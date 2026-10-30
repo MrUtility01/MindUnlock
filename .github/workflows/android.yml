@@ -16,15 +16,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Ensure android source exists
+      - name: Prepare complete Android source from foundation ZIP
         run: |
-          if [ ! -f android/app/build.gradle.kts ]; then
-            echo "Extracting foundation ZIP..."
-            mkdir -p android
-            unzip -o MindUnlock-Android-foundation.zip -d android
+          rm -rf android-build
+          mkdir -p android-build
+          if [ -f MindUnlock-Android-foundation.zip ]; then
+            unzip -o MindUnlock-Android-foundation.zip -d android-build
+            echo "Using MindUnlock-Android-foundation.zip"
+          else
+            echo "ZIP missing; copying android/ folder"
+            cp -a android/. android-build/
           fi
-          ls -la android/
-          ls -la android/app/src/main/java/com/mindunlock/app/ || true
+          echo "=== Source tree ==="
+          find android-build -type f | sort
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -36,39 +40,37 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Create Gradle Wrapper
-        working-directory: android
+        working-directory: android-build
         run: |
-          if [ ! -f gradlew ]; then
-            gradle wrapper --gradle-version 8.9
-          fi
+          gradle wrapper --gradle-version 8.9
           chmod +x gradlew
 
       - name: Build Debug APK
-        working-directory: android
+        working-directory: android-build
         run: ./gradlew assembleDebug --stacktrace
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: MindUnlock-debug-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          path: android-build/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
-      - name: Publish Release (manual dispatch only)
+      - name: Publish GitHub Release with APK
         if: github.event_name == 'workflow_dispatch'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: android-v0.1.0-${{ github.run_number }}
           name: MindUnlock Android 0.1.0 (#${{ github.run_number }})
           body: |
-            ## نصب مستقیم روی گوشی
-            1. فایل `app-debug.apk` را دانلود کنید
-            2. روی گوشی نصب کنید (ممکن است نیاز به «نصب از منابع ناشناس» باشد)
+            ## نصب روی گوشی
+            1. فایل **app-debug.apk** را از این Release دانلود کنید
+            2. روی گوشی باز کنید و نصب کنید
             3. برنامه ویندوز را اجرا کنید (پورت 82)
             4. در اپ IP کامپیوتر را وارد و همگام‌سازی کنید
 
             حداقل Android 8 — هدف Android 15
-          files: android/app/build/outputs/apk/debug/app-debug.apk
+          files: android-build/app/build/outputs/apk/debug/app-debug.apk
           prerelease: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
