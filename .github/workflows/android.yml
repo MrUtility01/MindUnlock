@@ -24,7 +24,9 @@ jobs:
           SOURCE_ZIP="MindUnlock-Android-v0.3.1-source.zip"
           test -f "$SOURCE_ZIP"
           unzip -q "$SOURCE_ZIP" -d source-bundle
-          ANDROID_DIR="$(find source-bundle -type f -name settings.gradle.kts -printf '%h\\n' | head -n1)"
+          SETTINGS_FILE="$(find source-bundle -type f -name settings.gradle.kts -print -quit)"
+          test -n "$SETTINGS_FILE"
+          ANDROID_DIR="$(dirname "$SETTINGS_FILE")"
           test -n "$ANDROID_DIR"
           cp -a "$ANDROID_DIR/." android-build/
           echo "Using Android source: $ANDROID_DIR"
