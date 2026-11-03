@@ -15,7 +15,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Prepare Android v0.3.2 source bundle
+      - name: Prepare Android v0.3.3 source bundle
         shell: bash
         run: |
           set -euo pipefail
@@ -76,6 +76,179 @@ jobs:
           print("Launcher icons generated from uploaded portrait.")
           PY
 
+      - name: Integrate offline Persian Piper TTS engine and model
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP_DIR="android-build/app"
+          SETTINGS="android-build/settings.gradle.kts"
+          SPEECH_FILE="$(find "$APP_DIR/src/main/java" -type f -name PersianSpeech.kt -print -quit)"
+          test -n "$SPEECH_FILE"
+          python3 - "$SETTINGS" "$APP_DIR/build.gradle.kts" "$SPEECH_FILE" <<'PY'
+          from pathlib import Path
+          import sys
+          settings, gradle, speech = map(Path, sys.argv[1:])
+          s = settings.read_text(encoding="utf-8")
+          if 'https://jitpack.io' not in s:
+              s = s.replace('mavenCentral()','mavenCentral()\\n        maven(url = "https://jitpack.io")')
+          settings.write_text(s, encoding="utf-8")
+          g = gradle.read_text(encoding="utf-8")
+          dep = 'implementation("com.github.k2-fsa:sherpa-onnx:v1.13.8")'
+          if dep not in g:
+              g = g.replace('dependencies {', 'dependencies {\\n    ' + dep)
+          gradle.write_text(g, encoding="utf-8")
+          speech.write_text(r'''package com.mindunlock.app
+
+          import android.content.Context
+          import android.media.AudioAttributes
+          import android.media.AudioFormat
+          import android.media.AudioTrack
+          import android.speech.tts.Voice
+          import androidx.compose.runtime.mutableStateOf
+          import com.k2fsa.sherpa.onnx.OfflineTts
+          import com.k2fsa.sherpa.onnx.OfflineTtsConfig
+          import com.k2fsa.sherpa.onnx.OfflineTtsModelConfig
+          import com.k2fsa.sherpa.onnx.OfflineTtsVitsModelConfig
+          import java.io.File
+          import java.util.concurrent.Executors
+          import kotlin.concurrent.thread
+
+          class PersianSpeech(context: Context) {
+              private val appContext = context.applicationContext
+              private val executor = Executors.newSingleThreadExecutor()
+              @Volatile private var tts: OfflineTts? = null
+              @Volatile private var audioTrack: AudioTrack? = null
+              val ready = mutableStateOf(false)
+              val error = mutableStateOf<String?>(null)
+              val status = mutableStateOf("در حال آماده‌سازی موتور عصبی فارسی…")
+              val voices = mutableStateOf<List<Voice>>(emptyList())
+
+              init {
+                  thread(name = "piper-fa-init") {
+                      try {
+                          val root = File(appContext.filesDir, "piper-fa")
+                          val modelDir = File(root, "vits-piper-fa_IR-gyro-medium")
+                          val espeakDir = File(root, "espeak-ng-data")
+                          copyAssetTree("vits-piper-fa_IR-gyro-medium", modelDir)
+                          copyAssetTree("espeak-ng-data", espeakDir)
+                          val model = File(modelDir, "fa_IR-gyro-medium.onnx")
+                          val tokens = File(modelDir, "tokens.txt")
+                          check(model.isFile && model.length() > 1_000_000L) { "فایل مدل صوتی فارسی ناقص است." }
+                          check(tokens.isFile && espeakDir.isDirectory) { "فایل‌های زبان فارسی ناقص هستند." }
+                          val config = OfflineTtsConfig(
+                              model = OfflineTtsModelConfig(
+                                  vits = OfflineTtsVitsModelConfig(
+                                      model = model.absolutePath,
+                                      tokens = tokens.absolutePath,
+                                      dataDir = espeakDir.absolutePath
+                                  ),
+                                  numThreads = 2,
+                                  debug = false,
+                                  provider = "cpu"
+                              )
+                          )
+                          val engine = OfflineTts(config = config)
+                          check(engine.numSpeakers() > 0) { "مدل فارسی هیچ گوینده‌ای ارائه نکرد." }
+                          tts = engine
+                          ready.value = true
+                          error.value = null
+                          status.value = "موتور آفلاین Piper فارسی آماده است."
+                      } catch (t: Throwable) {
+                          error.value = "راه‌اندازی موتور فارسی ناموفق بود: ${t.message ?: t.javaClass.simpleName}"
+                          status.value = error.value!!
+                      }
+                  }
+              }
+
+              private fun copyAssetTree(assetPath: String, target: File) {
+                  if (target.exists() && target.isDirectory && target.list()?.isNotEmpty() == true) return
+                  target.mkdirs()
+                  val children = appContext.assets.list(assetPath).orEmpty()
+                  if (children.isEmpty()) {
+                      appContext.assets.open(assetPath).use { input ->
+                          target.parentFile?.mkdirs()
+                          target.outputStream().use { output -> input.copyTo(output) }
+                      }
+                  } else {
+                      children.forEach { child ->
+                          copyAssetTree("$assetPath/$child", File(target, child))
+                      }
+                  }
+              }
+
+              fun speak(text: String, speed: Float = 1f, voiceName: String? = null) {
+                  if (text.isBlank()) return
+                  val engine = tts
+                  if (engine == null) {
+                      error.value = "موتور فارسی هنوز آماده نیست."
+                      status.value = error.value!!
+                      return
+                  }
+                  stop()
+                  error.value = null
+                  status.value = "در حال تولید صدای فارسی به‌صورت آفلاین…"
+                  executor.execute {
+                      try {
+                          val audio = engine.generate(text = text, sid = 0, speed = speed.coerceIn(0.75f, 1.35f))
+                          check(audio.samples.isNotEmpty()) { "مدل خروجی صوتی تولید نکرد." }
+                          val minBuffer = AudioTrack.getMinBufferSize(
+                              audio.sampleRate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_FLOAT
+                          ).coerceAtLeast(audio.samples.size * 4)
+                          val track = AudioTrack.Builder()
+                              .setAudioAttributes(AudioAttributes.Builder()
+                                  .setUsage(AudioAttributes.USAGE_MEDIA)
+                                  .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
+                              .setAudioFormat(AudioFormat.Builder()
+                                  .setSampleRate(audio.sampleRate)
+                                  .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                                  .setEncoding(AudioFormat.ENCODING_PCM_FLOAT).build())
+                              .setBufferSizeInBytes(minBuffer)
+                              .setTransferMode(AudioTrack.MODE_STATIC)
+                              .build()
+                          audioTrack = track
+                          track.write(audio.samples, 0, audio.samples.size, AudioTrack.WRITE_BLOCKING)
+                          track.play()
+                          status.value = "صدای فارسی در حال پخش است."
+                          while (track.playState == AudioTrack.PLAYSTATE_PLAYING &&
+                              track.playbackHeadPosition < audio.samples.size) Thread.sleep(80)
+                          track.release()
+                          if (audioTrack === track) audioTrack = null
+                          status.value = "خواندن فارسی با موتور Piper تمام شد."
+                      } catch (t: Throwable) {
+                          error.value = "خطا در تولید یا پخش صدای فارسی: ${t.message ?: t.javaClass.simpleName}"
+                          status.value = error.value!!
+                      }
+                  }
+              }
+
+              fun stop() {
+                  try { audioTrack?.pause(); audioTrack?.flush(); audioTrack?.release() } catch (_: Throwable) {}
+                  audioTrack = null
+                  status.value = "پخش متوقف شد."
+              }
+
+              fun close() {
+                  stop()
+                  executor.shutdownNow()
+                  try { tts?.release() } catch (_: Throwable) {}
+                  tts = null
+              }
+          }
+          ''', encoding="utf-8")
+          PY
+
+          MODEL_URL="https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-fa_IR-gyro-medium.tar.bz2"
+          mkdir -p "$APP_DIR/src/main/assets"
+          curl --fail --location --retry 3 "$MODEL_URL" -o /tmp/piper-fa.tar.bz2
+          test "$(stat -c%s /tmp/piper-fa.tar.bz2)" -gt 50000000
+          tar -xjf /tmp/piper-fa.tar.bz2 -C /tmp
+          test -s /tmp/vits-piper-fa_IR-gyro-medium/fa_IR-gyro-medium.onnx
+          test -s /tmp/vits-piper-fa_IR-gyro-medium/tokens.txt
+          test -d /tmp/vits-piper-fa_IR-gyro-medium/espeak-ng-data
+          cp -a /tmp/vits-piper-fa_IR-gyro-medium "$APP_DIR/src/main/assets/"
+          cp -a /tmp/vits-piper-fa_IR-gyro-medium/espeak-ng-data "$APP_DIR/src/main/assets/"
+          echo "Piper Persian model and eSpeak language data integrated."
+
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
@@ -121,7 +294,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: MindUnlock-Android-v0.3.2-debug
+          name: MindUnlock-Android-v0.3.3-debug
           path: android-build/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
@@ -129,8 +302,8 @@ jobs:
         if: github.event_name == 'workflow_dispatch'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: android-v0.3.2-${{ github.run_number }}
-          name: MindUnlock Android 0.3.2 (#${{ github.run_number }})
+          tag_name: android-v0.3.3-${{ github.run_number }}
+          name: MindUnlock Android 0.3.3 (#${{ github.run_number }})
           body: |
             Android Native 0.3.2 test build.
             Launcher icon uses the portrait uploaded in the repository.
