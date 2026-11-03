@@ -15,20 +15,44 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Prepare full native Android v0.3.0 source bundle
+      - name: Prepare Android v0.3.1 source bundle
         run: |
+          set -euo pipefail
           rm -rf android-build source-bundle
           mkdir -p android-build source-bundle
-          if [ -f "MindUnlock-Android-v0.3.0-main-deploy (1).zip" ]; then
-            unzip -q "MindUnlock-Android-v0.3.0-main-deploy (1).zip" -d source-bundle
-            cp -a source-bundle/android/. android-build/
-            echo "Using complete native Android source bundle v0.3.0"
-          else
-            echo "::error::Complete Android source bundle missing from repository"
-            exit 1
-          fi
+          SOURCE_ZIP="MindUnlock-Android-v0.3.1-source.zip"
+          test -f "$SOURCE_ZIP"
+          unzip -q "$SOURCE_ZIP" -d source-bundle
+          ANDROID_DIR="$(find source-bundle -type f -name settings.gradle.kts -printf '%h\n' | head -n1)"
+          test -n "$ANDROID_DIR"
+          cp -a "$ANDROID_DIR/." android-build/
+          echo "Using Android source: $ANDROID_DIR"
           echo "=== Android source tree ==="
           find android-build -type f | sort
+
+      - name: Apply uploaded portrait as Android launcher icon
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet Pillow
+          python3 - <<'PY'
+          from PIL import Image
+          from pathlib import Path
+          source = Path("IMG_20261103_164024_548.jpg")
+          if not source.is_file():
+              raise SystemExit("Uploaded launcher portrait is missing")
+          image = Image.open(source).convert("RGB")
+          width, height = image.size
+          side = int(min(width * 0.78, height * 0.78))
+          left = max(0, min(width - side, int(width * 0.50 - side / 2)))
+          top = max(0, min(height - side, int(height * 0.43 - side / 2)))
+          crop = image.crop((left, top, left + side, top + side))
+          sizes = {"mdpi": 48, "hdpi": 72, "xhdpi": 96, "xxhdpi": 144, "xxxhdpi": 192}
+          for density, size in sizes.items():
+              target = Path("android-build/app/src/main/res") / f"mipmap-{density}" / "ic_launcher.png"
+              target.parent.mkdir(parents=True, exist_ok=True)
+              crop.resize((size, size), Image.Resampling.LANCZOS).save(target, optimize=True)
+          print("Launcher icons generated from uploaded portrait.")
+          PY
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -52,7 +76,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: MindUnlock-Android-v0.3.0-debug
+          name: MindUnlock-Android-v0.3.1-debug
           path: android-build/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
@@ -60,11 +84,12 @@ jobs:
         if: github.event_name == 'workflow_dispatch'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: android-v0.3.0-${{ github.run_number }}
-          name: MindUnlock Android 0.3.0 (#${{ github.run_number }})
+          tag_name: android-v0.3.1-${{ github.run_number }}
+          name: MindUnlock Android 0.3.1 (#${{ github.run_number }})
           body: |
-            Android Native 0.3.0 test build.
-            Minimum Android 8.0. HTTP sync is intended for trusted local networks only.
+            Android Native 0.3.1 test build.
+            Launcher icon uses the portrait uploaded in the repository.
+            HTTP sync is intended for trusted local networks only.
           files: android-build/app/build/outputs/apk/debug/app-debug.apk
           prerelease: true
         env:
