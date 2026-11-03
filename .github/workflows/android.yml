@@ -31,6 +31,26 @@ jobs:
           cp -a "$ANDROID_DIR/." android-build/
           echo "Using Android source: $ANDROID_DIR"
 
+          # Security UX correction: app-lock passwords accept 4+ characters.
+          LOCK_FILE="$(find android-build/app/src/main/java -type f -name AppLock.kt -print -quit)"
+          MAIN_FILE="$(find android-build/app/src/main/java -type f -name MainActivity.kt -print -quit)"
+          SCREENS_FILE="$(find android-build/app/src/main/java -type f -name StudyScreens.kt -print -quit)"
+          test -n "$LOCK_FILE" && test -n "$MAIN_FILE" && test -n "$SCREENS_FILE"
+          python3 - "$LOCK_FILE" "$MAIN_FILE" "$SCREENS_FILE" <<'PY'
+          from pathlib import Path
+          import sys
+          lock, main, screens = map(Path, sys.argv[1:])
+          replacements = {
+              lock: [('password.size >= 8', 'password.size >= 4'), ('حداقل ۸ نویسه', 'حداقل ۴ کاراکتر')],
+              main: [('حداقل ۸ نویسه', 'حداقل ۴ کاراکتر'), ('lockPassword.length >= 8', 'lockPassword.length >= 4')],
+              screens: [('حداقل ۸ نویسه', 'حداقل ۴ کاراکتر'), ('newAppPassword.length >= 8', 'newAppPassword.length >= 4')],
+          }
+          for path, pairs in replacements.items():
+              data = path.read_text(encoding='utf-8')
+              for old, new in pairs: data = data.replace(old, new)
+              path.write_text(data, encoding='utf-8')
+          PY
+
       - name: Apply uploaded portrait as Android launcher icon
         shell: bash
         run: |
