@@ -15,11 +15,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Prepare Android source from main branch
+      - name: Prepare full native Android v0.3.0 source bundle
         run: |
-          rm -rf android-build
-          mkdir -p android-build
-          cp -a android/. android-build/
+          rm -rf android-build source-bundle
+          mkdir -p android-build source-bundle
+          if [ -f "MindUnlock-Android-v0.3.0-main-deploy (1).zip" ]; then
+            unzip -q "MindUnlock-Android-v0.3.0-main-deploy (1).zip" -d source-bundle
+            cp -a source-bundle/android/. android-build/
+            echo "Using complete native Android source bundle v0.3.0"
+          else
+            echo "::error::Complete Android source bundle missing from repository"
+            exit 1
+          fi
           echo "=== Android source tree ==="
           find android-build -type f | sort
 
