@@ -15,13 +15,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Prepare Android v0.3.1 source bundle
+      - name: Prepare Android v0.3.2 source bundle
         shell: bash
         run: |
           set -euo pipefail
           rm -rf android-build source-bundle
           mkdir -p android-build source-bundle
-          SOURCE_ZIP="MindUnlock-Android-v0.3.1-source.zip"
+          SOURCE_ZIP="MindUnlock-Android-v0.3.2-source.zip"
           test -f "$SOURCE_ZIP"
           unzip -q "$SOURCE_ZIP" -d source-bundle
           SETTINGS_FILE="$(find source-bundle -type f -name settings.gradle.kts -print -quit)"
@@ -121,7 +121,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: MindUnlock-Android-v0.3.1-debug
+          name: MindUnlock-Android-v0.3.2-debug
           path: android-build/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
@@ -129,10 +129,10 @@ jobs:
         if: github.event_name == 'workflow_dispatch'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: android-v0.3.1-${{ github.run_number }}
-          name: MindUnlock Android 0.3.1 (#${{ github.run_number }})
+          tag_name: android-v0.3.2-${{ github.run_number }}
+          name: MindUnlock Android 0.3.2 (#${{ github.run_number }})
           body: |
-            Android Native 0.3.1 test build.
+            Android Native 0.3.2 test build.
             Launcher icon uses the portrait uploaded in the repository.
             HTTP sync is intended for trusted local networks only.
           files: android-build/app/build/outputs/apk/debug/app-debug.apk
