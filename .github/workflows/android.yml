@@ -93,7 +93,7 @@ jobs:
               s = s.replace('mavenCentral()','mavenCentral()\n        maven(url = "https://jitpack.io")')
           settings.write_text(s, encoding="utf-8")
           g = gradle.read_text(encoding="utf-8")
-          dep = 'implementation("com.github.k2-fsa:sherpa-onnx:v1.13.8")'
+          dep = 'implementation("com.github.k2-fsa:sherpa-onnx:v1.13.8") { exclude(group = "com.github.k2-fsa.sherpa-onnx", module = "sherpa-onnx-jvm") }'
           if dep not in g:
               g = g.replace('dependencies {', 'dependencies {\n    ' + dep)
           gradle.write_text(g, encoding="utf-8")
