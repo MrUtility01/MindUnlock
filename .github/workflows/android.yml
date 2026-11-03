@@ -90,12 +90,12 @@ jobs:
           settings, gradle, speech = map(Path, sys.argv[1:])
           s = settings.read_text(encoding="utf-8")
           if 'https://jitpack.io' not in s:
-              s = s.replace('mavenCentral()','mavenCentral()\\n        maven(url = "https://jitpack.io")')
+              s = s.replace('mavenCentral()','mavenCentral()\n        maven(url = "https://jitpack.io")')
           settings.write_text(s, encoding="utf-8")
           g = gradle.read_text(encoding="utf-8")
           dep = 'implementation("com.github.k2-fsa:sherpa-onnx:v1.13.8")'
           if dep not in g:
-              g = g.replace('dependencies {', 'dependencies {\\n    ' + dep)
+              g = g.replace('dependencies {', 'dependencies {\n    ' + dep)
           gradle.write_text(g, encoding="utf-8")
           speech.write_text(r'''package com.mindunlock.app
 
