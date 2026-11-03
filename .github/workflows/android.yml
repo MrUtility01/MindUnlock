@@ -87,7 +87,7 @@ jobs:
           if package_index is None:
               raise SystemExit("Kotlin package declaration not found")
           lines.insert(package_index + 1, "import androidx.compose.foundation.layout.fillMaxWidth")
-          p.write_text("\\n".join(lines) + "\\n")
+          p.write_text("\n".join(lines) + "\n")
           PY
           fi
           grep -n 'fillMaxWidth' "$MAIN_FILE"
