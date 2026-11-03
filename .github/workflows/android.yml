@@ -96,6 +96,9 @@ jobs:
           dep = 'implementation("com.github.k2-fsa:sherpa-onnx:v1.13.8") { exclude(group = "com.github.k2-fsa.sherpa-onnx", module = "sherpa-onnx-jvm") }'
           if dep not in g:
               g = g.replace('dependencies {', 'dependencies {\n    ' + dep)
+          g = g.replace('defaultConfig {', 'defaultConfig {\\n        ndk { abiFilters += "arm64-v8a" }')
+          if 'sherpa-onnx/native/**' not in g:
+              g = g.replace('packaging {', 'packaging {\\n        resources.excludes += "sherpa-onnx/native/**"')
           gradle.write_text(g, encoding="utf-8")
           speech.write_text(r'''package com.mindunlock.app
 
@@ -128,7 +131,7 @@ jobs:
                       try {
                           val root = File(appContext.filesDir, "piper-fa")
                           val modelDir = File(root, "vits-piper-fa_IR-gyro-medium")
-                          val espeakDir = File(root, "espeak-ng-data")
+                          val espeakDir = File(modelDir, "espeak-ng-data")
                           copyAssetTree("vits-piper-fa_IR-gyro-medium", modelDir)
                           copyAssetTree("espeak-ng-data", espeakDir)
                           val model = File(modelDir, "fa_IR-gyro-medium.onnx")
