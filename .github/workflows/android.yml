@@ -69,6 +69,41 @@ jobs:
           gradle wrapper --gradle-version 8.9
           chmod +x gradlew
 
+      - name: Fix missing Compose fillMaxWidth import
+        working-directory: android-build
+        run: |
+          set -euo pipefail
+          MAIN_FILE="$(find app/src/main/java -type f -name MainActivity.kt | head -n1)"
+          test -n "$MAIN_FILE"
+          if ! grep -q '^import androidx.compose.foundation.layout.fillMaxWidth        working-directory: android-build
+        run: ./gradlew assembleDebug --stacktrace
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MindUnlock-Android-v0.3.1-debug
+          path: android-build/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+      - name: Publish GitHub Release with APK
+        if: github.event_name == 'workflow_dispatch'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: android-v0.3.1-${{ github.run_number }}
+          name: MindUnlock Android 0.3.1 (#${{ github.run_number }})
+          body: |
+            Android Native 0.3.1 test build.
+            Launcher icon uses the portrait uploaded in the repository.
+            HTTP sync is intended for trusted local networks only.
+          files: android-build/app/build/outputs/apk/debug/app-debug.apk
+          prerelease: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+ "$MAIN_FILE"; then
+            sed -i '/^package /a import androidx.compose.foundation.layout.fillMaxWidth' "$MAIN_FILE"
+          fi
+          grep -n 'fillMaxWidth' "$MAIN_FILE"
+
       - name: Build Debug APK
         working-directory: android-build
         run: ./gradlew assembleDebug --stacktrace
