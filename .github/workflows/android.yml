@@ -21,7 +21,7 @@ jobs:
           set -euo pipefail
           rm -rf android-build source-bundle
           mkdir -p android-build source-bundle
-          SOURCE_ZIP="MindUnlock-Android-v0.3.2-source.zip"
+          SOURCE_ZIP="MindUnlock-Android-v0.3.1-source.zip"
           test -f "$SOURCE_ZIP"
           unzip -q "$SOURCE_ZIP" -d source-bundle
           SETTINGS_FILE="$(find source-bundle -type f -name settings.gradle.kts -print -quit)"
