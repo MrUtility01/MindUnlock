@@ -243,16 +243,7 @@ jobs:
           ''', encoding="utf-8")
           PY
 
-          MODEL_URL="https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-fa_IR-gyro-medium.tar.bz2"
-          mkdir -p "$APP_DIR/src/main/assets"
-          curl --fail --location --retry 3 "$MODEL_URL" -o /tmp/piper-fa.tar.bz2
-          test "$(stat -c%s /tmp/piper-fa.tar.bz2)" -gt 50000000
-          tar -xjf /tmp/piper-fa.tar.bz2 -C /tmp
-          test -s /tmp/vits-piper-fa_IR-gyro-medium/fa_IR-gyro-medium.onnx
-          test -s /tmp/vits-piper-fa_IR-gyro-medium/tokens.txt
-          test -d /tmp/vits-piper-fa_IR-gyro-medium/espeak-ng-data
-          cp -a /tmp/vits-piper-fa_IR-gyro-medium "$APP_DIR/src/main/assets/"
-          echo "Piper Persian model and eSpeak language data integrated."
+          echo "Persian voice models will be downloaded on demand after installation."
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -303,28 +294,6 @@ jobs:
           p.write_text(s, encoding="utf-8")
           PY
 
-      - name: Add independent Persian speech models
-        shell: bash
-        run: |
-          set -euo pipefail
-          ASSET_DIR="android-build/app/src/main/assets"
-          mkdir -p "$ASSET_DIR"
-
-          curl --fail --location --retry 3 "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-fa_IR-amir-medium.tar.bz2" -o /tmp/piper-amir-fa.tar.bz2
-          tar -xjf /tmp/piper-amir-fa.tar.bz2 -C /tmp
-          test -s /tmp/vits-piper-fa_IR-amir-medium/fa_IR-amir-medium.onnx
-          test -s /tmp/vits-piper-fa_IR-amir-medium/tokens.txt
-          test -d /tmp/vits-piper-fa_IR-amir-medium/espeak-ng-data
-          cp -a /tmp/vits-piper-fa_IR-amir-medium "$ASSET_DIR/"
-
-          curl --fail --location --retry 3 "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-mimic3-fa-haaniye_low.tar.bz2" -o /tmp/mimic3-haaniye-fa.tar.bz2
-          tar -xjf /tmp/mimic3-haaniye-fa.tar.bz2 -C /tmp
-          test -s /tmp/vits-mimic3-fa-haaniye_low/fa-haaniye_low.onnx
-          test -s /tmp/vits-mimic3-fa-haaniye_low/tokens.txt
-          test -d /tmp/vits-mimic3-fa-haaniye_low/espeak-ng-data
-          cp -a /tmp/vits-mimic3-fa-haaniye_low "$ASSET_DIR/"
-          echo "Three selectable Persian speech models are packaged."
-
       - name: Apply study workflow and UI redesign
         shell: bash
         run: |
@@ -339,6 +308,22 @@ jobs:
           # The Android baseline does not bundle the extended FlashOn vector.
           # Reuse the already imported PlayArrow icon to keep dependencies lean.
           sed -i 's/FlashOn/PlayArrow/g' "$SCREENS_FILE"
+
+      - name: Apply database split, on-demand voices and sync optimizations
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import base64, lzma
+          from pathlib import Path
+          encoded = Path(".github/mindunlock_optimization.py.xz.b64").read_text(encoding="ascii")
+          Path("/tmp/mindunlock_optimization.py").write_bytes(lzma.decompress(base64.b64decode(encoded)))
+          PY
+          MAIN_FILE="$(find android-build/app/src/main/java -type f -name MainActivity.kt -print -quit)"
+          test -n "$MAIN_FILE"
+          PACKAGE_DIR="$(dirname "$MAIN_FILE")"
+          python3 /tmp/mindunlock_optimization.py "$PACKAGE_DIR"
+          sed -i 's/versionCode = 3/versionCode = 5/; s/versionName = "0.3.1"/versionName = "0.5.0"/' android-build/app/build.gradle.kts
 
       - name: Fix unavailable FlashOn material icon
         shell: bash
@@ -381,36 +366,6 @@ jobs:
           fi
           grep -n 'fillMaxWidth' "$MAIN_FILE"
 
-      - name: Inspect prepared screens and navigation source
-        shell: bash
-        run: |
-          set -euo pipefail
-          for name in MainActivity.kt StudyScreens.kt; do
-            file="$(find android-build/app/src/main/java -type f -name "$name" -print -quit)"
-            test -n "$file"
-            echo "===== SOURCE BEGIN: $file ====="
-            nl -ba "$file" | sed -n '1,1800p'
-            echo "===== SOURCE END: $file ====="
-          done
-
-      - name: Export prepared source snapshot for review
-        shell: bash
-        run: |
-          set -euo pipefail
-          rm -rf /tmp/mindunlock-source-snapshot
-          mkdir -p /tmp/mindunlock-source-snapshot
-          cp -a android-build/app/src/main /tmp/mindunlock-source-snapshot/
-          rm -rf /tmp/mindunlock-source-snapshot/main/assets/vits-*
-          cp android-build/app/build.gradle.kts /tmp/mindunlock-source-snapshot/app-build.gradle.kts
-          cp android-build/build.gradle.kts android-build/settings.gradle.kts android-build/gradle.properties /tmp/mindunlock-source-snapshot/
-          (cd /tmp && zip -qr mindunlock-prepared-source.zip mindunlock-source-snapshot)
-      - name: Upload prepared source snapshot
-        uses: actions/upload-artifact@v4
-        with:
-          name: MindUnlock-Android-source-snapshot
-          path: /tmp/mindunlock-prepared-source.zip
-          if-no-files-found: error
-
       - name: Build Debug APK
         working-directory: android-build
         run: ./gradlew assembleDebug --stacktrace
@@ -418,7 +373,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: MindUnlock-Android-v0.4.0-redesign-debug
+          name: MindUnlock-Android-v0.5.0-debug
           path: android-build/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
@@ -426,10 +381,10 @@ jobs:
         if: github.event_name == 'workflow_dispatch'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: android-v0.4.0-${{ github.run_number }}
-          name: MindUnlock Android 0.4.0 (#${{ github.run_number }})
+          tag_name: android-v0.5.0-${{ github.run_number }}
+          name: MindUnlock Android 0.5.0 (#${{ github.run_number }})
           body: |
-            Android Native 0.4.0 redesigned learning workspace with topic/chapter navigation, image rendering, separate learning modes and three selectable Persian voices.
+            Android Native 0.5.0 with separate content/user databases, on-demand Persian speech models and optimized chapter/media sync with topic/chapter navigation, image rendering, separate learning modes and three selectable Persian voices.
             Launcher icon uses the portrait uploaded in the repository.
             HTTP sync is intended for trusted local networks only.
           files: android-build/app/build/outputs/apk/debug/app-debug.apk
