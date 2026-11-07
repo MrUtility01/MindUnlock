@@ -374,6 +374,72 @@ jobs:
                   HorizontalDivider()
                   Text("امنیت برنامه"''')
           screens.write_text(ui, encoding="utf-8")
+          # Progressive chapter loading: fetch the first 100 records and expand only on request.
+          dao = package / "data" / "local" / "AppDatabase.kt"
+          d = dao.read_text(encoding="utf-8")
+          flow_query = '''    @Query("SELECT * FROM content_items WHERE chapterId = :chapterId ORDER BY orderIndex, title")
+              fun observeForChapter(chapterId: String): Flow<List<ContentItemEntity>>'''
+          paged_query = flow_query + '''
+          
+              @Query("SELECT * FROM content_items WHERE chapterId = :chapterId ORDER BY orderIndex, title LIMIT :limit OFFSET :offset")
+              fun observeForChapterPage(chapterId: String, limit: Int, offset: Int): Flow<List<ContentItemEntity>>'''
+          if "observeForChapterPage" not in d:
+              if flow_query not in d: raise SystemExit("Chapter DAO paging insertion point not found")
+              d = d.replace(flow_query, paged_query, 1)
+              dao.write_text(d, encoding="utf-8")
+          ui = screens.read_text(encoding="utf-8")
+          old = '''    val items by db.contentItemDao().observeForChapter(chapterId).collectAsState(initial = emptyList())
+              var query by rememberSaveable { mutableStateOf("") }'''
+          new = '''    var page by rememberSaveable(chapterId) { mutableIntStateOf(1) }
+              val pageLimit = page * 100
+              val items by db.contentItemDao().observeForChapterPage(chapterId, pageLimit, 0).collectAsState(initial = emptyList())
+              var query by rememberSaveable { mutableStateOf("") }'''
+          if old not in ui: raise SystemExit("Chapter content page-load insertion point not found")
+          ui = ui.replace(old, new, 1)
+          old = '''            items(visible, key = { it.uid }) { item -> ContentItemCard(item, onClick = { onItemClick(item.uid) }) }
+              }
+          }'''
+          new = '''            items(visible, key = { it.uid }) { item -> ContentItemCard(item, onClick = { onItemClick(item.uid) }) }
+                  if (items.size == pageLimit) item {
+                      TextButton(onClick = { page += 1 }, modifier = Modifier.fillMaxWidth()) { Text("بارگذاری ۱۰۰ مطلب بعدی") }
+                  }
+              }
+          }'''
+          if old not in ui: raise SystemExit("Chapter content load-more insertion point not found")
+          ui = ui.replace(old, new, 1)
+          # Explicit cancellation control for chapter synchronization.
+          ui = ui.replace('''    var busy by remember { mutableStateOf(false) }
+              var message''','''    var busy by remember { mutableStateOf(false) }
+              var syncJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+              var message''', 1)
+          ui = ui.replace('''                scope.launch {
+                      val result = runCatching {
+                          repository.syncSelected''','''                syncJob = scope.launch {
+                      val result = runCatching {
+                          repository.syncSelected''', 1)
+          ui = ui.replace('''                    busy = false
+                  }
+              }, modifier = Modifier.fillMaxWidth()) { Text("دانلود فصل‌های انتخاب‌شده") }''','''                    busy = false
+                      syncJob = null
+                  }
+              }, modifier = Modifier.fillMaxWidth()) { Text("دانلود فصل‌های انتخاب‌شده") }''', 1)
+          ui = ui.replace('''                Text(progressText, style = MaterialTheme.typography.bodySmall)
+              }
+              OutlinedButton(onClick = onDone''','''                Text(progressText, style = MaterialTheme.typography.bodySmall)
+              }
+              if (busy && syncJob != null) OutlinedButton(onClick = { syncJob?.cancel(); message = "درخواست لغو همگام‌سازی ارسال شد." }, modifier = Modifier.fillMaxWidth()) { Text("لغو همگام‌سازی") }
+              OutlinedButton(onClick = onDone''', 1)
+          screens.write_text(ui, encoding="utf-8")
+          # Check cancellation between chapter downloads instead of finishing the full queue.
+          sync = package / "data" / "repository" / "SyncRepository.kt"
+          source = sync.read_text(encoding="utf-8")
+          if "import kotlinx.coroutines.currentCoroutineContext" not in source:
+              source = source.replace("import kotlinx.coroutines.Dispatchers", "import kotlinx.coroutines.Dispatchers\nimport kotlinx.coroutines.currentCoroutineContext\nimport kotlinx.coroutines.ensureActive", 1)
+          source = source.replace('''        selected.forEachIndexed { index, chapter ->
+                      withContext(Dispatchers.Main)''','''        selected.forEachIndexed { index, chapter ->
+                      currentCoroutineContext().ensureActive()
+                      withContext(Dispatchers.Main)''', 1)
+          sync.write_text(source, encoding="utf-8")
           PY
 
       - name: Fix unavailable FlashOn material icon
