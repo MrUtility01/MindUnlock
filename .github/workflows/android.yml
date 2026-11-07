@@ -326,6 +326,24 @@ jobs:
           fi
           grep -n 'fillMaxWidth' "$MAIN_FILE"
 
+      - name: Export prepared source snapshot for review
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/mindunlock-source-snapshot
+          mkdir -p /tmp/mindunlock-source-snapshot
+          cp -a android-build/app/src/main /tmp/mindunlock-source-snapshot/
+          rm -rf /tmp/mindunlock-source-snapshot/main/assets/vits-piper-fa_IR-gyro-medium
+          cp android-build/app/build.gradle.kts /tmp/mindunlock-source-snapshot/
+          cp android-build/build.gradle.kts android-build/settings.gradle.kts android-build/gradle.properties /tmp/mindunlock-source-snapshot/
+          (cd /tmp && zip -qr mindunlock-prepared-source.zip mindunlock-source-snapshot)
+      - name: Upload prepared source snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: MindUnlock-Android-source-snapshot
+          path: /tmp/mindunlock-prepared-source.zip
+          if-no-files-found: error
+
       - name: Build Debug APK
         working-directory: android-build
         run: ./gradlew assembleDebug --stacktrace
