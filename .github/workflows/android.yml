@@ -381,6 +381,18 @@ jobs:
           fi
           grep -n 'fillMaxWidth' "$MAIN_FILE"
 
+      - name: Inspect prepared screens and navigation source
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in MainActivity.kt StudyScreens.kt; do
+            file="$(find android-build/app/src/main/java -type f -name "$name" -print -quit)"
+            test -n "$file"
+            echo "===== SOURCE BEGIN: $file ====="
+            nl -ba "$file" | sed -n '1,1800p'
+            echo "===== SOURCE END: $file ====="
+          done
+
       - name: Export prepared source snapshot for review
         shell: bash
         run: |
