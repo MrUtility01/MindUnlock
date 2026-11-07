@@ -331,13 +331,13 @@ jobs:
           speech = package / "PersianSpeech.kt"
           source = speech.read_text(encoding="utf-8")
           old = '''    init {
-              val saved = appContext.getSharedPreferences("mindunlock_preferences", Context.MODE_PRIVATE).getString("speech_voice", "gyro") ?: "gyro"
-              selectVoice(saved)
-              }'''
-          new = '''    init {
-          val saved = appContext.getSharedPreferences("mindunlock_preferences", Context.MODE_PRIVATE).getString("speech_voice", "gyro") ?: "gyro"
-          activeId = saved
-              activeVoice.value = saved
+                  val saved = appContext.getSharedPreferences("mindunlock_preferences", Context.MODE_PRIVATE).getString("speech_voice", "gyro") ?: "gyro"
+                  selectVoice(saved)
+                  }'''
+                  new = '''    init {
+                  val saved = appContext.getSharedPreferences("mindunlock_preferences", Context.MODE_PRIVATE).getString("speech_voice", "gyro") ?: "gyro"
+                  activeId = saved
+                  activeVoice.value = saved
               }'''
           if old not in source:
               raise SystemExit("Could not make speech model download fully on-demand")
