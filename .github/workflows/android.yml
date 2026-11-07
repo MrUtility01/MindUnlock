@@ -324,6 +324,57 @@ jobs:
           PACKAGE_DIR="$(dirname "$MAIN_FILE")"
           python3 /tmp/mindunlock_optimization.py "$PACKAGE_DIR"
           sed -i 's/versionCode = 3/versionCode = 5/; s/versionName = "0.3.1"/versionName = "0.5.0"/' android-build/app/build.gradle.kts
+          python3 - "$PACKAGE_DIR" <<'PY'
+          from pathlib import Path
+          import sys
+          package = Path(sys.argv[1])
+          speech = package / "PersianSpeech.kt"
+          source = speech.read_text(encoding="utf-8")
+          old = '''    init {
+                  val saved = appContext.getSharedPreferences("mindunlock_preferences", Context.MODE_PRIVATE).getString("speech_voice", "gyro") ?: "gyro"
+                  selectVoice(saved)
+              }'''
+          new = '''    init {
+                  val saved = appContext.getSharedPreferences("mindunlock_preferences", Context.MODE_PRIVATE).getString("speech_voice", "gyro") ?: "gyro"
+                  activeId = saved
+                  activeVoice.value = saved
+              }'''
+          if old not in source:
+              raise SystemExit("Could not make speech model download fully on-demand")
+          source = source.replace(old, new, 1)
+          marker = "    fun speak(text: String, speed: Float = 1f, voiceName: String? = null) {"
+          delete_method = '''    fun deleteDownloadedVoice(id: String) {
+                  val target = voiceOptions.firstOrNull { it.first == id }?.first ?: return
+                  if (loadedId == target) {
+                      stop()
+                      try { tts?.release() } catch (_: Throwable) {}
+                      tts = null
+                      loadedId = null
+                      ready.value = false
+                  }
+                  val folder = File(appContext.filesDir, "speech/\${spec(target).directory}")
+                  folder.deleteRecursively()
+                  status.value = "مدل صوتی انتخاب‌شده از حافظهٔ برنامه حذف شد."
+              }
+
+          '''
+          if marker not in source:
+              raise SystemExit("Speech method insertion point not found")
+          source = source.replace(marker, delete_method + marker, 1)
+          speech.write_text(source, encoding="utf-8")
+          screens = package / "ui" / "StudyScreens.kt"
+          ui = screens.read_text(encoding="utf-8")
+          ui = ui.replace('    LaunchedEffect(voiceName) { speech.selectVoice(voiceName ?: "gyro") }', '')
+          ui = ui.replace('Card(onClick = { voiceName = voice.first; preferences.edit().putString("speech_voice", voice.first).apply() }',
+                          'Card(onClick = { voiceName = voice.first; preferences.edit().putString("speech_voice", voice.first).apply(); speech.selectVoice(voice.first) }')
+          ui = ui.replace('onClick = { voiceName = voice.first; preferences.edit().putString("speech_voice", voice.first).apply() })',
+                          'onClick = { voiceName = voice.first; preferences.edit().putString("speech_voice", voice.first).apply(); speech.selectVoice(voice.first) })')
+          ui = ui.replace('''        HorizontalDivider()
+                  Text("امنیت برنامه"''','''        OutlinedButton(onClick = { speech.deleteDownloadedVoice(voiceName ?: "gyro") }, modifier = Modifier.fillMaxWidth()) { Text("حذف مدل صوتی انتخاب‌شده از حافظه") }
+                  HorizontalDivider()
+                  Text("امنیت برنامه"''')
+          screens.write_text(ui, encoding="utf-8")
+          PY
 
       - name: Fix unavailable FlashOn material icon
         shell: bash
