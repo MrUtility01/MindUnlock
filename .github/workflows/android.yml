@@ -340,6 +340,24 @@ jobs:
           # Reuse the already imported PlayArrow icon to keep dependencies lean.
           sed -i 's/FlashOn/PlayArrow/g' "$SCREENS_FILE"
 
+      - name: Fix unavailable FlashOn material icon
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          for name in ("MainActivity.kt", "StudyScreens.kt"):
+              matches = list(Path("android-build/app/src/main/java").rglob(name))
+              if not matches:
+                  raise SystemExit(f"Missing generated Kotlin file: {name}")
+              p = matches[0]
+              source = p.read_text(encoding="utf-8")
+              source = source.replace("Icons.Default.FlashOn", "Icons.Default.Bookmark")
+              source = source.replace("import androidx.compose.material.icons.filled.FlashOn\\n", "")
+              p.write_text(source, encoding="utf-8")
+          print("Unavailable FlashOn icon replaced with an already available Material icon.")
+          PY
+
       - name: Fix missing Compose fillMaxWidth import
         working-directory: android-build
         shell: bash
