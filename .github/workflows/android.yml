@@ -316,7 +316,7 @@ jobs:
           python3 - <<'PY'
           import base64, lzma
           from pathlib import Path
-          encoded = Path(".github/mindunlock_optimization.py.xz.b64").read_text(encoding="ascii")
+          encoded = Path(".github/mindunlock_optimization.py.xz.b64").read_text(encoding="ascii") + Path(".github/mindunlock_optimization_part2.b64").read_text(encoding="ascii")
           Path("/tmp/mindunlock_optimization.py").write_bytes(lzma.decompress(base64.b64decode(encoded)))
           PY
           MAIN_FILE="$(find android-build/app/src/main/java -type f -name MainActivity.kt -print -quit)"
