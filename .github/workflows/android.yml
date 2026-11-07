@@ -331,14 +331,14 @@ jobs:
           speech = package / "PersianSpeech.kt"
           source = speech.read_text(encoding="utf-8")
           old = '''    init {
-                  val saved = appContext.getSharedPreferences("mindunlock_preferences", Context.MODE_PRIVATE).getString("speech_voice", "gyro") ?: "gyro"
-                  selectVoice(saved)
-              }'''
+        val saved = appContext.getSharedPreferences("mindunlock_preferences", Context.MODE_PRIVATE).getString("speech_voice", "gyro") ?: "gyro"
+        selectVoice(saved)
+    }'''
           new = '''    init {
-                  val saved = appContext.getSharedPreferences("mindunlock_preferences", Context.MODE_PRIVATE).getString("speech_voice", "gyro") ?: "gyro"
-                  activeId = saved
-                  activeVoice.value = saved
-              }'''
+        val saved = appContext.getSharedPreferences("mindunlock_preferences", Context.MODE_PRIVATE).getString("speech_voice", "gyro") ?: "gyro"
+        activeId = saved
+        activeVoice.value = saved
+    }'''
           if old not in source:
               raise SystemExit("Could not make speech model download fully on-demand")
           source = source.replace(old, new, 1)
@@ -352,7 +352,7 @@ jobs:
                       loadedId = null
                       ready.value = false
                   }
-                  val folder = File(appContext.filesDir, "speech/\${spec(target).directory}")
+                  val folder = File(appContext.filesDir, "speech/${spec(target).directory}")
                   folder.deleteRecursively()
                   status.value = "مدل صوتی انتخاب‌شده از حافظهٔ برنامه حذف شد."
               }
