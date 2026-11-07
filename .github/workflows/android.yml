@@ -380,7 +380,7 @@ jobs:
           if "observeForChapterPage" not in d:
               needle = '    fun observeForChapter(chapterId: String): Flow<List<ContentItemEntity>>'
               if needle not in d: raise SystemExit("Chapter DAO paging insertion point not found")
-              d = d.replace(needle, needle + '\\n\\n    @Query("SELECT * FROM content_items WHERE chapterId = :chapterId ORDER BY orderIndex, title LIMIT :limit OFFSET :offset")\\n    fun observeForChapterPage(chapterId: String, limit: Int, offset: Int): Flow<List<ContentItemEntity>>', 1)
+              d = d.replace(needle, needle + '\n\n    @Query("SELECT * FROM content_items WHERE chapterId = :chapterId ORDER BY orderIndex, title LIMIT :limit OFFSET :offset")\n    fun observeForChapterPage(chapterId: String, limit: Int, offset: Int): Flow<List<ContentItemEntity>>', 1)
               dao.write_text(d, encoding="utf-8")
           ui = screens.read_text(encoding="utf-8")
           old_line = '    val items by db.contentItemDao().observeForChapter(chapterId).collectAsState(initial = emptyList())'
@@ -390,20 +390,20 @@ jobs:
           if old_line not in ui: raise SystemExit("Chapter content page-load insertion point not found")
           ui = ui.replace(old_line, new_lines, 1)
           item_line = '            items(visible, key = { it.uid }) { item -> ContentItemCard(item, onClick = { onItemClick(item.uid) }) }'
-          load_more = item_line + '\\n            if (items.size == pageLimit) item { TextButton(onClick = { page += 1 }, modifier = Modifier.fillMaxWidth()) { Text("بارگذاری ۱۰۰ مطلب بعدی") } }'
+          load_more = item_line + '\n            if (items.size == pageLimit) item { TextButton(onClick = { page += 1 }, modifier = Modifier.fillMaxWidth()) { Text("بارگذاری ۱۰۰ مطلب بعدی") } }'
           if item_line not in ui: raise SystemExit("Chapter content load-more insertion point not found")
           ui = ui.replace(item_line, load_more, 1)
           # Explicit cancellation control for chapter synchronization.
-          ui = ui.replace('    var busy by remember { mutableStateOf(false) }', '    var busy by remember { mutableStateOf(false) }\\n    var syncJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }', 1)
-          old_launch = '                scope.launch {\\n                    val result = runCatching {\\n                        repository.syncSelected'
+          ui = ui.replace('    var busy by remember { mutableStateOf(false) }', '    var busy by remember { mutableStateOf(false) }\n    var syncJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }', 1)
+          old_launch = '                scope.launch {\n                    val result = runCatching {\n                        repository.syncSelected'
           if old_launch not in ui: raise SystemExit("Sync job insertion point not found")
-          ui = ui.replace(old_launch, '                syncJob = scope.launch {\\n                    val result = runCatching {\\n                        repository.syncSelected', 1)
-          old_end = '                    busy = false\\n                }\\n            }, modifier = Modifier.fillMaxWidth()) { Text("دانلود فصل‌های انتخاب‌شده") }'
+          ui = ui.replace(old_launch, '                syncJob = scope.launch {\n                    val result = runCatching {\n                        repository.syncSelected', 1)
+          old_end = '                    busy = false\n                }\n            }, modifier = Modifier.fillMaxWidth()) { Text("دانلود فصل‌های انتخاب‌شده") }'
           if old_end not in ui: raise SystemExit("Sync job completion insertion point not found")
-          ui = ui.replace(old_end, '                    busy = false\\n                    syncJob = null\\n                }\\n            }, modifier = Modifier.fillMaxWidth()) { Text("دانلود فصل‌های انتخاب‌شده") }', 1)
-          cancel_anchor = '                Text(progressText, style = MaterialTheme.typography.bodySmall)\\n            }\\n            OutlinedButton(onClick = onDone'
+          ui = ui.replace(old_end, '                    busy = false\n                    syncJob = null\n                }\n            }, modifier = Modifier.fillMaxWidth()) { Text("دانلود فصل‌های انتخاب‌شده") }', 1)
+          cancel_anchor = '                Text(progressText, style = MaterialTheme.typography.bodySmall)\n            }\n            OutlinedButton(onClick = onDone'
           if cancel_anchor not in ui: raise SystemExit("Sync cancel button insertion point not found")
-          ui = ui.replace(cancel_anchor, '                Text(progressText, style = MaterialTheme.typography.bodySmall)\\n            }\\n            if (busy && syncJob != null) OutlinedButton(onClick = { syncJob?.cancel(); message = "درخواست لغو همگام‌سازی ارسال شد." }, modifier = Modifier.fillMaxWidth()) { Text("لغو همگام‌سازی") }\\n            OutlinedButton(onClick = onDone', 1)
+          ui = ui.replace(cancel_anchor, '                Text(progressText, style = MaterialTheme.typography.bodySmall)\n            }\n            if (busy && syncJob != null) OutlinedButton(onClick = { syncJob?.cancel(); message = "درخواست لغو همگام‌سازی ارسال شد." }, modifier = Modifier.fillMaxWidth()) { Text("لغو همگام‌سازی") }\n            OutlinedButton(onClick = onDone', 1)
           screens.write_text(ui, encoding="utf-8")
           # Check cancellation between chapter downloads instead of finishing the full queue.
           sync = package / "data" / "repository" / "SyncRepository.kt"
