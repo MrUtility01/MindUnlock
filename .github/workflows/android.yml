@@ -334,6 +334,11 @@ jobs:
           test -n "$MAIN_FILE"
           PACKAGE_DIR="$(dirname "$MAIN_FILE")"
           python3 /tmp/refactor_android.py "$PACKAGE_DIR"
+          SCREENS_FILE="$(find "$PACKAGE_DIR" -type f -name StudyScreens.kt -print -quit)"
+          test -n "$SCREENS_FILE"
+          # The Android baseline does not bundle the extended FlashOn vector.
+          # Reuse the already imported PlayArrow icon to keep dependencies lean.
+          sed -i 's/FlashOn/PlayArrow/g' "$SCREENS_FILE"
 
       - name: Fix missing Compose fillMaxWidth import
         working-directory: android-build
