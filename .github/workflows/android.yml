@@ -333,7 +333,7 @@ jobs:
           old = '''    init {
                   val saved = appContext.getSharedPreferences("mindunlock_preferences", Context.MODE_PRIVATE).getString("speech_voice", "gyro") ?: "gyro"
                   selectVoice(saved)
-                  }'''
+              }'''
                   new = '''    init {
                   val saved = appContext.getSharedPreferences("mindunlock_preferences", Context.MODE_PRIVATE).getString("speech_voice", "gyro") ?: "gyro"
                   activeId = saved
