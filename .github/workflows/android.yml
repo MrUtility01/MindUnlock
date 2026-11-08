@@ -1207,6 +1207,39 @@ jobs:
           echo "=== DASHBOARD COUNTER TOKENS ==="
           grep -nE 'dueCards|dueCard|dueCount|flashcardCount|observeDue|Flashcard' "$SCREENS" | head -80 || true
 
+      - name: Diagnose Android cold-start and Room database initialization
+        shell: bash
+        run: |
+          set -euo pipefail
+          MAIN_FILE="$(find android-build/app/src/main/java -type f -name MainActivity.kt -print -quit)"
+          PACKAGE_DIR="$(dirname "$MAIN_FILE")"
+          echo "=== MAIN ACTIVITY / STARTUP ==="
+          nl -ba "$MAIN_FILE" | sed -n '1,330p'
+          echo "=== APP DATABASE ==="
+          nl -ba "$PACKAGE_DIR/data/local/AppDatabase.kt" | sed -n '1,210p'
+          echo "=== USER DATABASE ==="
+          nl -ba "$PACKAGE_DIR/data/local/UserDatabase.kt" | sed -n '1,150p'
+          echo "=== APP MANIFEST ==="
+          MANIFEST="$(find android-build/app/src/main -name AndroidManifest.xml -print -quit)"
+          nl -ba "$MANIFEST" | sed -n '1,220p'
+          echo "=== APPLICATION / INITIALIZATION CLASSES ==="
+          grep -RInE 'Application\(|onCreate\(|Room\.databaseBuilder|allowMainThreadQueries|openHelper|databaseBuilder|runBlocking|GlobalScope|Dispatchers\.Main' "$PACKAGE_DIR" | head -240 || true
+          echo "=== DASHBOARD INCONSISTENT LABEL FIX ==="
+          SCREENS="$PACKAGE_DIR/ui/StudyScreens.kt"
+          python3 - "$SCREENS" <<'PY'
+          from pathlib import Path
+          import sys
+          p = Path(sys.argv[1])
+          s = p.read_text(encoding="utf-8")
+          old = 'ActionTile("مرور امروز · $dueCards",'
+          if old in s:
+              s = s.replace(old, 'ActionTile("مرور امروز",', 1)
+              p.write_text(s, encoding="utf-8")
+              print("Removed stale dashboard count interpolation; review screen remains accessible.")
+          else:
+              print("Dashboard review tile has no stale dueCards interpolation.")
+          PY
+
       - name: Run JVM unit tests
         working-directory: android-build
         run: ./gradlew testDebugUnitTest --stacktrace
