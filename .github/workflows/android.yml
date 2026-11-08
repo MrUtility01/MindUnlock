@@ -1240,6 +1240,21 @@ jobs:
               print("Dashboard review tile has no stale dueCards interpolation.")
           PY
 
+      - name: Inspect legacy database migration implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          PACKAGE_DIR="$(dirname "$(find android-build/app/src/main/java -type f -name MainActivity.kt -print -quit)")"
+          echo "=== LEGACY MIGRATOR ==="
+          MIGRATOR="$PACKAGE_DIR/data/local/LegacyDatabaseMigrator.kt"
+          if [ -f "$MIGRATOR" ]; then nl -ba "$MIGRATOR" | sed -n '1,300p'; else echo "Legacy migrator source not found"; fi
+          echo "=== APPLICATION STARTUP ==="
+          nl -ba "$PACKAGE_DIR/MindUnlockApp.kt" | sed -n '1,180p'
+          echo "=== MAIN ACTIVITY STARTUP ==="
+          nl -ba "$PACKAGE_DIR/MainActivity.kt" | sed -n '55,115p'
+          echo "=== MIGRATION MARKERS ==="
+          grep -RInE 'legacy_migrat|migration_done|migrate\(' "$PACKAGE_DIR" | head -180 || true
+
       - name: Run JVM unit tests
         working-directory: android-build
         run: ./gradlew testDebugUnitTest --stacktrace
