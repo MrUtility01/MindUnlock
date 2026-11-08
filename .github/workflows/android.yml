@@ -1263,6 +1263,471 @@ jobs:
           print("Added safe settings reset, app/device diagnostics and support-copy action.")
           PY
 
+      - name: Rebuild settings as a complete functional control center
+        shell: bash
+        run: |
+          set -euo pipefail
+          SCREENS_FILE="$(find android-build/app/src/main/java -type f -name StudyScreens.kt -print -quit)"
+          MAIN_FILE="$(find android-build/app/src/main/java -type f -name MainActivity.kt -print -quit)"
+          test -n "$SCREENS_FILE" && test -n "$MAIN_FILE"
+          python3 - "$SCREENS_FILE" "$MAIN_FILE" <<'PY'
+          from pathlib import Path
+          import sys
+
+          screens_path, main_path = map(Path, sys.argv[1:])
+          source = screens_path.read_text(encoding="utf-8")
+          start = source.find("fun SettingsScreen(")
+          end = source.find("@Composable", start + 1)
+          if start < 0 or end < 0:
+              raise SystemExit("Could not isolate SettingsScreen")
+
+          settings = r'''@Composable
+          fun SettingsScreen(
+              speech: PersianSpeech,
+              preferences: android.content.SharedPreferences,
+              theme: String,
+              onThemeChange: (String) -> Unit,
+              onFontScaleChange: (Float) -> Unit,
+              onLockApp: () -> Unit,
+              onOpenSync: () -> Unit
+          ) {
+              val context = LocalContext.current
+              val voices = speech.voiceOptions
+              var speed by remember { mutableStateOf(preferences.getFloat("speech_rate", 1f).coerceIn(0.75f, 1.35f)) }
+              var voiceName by remember { mutableStateOf(preferences.getString("speech_voice", "gyro") ?: "gyro") }
+              var fontScale by remember { mutableStateOf(preferences.getFloat("font_scale", 1f).coerceIn(0.85f, 1.35f)) }
+              var readingLineSpacing by remember { mutableStateOf(preferences.getFloat("reading_line_spacing", 1.45f).coerceIn(1.1f, 2.2f)) }
+              var readingHorizontalMargin by remember { mutableStateOf(preferences.getFloat("reading_horizontal_margin", 16f).coerceIn(8f, 32f)) }
+              var keepScreenOnWhileReading by remember { mutableStateOf(preferences.getBoolean("keep_screen_on_while_reading", true)) }
+              var newAppPassword by remember { mutableStateOf("") }
+              var passwordMessage by remember { mutableStateOf("") }
+              var settingsMessage by remember { mutableStateOf("") }
+              var showResetDialog by remember { mutableStateOf(false) }
+              var showDeleteVoiceDialog by remember { mutableStateOf(false) }
+
+              fun folderSize(file: java.io.File): Long =
+                  if (!file.exists()) 0L else if (file.isFile) file.length()
+                  else file.listFiles()?.sumOf { folderSize(it) } ?: 0L
+
+              fun privateDataSize(): Long {
+                  val databaseFolder = context.getDatabasePath("mindunlock.db").parentFile
+                  return folderSize(context.filesDir) + folderSize(databaseFolder ?: context.filesDir)
+              }
+
+              var cacheBytes by remember { mutableStateOf(folderSize(context.cacheDir)) }
+              var storageBytes by remember { mutableStateOf(privateDataSize()) }
+              val appVersion = remember {
+                  runCatching {
+                      context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "نامشخص"
+                  }.getOrDefault("نامشخص")
+              }
+              val selectedVoice = voiceName.ifBlank { "gyro" }
+              val selectedVoiceLabel = voices.firstOrNull { it.first == selectedVoice }?.second ?: "نیما · مرد · Gyro"
+
+              Column(
+                  Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+                  verticalArrangement = Arrangement.spacedBy(12.dp)
+              ) {
+                  Text("مرکز تنظیمات MindUnlock", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                  Text("تنظیمات ظاهری، مطالعه، گفتار فارسی، امنیت، فضای ذخیره‌سازی و اتصال را از این بخش مدیریت کن.", style = MaterialTheme.typography.bodyMedium)
+
+                  Card(Modifier.fillMaxWidth()) {
+                      Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                          Text("۱. ظاهر و نمایش", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                          Text("قالب رنگی برنامه")
+                          listOf("dark" to "تیره", "light" to "روشن", "sepia" to "سپیا · مناسب مطالعه").forEach { option ->
+                              Row(
+                                  Modifier.fillMaxWidth().clickable { onThemeChange(option.first) }.padding(vertical = 2.dp),
+                                  verticalAlignment = Alignment.CenterVertically
+                              ) {
+                                  RadioButton(selected = theme == option.first, onClick = { onThemeChange(option.first) })
+                                  Text(option.second)
+                              }
+                          }
+                          HorizontalDivider()
+                          Text("اندازه نوشته‌های برنامه: " + String.format(java.util.Locale.US, "%.0f", fontScale * 100f) + "٪")
+                          Slider(
+                              value = fontScale,
+                              onValueChange = {
+                                  fontScale = it
+                                  onFontScaleChange(it)
+                              },
+                              valueRange = 0.85f..1.35f
+                          )
+                          Text("این گزینه اندازه متن بخش‌های مختلف برنامه را تغییر می‌دهد.", style = MaterialTheme.typography.bodySmall)
+                      }
+                  }
+
+                  Card(Modifier.fillMaxWidth()) {
+                      Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                          Text("۲. تنظیمات مطالعه", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                          Text("فاصله خطوط: " + String.format(java.util.Locale.US, "%.2f", readingLineSpacing) + " برابر")
+                          Slider(
+                              value = readingLineSpacing,
+                              onValueChange = {
+                                  readingLineSpacing = it
+                                  preferences.edit().putFloat("reading_line_spacing", it).apply()
+                              },
+                              valueRange = 1.1f..2.2f
+                          )
+                          Text("حاشیه افقی متن: " + String.format(java.util.Locale.US, "%.0f", readingHorizontalMargin) + " dp")
+                          Slider(
+                              value = readingHorizontalMargin,
+                              onValueChange = {
+                                  readingHorizontalMargin = it
+                                  preferences.edit().putFloat("reading_horizontal_margin", it).apply()
+                              },
+                              valueRange = 8f..32f
+                          )
+                          OutlinedButton(
+                              onClick = {
+                                  keepScreenOnWhileReading = !keepScreenOnWhileReading
+                                  preferences.edit().putBoolean("keep_screen_on_while_reading", keepScreenOnWhileReading).apply()
+                              },
+                              modifier = Modifier.fillMaxWidth()
+                          ) {
+                              Text(if (keepScreenOnWhileReading) "روشن ماندن صفحه هنگام مطالعه: فعال" else "روشن ماندن صفحه هنگام مطالعه: غیرفعال")
+                          }
+                          Text("تنظیمات فاصله خطوط، حاشیه و روشن‌ماندن صفحه بلافاصله ذخیره می‌شوند.", style = MaterialTheme.typography.bodySmall)
+                      }
+                  }
+
+                  Card(Modifier.fillMaxWidth()) {
+                      Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                          Text("۳. موتور گفتار فارسی", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                          Text("گوینده انتخاب‌شده: " + selectedVoiceLabel, style = MaterialTheme.typography.bodyMedium)
+                          Text(
+                              if (speech.ready.value) "وضعیت موتور: آماده"
+                              else if (speech.loading.value) "وضعیت موتور: در حال دریافت یا بارگذاری"
+                              else "وضعیت موتور: آماده نیست",
+                              color = if (speech.ready.value) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                          )
+                          Text("سرعت خواندن: " + String.format(java.util.Locale.US, "%.2f", speed) + " برابر")
+                          Slider(
+                              value = speed,
+                              onValueChange = {
+                                  speed = it
+                                  preferences.edit().putFloat("speech_rate", it).apply()
+                              },
+                              valueRange = 0.75f..1.35f
+                          )
+                          Text("مدل‌های گفتار فارسی", fontWeight = FontWeight.SemiBold)
+                          voices.forEach { voice ->
+                              val isSelected = selectedVoice == voice.first
+                              Card(
+                                  onClick = {
+                                      voiceName = voice.first
+                                      preferences.edit().putString("speech_voice", voice.first).apply()
+                                      speech.selectVoice(voice.first)
+                                  },
+                                  modifier = Modifier.fillMaxWidth(),
+                                  colors = CardDefaults.cardColors(
+                                      containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
+                                  )
+                              ) {
+                                  Row(Modifier.fillMaxWidth().padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                                      RadioButton(
+                                          selected = isSelected,
+                                          onClick = {
+                                              voiceName = voice.first
+                                              preferences.edit().putString("speech_voice", voice.first).apply()
+                                              speech.selectVoice(voice.first)
+                                          }
+                                      )
+                                      Column(Modifier.weight(1f)) {
+                                          Text(voice.second, fontWeight = FontWeight.SemiBold)
+                                          Text(
+                                              if (voice.first == "haaniye") "صدای زن · مدل Mimic3" else "صدای مرد · مدل Piper",
+                                              style = MaterialTheme.typography.labelSmall
+                                          )
+                                          Text(
+                                              if (speech.isVoiceDownloaded(voice.first)) "مدل نصب شده روی دستگاه" else "مدل دریافت نشده · با انتخاب، دانلود می‌شود",
+                                              style = MaterialTheme.typography.labelSmall
+                                          )
+                                      }
+                                  }
+                              }
+                          }
+                          Text(speech.status.value, style = MaterialTheme.typography.bodySmall)
+                          if (speech.loading.value) {
+                              LinearProgressIndicator(
+                                  progress = speech.downloadProgress.value,
+                                  modifier = Modifier.fillMaxWidth()
+                              )
+                              Text(
+                                  "دریافت‌شده: " + String.format(java.util.Locale.US, "%.1f", speech.downloadedBytes.value / (1024f * 1024f)) + " مگابایت",
+                                  style = MaterialTheme.typography.labelSmall
+                              )
+                          }
+                          speech.error.value?.let {
+                              Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                          }
+                          Button(
+                              onClick = {
+                                  speech.speak(
+                                      "سلام. این یک آزمایش صدای فارسی در برنامه مایندآنلاک است. کیفیت و سرعت گفتار را بررسی کن.",
+                                      speed,
+                                      selectedVoice
+                                  )
+                              },
+                              enabled = !speech.loading.value,
+                              modifier = Modifier.fillMaxWidth()
+                          ) { Text("آزمایش صدای انتخاب‌شده") }
+                          OutlinedButton(onClick = { speech.stop() }, modifier = Modifier.fillMaxWidth()) {
+                              Text("توقف پخش صدا")
+                          }
+                          OutlinedButton(onClick = { showDeleteVoiceDialog = true }, modifier = Modifier.fillMaxWidth()) {
+                              Text("حذف مدل صوتی انتخاب‌شده از حافظه")
+                          }
+                      }
+                  }
+
+                  Card(Modifier.fillMaxWidth()) {
+                      Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                          Text("۴. امنیت و قفل برنامه", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                          Text(
+                              if (com.mindunlock.app.AppLock.isConfigured(preferences)) "قفل برنامه فعال است؛ رمز به‌صورت هش‌شده نگهداری می‌شود."
+                              else "هنوز رمز قفل تنظیم نشده است.",
+                              style = MaterialTheme.typography.bodySmall
+                          )
+                          OutlinedTextField(
+                              value = newAppPassword,
+                              onValueChange = {
+                                  newAppPassword = it
+                                  passwordMessage = ""
+                              },
+                              modifier = Modifier.fillMaxWidth(),
+                              label = { Text("رمز جدید (حداقل ۴ کاراکتر)") },
+                              visualTransformation = PasswordVisualTransformation(),
+                              singleLine = true
+                          )
+                          Button(
+                              enabled = newAppPassword.length >= 4,
+                              onClick = {
+                                  runCatching {
+                                      com.mindunlock.app.AppLock.setPassword(preferences, newAppPassword.toCharArray())
+                                  }.onSuccess {
+                                      newAppPassword = ""
+                                      passwordMessage = "رمز قفل با موفقیت تغییر کرد."
+                                  }.onFailure {
+                                      passwordMessage = it.message ?: "تغییر رمز ناموفق بود."
+                                  }
+                              },
+                              modifier = Modifier.fillMaxWidth()
+                          ) { Text("ذخیره رمز جدید") }
+                          if (passwordMessage.isNotBlank()) {
+                              Text(passwordMessage, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
+                          }
+                          OutlinedButton(onClick = onLockApp, modifier = Modifier.fillMaxWidth()) {
+                              Text("قفل‌کردن برنامه اکنون")
+                          }
+                      }
+                  }
+
+                  Card(Modifier.fillMaxWidth()) {
+                      Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                          Text("۵. فضای ذخیره‌سازی", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                          Text(
+                              "داده‌های خصوصی برنامه: " + String.format(java.util.Locale.US, "%.1f", storageBytes / (1024.0 * 1024.0)) + " مگابایت"
+                          )
+                          Text(
+                              "حافظه موقت: " + String.format(java.util.Locale.US, "%.1f", cacheBytes / (1024.0 * 1024.0)) + " مگابایت"
+                          )
+                          Text("پاک‌سازی حافظه موقت، یادداشت‌ها، پیشرفت، نشانک‌ها و مدل‌های صوتی نصب‌شده را حذف نمی‌کند.", style = MaterialTheme.typography.bodySmall)
+                          OutlinedButton(
+                              onClick = {
+                                  runCatching {
+                                      context.cacheDir.listFiles()?.forEach { it.deleteRecursively() }
+                                      cacheBytes = folderSize(context.cacheDir)
+                                      storageBytes = privateDataSize()
+                                      settingsMessage = "حافظه موقت پاک‌سازی شد؛ اطلاعات مطالعه حفظ شده‌اند."
+                                  }.onFailure {
+                                      settingsMessage = "پاک‌سازی ناموفق بود: " + (it.message ?: "خطای ناشناخته")
+                                  }
+                              },
+                              modifier = Modifier.fillMaxWidth()
+                          ) { Text("پاک‌سازی امن حافظه موقت") }
+                          TextButton(
+                              onClick = {
+                                  cacheBytes = folderSize(context.cacheDir)
+                                  storageBytes = privateDataSize()
+                                  settingsMessage = "اطلاعات فضای ذخیره‌سازی به‌روزرسانی شد."
+                              },
+                              modifier = Modifier.fillMaxWidth()
+                          ) { Text("به‌روزرسانی اطلاعات حافظه") }
+                          if (settingsMessage.isNotBlank()) {
+                              Text(settingsMessage, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
+                          }
+                      }
+                  }
+
+                  Card(Modifier.fillMaxWidth()) {
+                      Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                          Text("۶. اتصال، همگام‌سازی و حریم خصوصی", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                          Text("این نسخه محتوای آموزشی را از سرور ویندوز دریافت می‌کند. یادداشت‌ها، نشانک‌ها و پیشرفت کاربر در پایگاه‌داده خصوصی همین دستگاه نگهداری می‌شوند و در قرارداد فعلی به سرور ارسال نمی‌شوند.", style = MaterialTheme.typography.bodySmall)
+                          Text("اتصال HTTP را فقط در شبکه محلی مورداعتماد استفاده کن و پورت سرور ویندوز را در اینترنت عمومی منتشر نکن.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                          Button(onClick = onOpenSync, modifier = Modifier.fillMaxWidth()) {
+                              Text("بازکردن تنظیمات اتصال به سرور ویندوز")
+                          }
+                      }
+                  }
+
+                  Card(Modifier.fillMaxWidth()) {
+                      Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                          Text("۷. درباره برنامه و عیب‌یابی", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                          Text("MindUnlock · نسخه " + appVersion)
+                          Text("Android " + android.os.Build.VERSION.RELEASE + " · API " + android.os.Build.VERSION.SDK_INT, style = MaterialTheme.typography.bodySmall)
+                          Text("شناسه بسته: " + context.packageName, style = MaterialTheme.typography.bodySmall)
+                          OutlinedButton(
+                              onClick = {
+                                  val report = "MindUnlock " + appVersion +
+                                      "\nAndroid " + android.os.Build.VERSION.RELEASE +
+                                      " (API " + android.os.Build.VERSION.SDK_INT + ")" +
+                                      "\nPackage: " + context.packageName +
+                                      "\nTheme: " + theme +
+                                      "\nFont scale: " + fontScale +
+                                      "\nSpeech voice: " + selectedVoice +
+                                      "\nSpeech status: " + speech.status.value +
+                                      "\nCache bytes: " + cacheBytes +
+                                      "\nPrivate data bytes: " + storageBytes
+                                  val clipboard = context.getSystemService(android.content.ClipboardManager::class.java)
+                                  if (clipboard != null) {
+                                      clipboard.setPrimaryClip(android.content.ClipData.newPlainText("MindUnlock diagnostics", report))
+                                      settingsMessage = "گزارش فنی در کلیپ‌بورد کپی شد."
+                                  } else {
+                                      settingsMessage = "دسترسی به کلیپ‌بورد ممکن نشد."
+                                  }
+                              },
+                              modifier = Modifier.fillMaxWidth()
+                          ) { Text("کپی گزارش فنی برای پشتیبانی") }
+                          OutlinedButton(
+                              onClick = {
+                                  runCatching {
+                                      context.startActivity(
+                                          android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                              data = android.net.Uri.parse("package:" + context.packageName)
+                                          }
+                                      )
+                                  }.onFailure {
+                                      settingsMessage = "بازکردن تنظیمات اندروید ناموفق بود."
+                                  }
+                              },
+                              modifier = Modifier.fillMaxWidth()
+                          ) { Text("بازکردن تنظیمات سیستمی برنامه") }
+                          OutlinedButton(onClick = { showResetDialog = true }, modifier = Modifier.fillMaxWidth()) {
+                              Text("بازنشانی تنظیمات برنامه")
+                          }
+                      }
+                  }
+              }
+
+              if (showDeleteVoiceDialog) {
+                  AlertDialog(
+                      onDismissRequest = { showDeleteVoiceDialog = false },
+                      title = { Text("حذف مدل گفتار؟") },
+                      text = { Text("فقط فایل‌های مدل گوینده انتخاب‌شده حذف می‌شوند. برای استفاده دوباره باید آن مدل را مجدداً دریافت کنی.") },
+                      confirmButton = {
+                          Button(onClick = {
+                              speech.deleteDownloadedVoice(selectedVoice)
+                              showDeleteVoiceDialog = false
+                          }) { Text("حذف مدل") }
+                      },
+                      dismissButton = {
+                          TextButton(onClick = { showDeleteVoiceDialog = false }) { Text("انصراف") }
+                      }
+                  )
+              }
+
+              if (showResetDialog) {
+                  AlertDialog(
+                      onDismissRequest = { showResetDialog = false },
+                      title = { Text("بازنشانی همه تنظیمات؟") },
+                      text = { Text("قالب، اندازه متن، فاصله خطوط، حاشیه مطالعه، روشن‌ماندن صفحه، سرعت و گوینده گفتار به حالت پیش‌فرض بازمی‌گردند. رمز قفل، یادداشت‌ها، نشانک‌ها، پیشرفت و فایل‌های صوتی حذف نمی‌شوند.") },
+                      confirmButton = {
+                          Button(onClick = {
+                              onThemeChange("dark")
+                              fontScale = 1f
+                              onFontScaleChange(1f)
+                              readingLineSpacing = 1.45f
+                              readingHorizontalMargin = 16f
+                              keepScreenOnWhileReading = true
+                              speed = 1f
+                              voiceName = "gyro"
+                              preferences.edit()
+                                  .putString("theme", "dark")
+                                  .putFloat("font_scale", 1f)
+                                  .putFloat("reading_line_spacing", 1.45f)
+                                  .putFloat("reading_horizontal_margin", 16f)
+                                  .putBoolean("keep_screen_on_while_reading", true)
+                                  .putFloat("speech_rate", 1f)
+                                  .putString("speech_voice", "gyro")
+                                  .apply()
+                              speech.stop()
+                              settingsMessage = "تنظیمات بازنشانی شد؛ اطلاعات شخصی و رمز قفل حفظ شده‌اند."
+                              showResetDialog = false
+                          }) { Text("تأیید بازنشانی") }
+                      },
+                      dismissButton = {
+                          TextButton(onClick = { showResetDialog = false }) { Text("انصراف") }
+                      }
+                  )
+              }
+          }
+          '''
+
+          source = source[:start] + settings + "\n\n" + source[end:]
+          required_imports = [
+              "import androidx.compose.foundation.clickable",
+              "import androidx.compose.foundation.layout.Arrangement",
+              "import androidx.compose.foundation.layout.Column",
+              "import androidx.compose.foundation.layout.Row",
+              "import androidx.compose.foundation.layout.fillMaxSize",
+              "import androidx.compose.foundation.layout.fillMaxWidth",
+              "import androidx.compose.foundation.layout.padding",
+              "import androidx.compose.foundation.rememberScrollState",
+              "import androidx.compose.foundation.verticalScroll",
+              "import androidx.compose.material3.AlertDialog",
+              "import androidx.compose.material3.Button",
+              "import androidx.compose.material3.Card",
+              "import androidx.compose.material3.CardDefaults",
+              "import androidx.compose.material3.HorizontalDivider",
+              "import androidx.compose.material3.LinearProgressIndicator",
+              "import androidx.compose.material3.MaterialTheme",
+              "import androidx.compose.material3.OutlinedButton",
+              "import androidx.compose.material3.OutlinedTextField",
+              "import androidx.compose.material3.RadioButton",
+              "import androidx.compose.material3.Slider",
+              "import androidx.compose.material3.Text",
+              "import androidx.compose.material3.TextButton",
+              "import androidx.compose.runtime.Composable",
+              "import androidx.compose.runtime.getValue",
+              "import androidx.compose.runtime.mutableStateOf",
+              "import androidx.compose.runtime.remember",
+              "import androidx.compose.runtime.setValue",
+              "import androidx.compose.ui.Alignment",
+              "import androidx.compose.ui.Modifier",
+              "import androidx.compose.ui.platform.LocalContext",
+              "import androidx.compose.ui.text.font.FontWeight",
+              "import androidx.compose.ui.text.input.PasswordVisualTransformation",
+              "import androidx.compose.ui.unit.dp",
+          ]
+          lines = source.splitlines()
+          for item in required_imports:
+              if item not in lines:
+                  lines.insert(1, item)
+          screens_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+          main = main_path.read_text(encoding="utf-8")
+          old_call = '"settings" -> SettingsScreen(speech, preferences, initialTheme, onThemeChange, onFontScaleChange)'
+          new_call = '"settings" -> SettingsScreen(speech, preferences, initialTheme, onThemeChange, onFontScaleChange, onLockApp, { screen = "sync" })'
+          if old_call in main:
+              main = main.replace(old_call, new_call, 1)
+          elif new_call not in main:
+              raise SystemExit("Could not update SettingsScreen navigation call")
+          main_path.write_text(main, encoding="utf-8")
+          print("Replaced settings with seven functional groups and wired lock and Windows sync navigation.")
+          PY
+
       - name: Prevent chapter screen stalls with lightweight queries and pagination
         shell: bash
         run: |
