@@ -445,11 +445,11 @@ jobs:
               "private data class ModelSpec(val archive: String, val directory: String, val model: String, val archiveBytes: Long)"
           )
           replacements = {
-              '"vits-piper-fa_IR-amir-medium.tar.bz2", "vits-piper-fa_IR-amir-medium", "fa_IR-amir-medium.onnx")':
+              'vits-piper-fa_IR-amir-medium.tar.bz2", "vits-piper-fa_IR-amir-medium", "fa_IR-amir-medium.onnx")':
               '"vits-piper-fa_IR-amir-medium.tar.bz2", "vits-piper-fa_IR-amir-medium", "fa_IR-amir-medium.onnx", 67180373L)',
-              '"vits-mimic3-fa-haaniye_low.tar.bz2", "vits-mimic3-fa-haaniye_low", "fa-haaniye_low.onnx")':
+              'vits-mimic3-fa-haaniye_low.tar.bz2", "vits-mimic3-fa-haaniye_low", "fa-haaniye_low.onnx")':
               '"vits-mimic3-fa-haaniye_low.tar.bz2", "vits-mimic3-fa-haaniye_low", "fa-haaniye_low.onnx", 67093314L)',
-              '"vits-piper-fa_IR-gyro-medium.tar.bz2", "vits-piper-fa_IR-gyro-medium", "fa_IR-gyro-medium.onnx")':
+              'vits-piper-fa_IR-gyro-medium.tar.bz2", "vits-piper-fa_IR-gyro-medium", "fa_IR-gyro-medium.onnx")':
               '"vits-piper-fa_IR-gyro-medium.tar.bz2", "vits-piper-fa_IR-gyro-medium", "fa_IR-gyro-medium.onnx", 67183308L)',
           }
           for old, new in replacements.items():
