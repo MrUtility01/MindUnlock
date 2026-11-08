@@ -1069,6 +1069,96 @@ jobs:
               grep -nE '(@Dao|@Entity|interface .*Dao|abstract class .*Database|data class .*Entity|@Query|@Upsert|@Insert|@Delete|fun (insert|update|delete|observe|get|all|save|upsert))' "$file" | head -220 || true
             fi
           done | tee "$GITHUB_STEP_SUMMARY"
+
+      - name: Add persistent reading typography and margin controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          SCREENS_FILE="$(find android-build/app/src/main/java -type f -name StudyScreens.kt -print -quit)"
+          test -n "$SCREENS_FILE"
+          python3 - "$SCREENS_FILE" <<'PY'
+          from pathlib import Path
+          import sys
+
+          path = Path(sys.argv[1])
+          lines = path.read_text(encoding="utf-8").splitlines()
+
+          def unique_line(predicate, label):
+              matches = [i for i, line in enumerate(lines) if predicate(line)]
+              if len(matches) != 1:
+                  raise SystemExit(label + " marker expected once, found " + str(len(matches)))
+              return matches[0]
+
+          # Persistent settings state, separate from the app-wide font scale.
+          font_state = 'var fontScale by remember { mutableStateOf(preferences.getFloat("font_scale", 1f)) }'
+          font_index = unique_line(lambda line: line.strip() == font_state, "SettingsScreen fontScale")
+          if not any("readingLineSpacing by remember" in line for line in lines):
+              lines[font_index + 1:font_index + 1] = [
+                  '    var readingLineSpacing by remember { mutableStateOf(preferences.getFloat("reading_line_spacing", 1.45f)) }',
+                  '    var readingHorizontalMargin by remember { mutableStateOf(preferences.getFloat("reading_horizontal_margin", 16f)) }'
+              ]
+
+          # Real sliders save immediately to SharedPreferences.
+          speech_heading = 'Text("خواندن با صدای فارسی", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)'
+          if not any("حاشیه افقی متن:" in line for line in lines):
+              ui_index = unique_line(lambda line: line.strip() == speech_heading, "speech settings heading")
+              controls = [
+                  '        Text("تنظیمات صفحه مطالعه", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)',
+                  '        Text("فاصله خطوط: " + String.format(Locale.ROOT, "%.2f", readingLineSpacing) + "×")',
+                  '        Slider(',
+                  '            value = readingLineSpacing,',
+                  '            onValueChange = { value ->',
+                  '                readingLineSpacing = value',
+                  '                preferences.edit().putFloat("reading_line_spacing", value).apply()',
+                  '            },',
+                  '            valueRange = 1.1f..2.2f',
+                  '        )',
+                  '        Text("حاشیه افقی متن: " + String.format(Locale.ROOT, "%.0f", readingHorizontalMargin) + " dp")',
+                  '        Slider(',
+                  '            value = readingHorizontalMargin,',
+                  '            onValueChange = { value ->',
+                  '                readingHorizontalMargin = value',
+                  '                preferences.edit().putFloat("reading_horizontal_margin", value).apply()',
+                  '            },',
+                  '            valueRange = 8f..32f',
+                  '        )',
+                  '        Text("تغییرات بلافاصله ذخیره می‌شوند و در صفحه مطالعه اعمال خواهند شد.", style = MaterialTheme.typography.bodySmall)'
+              ]
+              lines[ui_index:ui_index] = controls
+
+          # Read the same persisted values when the reader is opened.
+          reader_start = unique_line(lambda line: line.startswith("fun ReaderScreen("), "ReaderScreen")
+          keep_line = next((i for i in range(reader_start, len(lines)) if 'val keepAwakeEnabled = preferences.getBoolean("keep_screen_on_while_reading", true)' in lines[i]), -1)
+          if keep_line < 0:
+              raise SystemExit("ReaderScreen keep-screen-on preference marker not found")
+          if not any('val readingLineSpacing = preferences.getFloat("reading_line_spacing"' in line for line in lines[reader_start:]):
+              lines[keep_line + 1:keep_line + 1] = [
+                  '    val readingLineSpacing = preferences.getFloat("reading_line_spacing", 1.45f).coerceIn(1.1f, 2.2f)',
+                  '    val readingHorizontalMargin = preferences.getFloat("reading_horizontal_margin", 16f).coerceIn(8f, 32f)'
+              ]
+
+          old_content = 'if (!current.content.isNullOrBlank()) Text(cleanHtml(current.content), style = MaterialTheme.typography.bodyLarge)'
+          new_content = '''if (!current.content.isNullOrBlank()) {
+                  Text(
+                      cleanHtml(current.content),
+                      modifier = Modifier.padding(horizontal = readingHorizontalMargin.dp),
+                      style = MaterialTheme.typography.bodyLarge.copy(
+                          lineHeight = MaterialTheme.typography.bodyLarge.fontSize * readingLineSpacing
+                      )
+                  )
+              }'''
+          if any("readingHorizontalMargin.dp" in line for line in lines):
+              pass
+          else:
+              content_index = unique_line(lambda line: line.strip() == old_content, "reader content Text")
+              indent = lines[content_index][:len(lines[content_index]) - len(lines[content_index].lstrip())]
+              lines[content_index:content_index + 1] = [indent + part if part else "" for part in new_content.splitlines()]
+
+          path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+          print("Persistent line spacing and horizontal text margins added to SettingsScreen and ReaderScreen.")
+          PY
+
+
       - name: Run JVM unit tests
         working-directory: android-build
         run: ./gradlew testDebugUnitTest --stacktrace
