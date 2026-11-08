@@ -1273,12 +1273,15 @@ jobs:
               "import androidx.compose.runtime.LaunchedEffect",
               1
           )
+          blocking_call = "runBlocking(Dispatchers.IO) { LegacyDatabaseMigrator.migrate(this@MainActivity, app.repository.database, userDatabase) }"
+          if blocking_call not in source:
+              raise SystemExit("Blocking legacy migration call not found")
+          source = source.replace(blocking_call, "", 1)
 
-          old_setup = '''        val userDatabase = UserDatabase.getInstance(this)
-                  runBlocking(Dispatchers.IO) { LegacyDatabaseMigrator.migrate(this@MainActivity, app.repository.database, userDatabase) }
-                  setContent {'''
-          new_setup = '''        val userDatabase = UserDatabase.getInstance(this)
-                  setContent {
+          set_content_marker = "        setContent {\n"
+          if set_content_marker not in source:
+              raise SystemExit("MainActivity setContent marker not found")
+          startup_effect = """        setContent {
                       var startupReady by remember { mutableStateOf(false) }
                       LaunchedEffect(Unit) {
                           try {
@@ -1290,118 +1293,38 @@ jobs:
                           } finally {
                               startupReady = true
                           }
-                      }'''
-          if old_setup not in source:
-              raise SystemExit("MainActivity migration startup block marker not found")
-          source = source.replace(old_setup, new_setup, 1)
+                      }
+          """
+          source = source.replace(set_content_marker, startup_effect, 1)
 
-          old_gate = '''                    if (!unlocked) {
-                          Column(Modifier.fillMaxSize().padding(28.dp), verticalArrangement = Arrangement.Center) {'''
-          new_gate = '''                    if (!startupReady) {
-                          Column(Modifier.fillMaxSize().padding(28.dp), verticalArrangement = Arrangement.Center) {
-                              Text("MindUnlock", style = MaterialTheme.typography.headlineSmall)
-                              Text("در حال آماده‌سازی اطلاعات برنامه…")
-                          }
-                      } else if (!unlocked) {
-                          Column(Modifier.fillMaxSize().padding(28.dp), verticalArrangement = Arrangement.Center) {'''
-          if old_gate not in source:
-              raise SystemExit("MainActivity startup UI gate marker not found")
-          source = source.replace(old_gate, new_gate, 1)
+          gate_marker = "if (!unlocked) {"
+          if gate_marker not in source:
+              raise SystemExit("MainActivity app-lock UI marker not found")
+          startup_gate = """if (!startupReady) {
+                              Column(Modifier.fillMaxSize().padding(28.dp), verticalArrangement = Arrangement.Center) {
+                                  Text("MindUnlock", style = MaterialTheme.typography.headlineSmall)
+                                  Text("در حال آماده‌سازی اطلاعات برنامه…")
+                              }
+                          } else if (!unlocked) {"""
+          source = source.replace(gate_marker, startup_gate, 1)
 
-          if "runBlocking(Dispatchers.IO)" in source or "import kotlinx.coroutines.runBlocking" in source:
-              raise SystemExit("Blocking migration call remains in MainActivity")
-          if "LaunchedEffect(Unit)" not in source or "MindUnlockStartup" not in source:
+          if "runBlocking(" in source or "import kotlinx.coroutines.runBlocking" in source:
+              raise SystemExit("Blocking migration code remains in MainActivity")
+          if "LaunchedEffect(Unit)" not in source or "withContext(Dispatchers.IO)" not in source or "startupReady = true" not in source:
               raise SystemExit("Non-blocking startup migration was not installed")
           path.write_text(source, encoding="utf-8")
-          print("Legacy database migration now runs on Dispatchers.IO after Compose startup; failures are logged and do not terminate startup.")
+          print("Legacy database migration now runs asynchronously; startup continues after migration errors.")
           PY
           python3 - "$MAIN_FILE" <<'PY'
           from pathlib import Path
           import sys
-          s = Path(sys.argv[1]).read_text(encoding="utf-8")
-          assert "runBlocking(" not in s
-          assert "LaunchedEffect(Unit)" in s
-          assert "withContext(Dispatchers.IO)" in s
-          assert "startupReady = true" in s
+          source = Path(sys.argv[1]).read_text(encoding="utf-8")
+          assert "runBlocking(" not in source
+          assert "LaunchedEffect(Unit)" in source
+          assert "withContext(Dispatchers.IO)" in source
+          assert "startupReady = true" in source
+          assert "else if (!unlocked)" in source
           print("Non-blocking startup assertions passed.")
-          PY
-
-      - name: Move legacy database migration off the Android main thread
-        shell: bash
-        run: |
-          set -euo pipefail
-          MAIN_FILE="$(find android-build/app/src/main/java -type f -name MainActivity.kt -print -quit)"
-          test -n "$MAIN_FILE"
-          python3 - "$MAIN_FILE" <<'PY'
-          from pathlib import Path
-          import sys
-
-          path = Path(sys.argv[1])
-          source = path.read_text(encoding="utf-8")
-
-          # Compose owns the loading state while database migration runs on IO.
-          import_line = "import androidx.compose.runtime.LaunchedEffect"
-          if import_line not in source:
-              package_end = source.find(chr(10))
-              if package_end < 0:
-                  raise SystemExit("MainActivity package declaration not found")
-              source = source[:package_end + 1] + import_line + chr(10) + source[package_end + 1:]
-
-          source = source.replace("import kotlinx.coroutines.runBlocking" + chr(10), "")
-          blocking_line = "        runBlocking(Dispatchers.IO) { LegacyDatabaseMigrator.migrate(this@MainActivity, app.repository.database, userDatabase) }"
-          if blocking_line in source:
-              source = source.replace(blocking_line + chr(10), "", 1)
-          elif "LegacyDatabaseMigrator.migrate(this@MainActivity" in source:
-              raise SystemExit("Unexpected legacy migration invocation; refusing unsafe partial replacement")
-
-          state_anchor = '            var lockError by rememberSaveable { mutableStateOf("") }'
-          states = '''            var databaseReady by rememberSaveable { mutableStateOf(false) }
-                      var migrationError by rememberSaveable { mutableStateOf("") }
-                      var migrationAttempt by rememberSaveable { mutableStateOf(0) }
-
-                      LaunchedEffect(migrationAttempt) {
-                          migrationError = ""
-                          try {
-                              withContext(Dispatchers.IO) {
-                                  LegacyDatabaseMigrator.migrate(this@MainActivity, app.repository.database, userDatabase)
-                              }
-                              databaseReady = true
-                          } catch (error: Exception) {
-                              migrationError = error.message ?: "انتقال اطلاعات قدیمی ناموفق بود."
-                          }
-                      }'''
-          if "var databaseReady by rememberSaveable" not in source:
-              if source.count(state_anchor) != 1:
-                  raise SystemExit("Could not uniquely find MainActivity startup state insertion point")
-              source = source.replace(state_anchor, state_anchor + chr(10) + states, 1)
-
-          screen_anchor = "                    if (!unlocked) {"
-          loading = '''                    if (!databaseReady) {
-                                  Column(Modifier.fillMaxSize().padding(28.dp), verticalArrangement = Arrangement.Center) {
-                                      Text("MindUnlock · آماده‌سازی برنامه", style = MaterialTheme.typography.headlineSmall)
-                                      Text(
-                                          if (migrationError.isBlank()) "در حال آماده‌سازی و انتقال اطلاعات قبلی..." else "آماده‌سازی کامل نشد: $migrationError",
-                                          color = if (migrationError.isBlank()) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.error
-                                      )
-                                      if (migrationError.isNotBlank()) {
-                                          Button(onClick = { migrationAttempt += 1 }, modifier = Modifier.fillMaxWidth()) {
-                                              Text("تلاش مجدد")
-                                          }
-                                      }
-                                  }
-                              } else if (!unlocked) {'''
-          if "if (!databaseReady)" not in source:
-              if source.count(screen_anchor) != 1:
-                  raise SystemExit("Could not uniquely locate the startup screen branch")
-              source = source.replace(screen_anchor, loading, 1)
-
-          if "runBlocking" in source:
-              raise SystemExit("runBlocking remains in MainActivity after migration patch")
-          if "LaunchedEffect(migrationAttempt)" not in source or "withContext(Dispatchers.IO)" not in source or "if (!databaseReady)" not in source:
-              raise SystemExit("Non-blocking migration startup assertions failed")
-
-          path.write_text(source, encoding="utf-8")
-          print("Legacy migration now runs asynchronously on Dispatchers.IO; UI shows progress and retry on error.")
           PY
 
       - name: Run JVM unit tests
