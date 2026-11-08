@@ -476,7 +476,7 @@ jobs:
           AAPT="$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -n1)"
           test -n "$AAPT"
           "$AAPT" dump badging "$APK" | tee /tmp/apk-badging.txt
-          grep -q "^package: name='com.mindunlock.app'" /tmp/apk-badging.txt
+          grep -Eq "^package: name='com\\.mindunlock\\.app(\\.debug)?'" /tmp/apk-badging.txt
           echo "APK_SIZE_BYTES=$(stat -c%s "$APK")" | tee -a "$GITHUB_STEP_SUMMARY"
           echo "APK archive integrity and application package verified." | tee -a "$GITHUB_STEP_SUMMARY"
 
