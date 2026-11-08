@@ -746,8 +746,8 @@ jobs:
 
           path = Path(sys.argv[1])
           source = path.read_text(encoding="utf-8")
+          newline = chr(10)
 
-          # Insert persistent preference state in SettingsScreen, after voiceOptions.
           settings_start = source.find("fun SettingsScreen(")
           if settings_start < 0:
               raise SystemExit("SettingsScreen declaration not found")
@@ -755,11 +755,12 @@ jobs:
           voice_at = source.find(voice_marker, settings_start)
           if voice_at < 0:
               raise SystemExit("Could not locate voiceOptions in SettingsScreen")
+
           if "keepScreenOnWhileReading" not in source:
-              line_end = source.find("\\n", voice_at)
+              line_end = source.find(newline, voice_at)
               if line_end < 0:
                   raise SystemExit("SettingsScreen voiceOptions line is malformed")
-              state_line = '    var keepScreenOnWhileReading by remember { mutableStateOf(preferences.getBoolean("keep_screen_on_while_reading", true)) }\\n'
+              state_line = '    var keepScreenOnWhileReading by remember { mutableStateOf(preferences.getBoolean("keep_screen_on_while_reading", true)) }' + newline
               source = source[:line_end + 1] + state_line + source[line_end + 1:]
 
           ui_marker = '        Text("خواندن با صدای فارسی", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)'
@@ -780,7 +781,6 @@ jobs:
                   raise SystemExit("Settings UI insertion marker missing or ambiguous")
               source = source.replace(ui_marker, ui_block + ui_marker, 1)
 
-          # Apply FLAG_KEEP_SCREEN_ON only while ReaderScreen is composed.
           reader_start = source.find("fun ReaderScreen(")
           if reader_start < 0:
               raise SystemExit("ReaderScreen declaration not found")
