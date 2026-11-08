@@ -836,10 +836,10 @@ jobs:
               "import androidx.activity.result.contract.ActivityResultContracts",
           ):
               if import_line not in source:
-                  package_end = source.find("\\n")
+          package_end = source.find(chr(10))
                   if package_end < 0:
                       raise SystemExit("Kotlin package declaration not found")
-                  source = source[:package_end + 1] + "\\n" + import_line + source[package_end + 1:]
+                  source = source[:package_end + 1] + chr(10) + import_line + source[package_end + 1:]
 
           def replace_composable(name: str, replacement: str) -> None:
               global source
@@ -850,10 +850,10 @@ jobs:
               start = source.rfind("@Composable", 0, at)
               if start < 0:
                   raise SystemExit(name + " @Composable annotation not found")
-              end = source.find("\\n@Composable", at)
+              end = source.find(chr(10) + "@Composable", at)
               if end < 0:
                   raise SystemExit("Could not find the end boundary for " + name)
-              source = source[:start] + replacement.rstrip() + "\\n\\n" + source[end + 1:]
+              source = source[:start] + replacement.rstrip() + chr(10) + chr(10) + source[end + 1:]
 
           notes_screen = r'''@Composable
           fun NotesScreen(userDb: UserDatabase) {
