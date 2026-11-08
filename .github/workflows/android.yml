@@ -1956,8 +1956,59 @@ jobs:
           if "LaunchedEffect(migrationAttempt)" not in source or "withContext(Dispatchers.IO)" not in source or "startupReady = true" not in source:
               raise SystemExit("Asynchronous migration code was not installed")
 
+          migrator_path = path.parent / "data" / "local" / "LegacyDatabaseMigrator.kt"
+          migrator = migrator_path.read_text(encoding="utf-8")
+          old_signature = "    @Synchronized fun migrate(context: Context, content: AppDatabase, user: UserDatabase) {"
+          new_signature = "    @Synchronized fun migrate(context: Context, content: AppDatabase, user: UserDatabase, onProgress: (String) -> Unit = {}) {"
+          if old_signature not in migrator: raise SystemExit("Legacy migrator signature not found")
+          migrator = migrator.replace(old_signature, new_signature, 1)
+          migrator = migrator.replace(
+              '        val prefs = context.getSharedPreferences("mindunlock_db_migration", Context.MODE_PRIVATE)',
+              '        val startedAt = System.nanoTime()\n        onProgress("بررسی انتقال اطلاعات قدیمی...")\n        android.util.Log.i("MindUnlockStartup", "Legacy migration started")\n        val prefs = context.getSharedPreferences("mindunlock_db_migration", Context.MODE_PRIVATE)',
+              1
+          )
+          migrator = migrator.replace(
+              '        if (prefs.getBoolean("split_v1_complete", false)) return',
+              '        if (prefs.getBoolean("split_v1_complete", false)) { onProgress("انتقال اطلاعات قبلی قبلاً انجام شده است."); android.util.Log.i("MindUnlockStartup", "Legacy migration skipped: complete marker present"); return }',
+              1
+          )
+          table_calls = [
+              ('copyTable(source, contentTarget, "chapters")', 'onProgress("انتقال فصل‌ها...")\n                copyTable(source, contentTarget, "chapters")'),
+              ('copyTable(source, contentTarget, "content_items")', 'onProgress("انتقال محتوای آموزشی...")\n                copyTable(source, contentTarget, "content_items")'),
+              ('copyTable(source, contentTarget, "server_config")', 'onProgress("انتقال تنظیمات سرور...")\n                copyTable(source, contentTarget, "server_config")'),
+              ('copyTable(source, contentTarget, "media_cache")', 'onProgress("انتقال حافظه رسانه...")\n                copyTable(source, contentTarget, "media_cache")'),
+              ('copyTable(source, userTarget, "progress")', 'onProgress("انتقال پیشرفت مطالعه...")\n                copyTable(source, userTarget, "progress")'),
+              ('copyTable(source, userTarget, "notes")', 'onProgress("انتقال یادداشت‌ها...")\n                copyTable(source, userTarget, "notes")'),
+              ('copyTable(source, userTarget, "bookmarks")', 'onProgress("انتقال نشانک‌ها...")\n                copyTable(source, userTarget, "bookmarks")'),
+              ('copyTable(source, userTarget, "study_tasks")', 'onProgress("انتقال برنامه‌های مطالعه...")\n                copyTable(source, userTarget, "study_tasks")')
+          ]
+          for old_call, new_call in table_calls:
+              if old_call not in migrator: raise SystemExit("Legacy table copy call missing: " + old_call)
+              migrator = migrator.replace(old_call, new_call, 1)
+          old_complete = '            prefs.edit().putBoolean("split_v1_complete", true).apply()'
+          new_complete = '            prefs.edit().putBoolean("split_v1_complete", true).apply()\n            val elapsedMs = (System.nanoTime() - startedAt) / 1_000_000\n            onProgress("انتقال اطلاعات کامل شد؛ زمان: " + elapsedMs + " میلی‌ثانیه")\n            android.util.Log.i("MindUnlockStartup", "Legacy migration completed in " + elapsedMs + "ms")'
+          if old_complete not in migrator: raise SystemExit("Legacy completion marker not found")
+          migrator = migrator.replace(old_complete, new_complete, 1)
+          migrator_path.write_text(migrator, encoding="utf-8")
+
+          call_old = "LegacyDatabaseMigrator.migrate(this@MainActivity, app.repository.database, userDatabase)"
+          call_new = "LegacyDatabaseMigrator.migrate(this@MainActivity, app.repository.database, userDatabase, onProgress = { phase -> runOnUiThread { migrationStatus = phase } })"
+          if call_old not in source: raise SystemExit("MainActivity migration call not found")
+          source = source.replace(call_old, call_new, 1)
+          source = source.replace(
+              'var migrationError by rememberSaveable { mutableStateOf("") }',
+              'var migrationError by rememberSaveable { mutableStateOf("") }\n                      var migrationStatus by rememberSaveable { mutableStateOf("شروع آماده‌سازی...") }',
+              1
+          )
+          source = source.replace('migrationError = ""\n                          try {', 'migrationError = ""\n                          migrationStatus = "شروع آماده‌سازی..."\n                          try {', 1)
+          source = source.replace(
+              'Text("در حال آماده‌سازی و انتقال اطلاعات قبلی...")',
+              'Text(migrationStatus, color = MaterialTheme.colorScheme.onSurfaceVariant)',
+              1
+          )
+
           path.write_text(source, encoding="utf-8")
-          print("Legacy migration now runs asynchronously on Dispatchers.IO; startup displays progress and offers retry on failure.")
+          print("Legacy migration now runs asynchronously with per-table phase progress and elapsed-time diagnostics.")
           PY
           python3 - "$MAIN_FILE" <<'PY'
           from pathlib import Path
