@@ -748,17 +748,23 @@ jobs:
           path = Path(sys.argv[1])
           source = path.read_text(encoding="utf-8")
 
-          settings_marker = '    val voices = speech.voiceOptions\\n'
-          settings_state = '''    val voices = speech.voiceOptions
-              var keepScreenOnWhileReading by remember {
-                  mutableStateOf(preferences.getBoolean("keep_screen_on_while_reading", true))
-              }
-          '''
+          # Add a persisted setting inside SettingsScreen, after its voice list.
+          settings_start = source.find("fun SettingsScreen(")
+          if settings_start < 0:
+              raise SystemExit("SettingsScreen declaration not found")
+          settings_match = re.search(r"(?m)^([ \\t]*)val voices = speech\\.voiceOptions[ \\t]*$", source[settings_start:])
           if "keepScreenOnWhileReading" not in source:
-              if source.count(settings_marker) != 1:
-                  raise SystemExit("Settings state insertion marker missing or ambiguous")
-              source = source.replace(settings_marker, settings_state, 1)
+              if not settings_match:
+                  raise SystemExit("Could not locate voice-list state inside SettingsScreen")
+              insert_at = settings_start + settings_match.end()
+              indent = settings_match.group(1)
+              state = (
+                  "\\n" + indent +
+                  'var keepScreenOnWhileReading by remember { mutableStateOf(preferences.getBoolean("keep_screen_on_while_reading", true)) }'
+              )
+              source = source[:insert_at] + state + source[insert_at:]
 
+          # Add a real control that persists its value.
           ui_marker = '        Text("خواندن با صدای فارسی", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)'
           ui_block = '''        Text("مطالعه", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                   OutlinedButton(
@@ -770,18 +776,21 @@ jobs:
                   ) {
                       Text(if (keepScreenOnWhileReading) "روشن ماندن صفحه هنگام مطالعه: فعال" else "روشن ماندن صفحه هنگام مطالعه: غیرفعال")
                   }
-                  Text("این گزینه فقط هنگام باز بودن صفحهٔ مطالعه اثر می‌کند؛ پس از خروج از مطالعه، قفل خودکار گوشی به حالت عادی برمی‌گردد.", style = MaterialTheme.typography.bodySmall)
+                  Text("این گزینه فقط هنگام باز بودن صفحهٔ مطالعه اثر می‌کند؛ با خروج از مطالعه، محدودیت روشن‌ماندن صفحه برداشته می‌شود.", style = MaterialTheme.typography.bodySmall)
           '''
           if "روشن ماندن صفحه هنگام مطالعه:" not in source:
               if source.count(ui_marker) != 1:
                   raise SystemExit("Settings UI insertion marker missing or ambiguous")
               source = source.replace(ui_marker, ui_block + ui_marker, 1)
 
-          reader_pattern = r'(fun ReaderScreen\\(db: AppDatabase, userDb: UserDatabase, itemUid: String, speech: PersianSpeech, preferences: android\\.content\\.SharedPreferences\\) \\{)'
-          match = re.search(reader_pattern, source)
-          if not match:
-              raise SystemExit("ReaderScreen signature not found; refusing to add a setting that would not affect reading")
+          # Find ReaderScreen by declaration, then its opening brace; avoid brittle signature matching.
+          reader_start = source.find("fun ReaderScreen(")
+          if reader_start < 0:
+              raise SystemExit("ReaderScreen declaration not found")
           if "keepAwakeActivity" not in source:
+              opening_brace = source.find("{", reader_start)
+              if opening_brace < 0 or opening_brace - reader_start > 1200:
+                  raise SystemExit("ReaderScreen opening brace not found near declaration")
               reader_code = '''
               val keepAwakeContext = androidx.compose.ui.platform.LocalContext.current
               val keepAwakeActivity = androidx.compose.runtime.remember(keepAwakeContext) {
@@ -804,10 +813,10 @@ jobs:
                   }
               }
           '''
-              source = source[:match.end()] + reader_code + source[match.end():]
+              source = source[:opening_brace + 1] + reader_code + source[opening_brace + 1:]
 
           path.write_text(source, encoding="utf-8")
-          print("Added persistent reading-only keep-screen-on preference and lifecycle cleanup.")
+          print("Added persistent reading-only keep-screen-on preference with lifecycle cleanup.")
           PY
 
       - name: Run JVM unit tests
