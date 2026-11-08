@@ -1765,6 +1765,48 @@ jobs:
           print("Chapter performance assertions passed.")
           PY
 
+      - name: Remove full content-table observation from subject screen
+        shell: bash
+        run: |
+          set -euo pipefail
+          PACKAGE_DIR="$(dirname "$(find android-build/app/src/main/java -type f -name MainActivity.kt -print -quit)")"
+          SCREENS="$PACKAGE_DIR/ui/StudyScreens.kt"
+          DAO="$PACKAGE_DIR/data/local/AppDatabase.kt"
+          test -s "$SCREENS" && test -s "$DAO"
+          grep -q 'fun observeItemCount(): Flow<Int>' "$DAO"
+          python3 - "$SCREENS" <<'PY'
+          from pathlib import Path
+          import sys
+
+          path = Path(sys.argv[1])
+          source = path.read_text(encoding="utf-8")
+          old_observation = 'val items by db.contentItemDao().observeAll().collectAsState(initial = emptyList())'
+          new_observation = 'val allItemsCount by db.contentItemDao().observeItemCount().collectAsState(initial = 0)'
+          if source.count(old_observation) != 1:
+              raise SystemExit("Expected exactly one full-table observation in SubjectListScreen; refusing an ambiguous edit")
+          source = source.replace(old_observation, new_observation, 1)
+          old_label = 'Text("${subjects.size} موضوع · ${chapters.size} فصل · ${items.size} مطلب",'
+          new_label = 'Text("${subjects.size} موضوع · ${chapters.size} فصل · ${allItemsCount} مطلب",'
+          if source.count(old_label) != 1:
+              raise SystemExit("Subject summary count label was not found exactly once")
+          source = source.replace(old_label, new_label, 1)
+          start = source.find("fun SubjectListScreen(")
+          end = source.find("@Composable", start + 1)
+          if start < 0 or end < 0:
+              raise SystemExit("Could not isolate SubjectListScreen for safety assertions")
+          screen = source[start:end]
+          if "contentItemDao().observeAll()" in screen or "allItemsCount" not in screen:
+              raise SystemExit("SubjectListScreen still collects the full content table")
+          path.write_text(source, encoding="utf-8")
+          print("Subject list now uses a count-only DAO flow; it no longer loads every lesson body to show the total.")
+          PY
+          grep -q 'val allItemsCount by db.contentItemDao().observeItemCount().collectAsState(initial = 0)' "$SCREENS"
+          if sed -n '/fun SubjectListScreen(/,/^@Composable/p' "$SCREENS" | grep -q 'contentItemDao().observeAll()'; then
+            echo "Full content-table observation remains in SubjectListScreen." >&2
+            exit 1
+          fi
+          echo "Subject-list memory safety assertions passed."
+
       - name: Inspect optimized dashboard counters after chapter patch
         shell: bash
         run: |
