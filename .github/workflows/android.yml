@@ -817,6 +817,227 @@ jobs:
           PY
 
 
+
+      - name: Add notes export and bookmark search/delete controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          SCREENS_FILE="$(find android-build/app/src/main/java -type f -name StudyScreens.kt -print -quit)"
+          test -n "$SCREENS_FILE"
+          python3 - "$SCREENS_FILE" <<'PY'
+          from pathlib import Path
+          import sys
+
+          path = Path(sys.argv[1])
+          source = path.read_text(encoding="utf-8")
+
+          for import_line in (
+              "import androidx.activity.compose.rememberLauncherForActivityResult",
+              "import androidx.activity.result.contract.ActivityResultContracts",
+          ):
+              if import_line not in source:
+                  package_end = source.find("\\n")
+                  if package_end < 0:
+                      raise SystemExit("Kotlin package declaration not found")
+                  source = source[:package_end + 1] + "\\n" + import_line + source[package_end + 1:]
+
+          def replace_composable(name: str, replacement: str) -> None:
+              global source
+              signature = "fun " + name + "("
+              at = source.find(signature)
+              if at < 0:
+                  raise SystemExit(name + " declaration not found")
+              start = source.rfind("@Composable", 0, at)
+              if start < 0:
+                  raise SystemExit(name + " @Composable annotation not found")
+              end = source.find("\\n@Composable", at)
+              if end < 0:
+                  raise SystemExit("Could not find the end boundary for " + name)
+              source = source[:start] + replacement.rstrip() + "\\n\\n" + source[end + 1:]
+
+          notes_screen = r'''@Composable
+          fun NotesScreen(userDb: UserDatabase) {
+              val notes by userDb.noteDao().observeAll().collectAsState(initial = emptyList())
+              val scope = rememberCoroutineScope()
+              val context = LocalContext.current
+              var showDialog by remember { mutableStateOf(false) }
+              var editingId by remember { mutableStateOf<Long?>(null) }
+              var title by remember { mutableStateOf("") }
+              var body by remember { mutableStateOf("") }
+              var query by rememberSaveable { mutableStateOf("") }
+              var exportMessage by remember { mutableStateOf("") }
+              val visible = notes.filter { query.isBlank() || it.title.contains(query, true) || it.body.contains(query, true) }
+              val exportLauncher = rememberLauncherForActivityResult(
+                  contract = ActivityResultContracts.CreateDocument("text/plain")
+              ) { uri ->
+                  if (uri != null) {
+                      val snapshot = notes.sortedByDescending { it.updatedAt }
+                      scope.launch {
+                          val result = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                              runCatching {
+                                  val output = context.contentResolver.openOutputStream(uri)
+                                      ?: error("امکان باز کردن فایل مقصد وجود ندارد.")
+                                  output.bufferedWriter(Charsets.UTF_8).use { writer ->
+                                      writer.appendLine("یادداشت‌های MindUnlock")
+                                      writer.appendLine("تعداد: " + snapshot.size)
+                                      writer.appendLine()
+                                      snapshot.forEachIndexed { index, note ->
+                                          writer.appendLine((index + 1).toString() + ". " + note.title)
+                                          writer.appendLine(note.body)
+                                          if (!note.chapterId.isNullOrBlank()) writer.appendLine("شناسه فصل: " + note.chapterId)
+                                          if (!note.itemUid.isNullOrBlank()) writer.appendLine("شناسه مطلب: " + note.itemUid)
+                                          writer.appendLine()
+                                          writer.appendLine("----------------------------------------")
+                                          writer.appendLine()
+                                      }
+                                  }
+                              }
+                          }
+                          exportMessage = result.fold(
+                              { "خروجی " + snapshot.size + " یادداشت ذخیره شد." },
+                              { "ذخیرهٔ خروجی ناموفق بود: " + (it.message ?: "خطای ناشناخته") }
+                          )
+                      }
+                  } else {
+                      exportMessage = "ذخیرهٔ خروجی لغو شد."
+                  }
+              }
+
+              Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                  Text("یادداشت‌ها · " + notes.size, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                  Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                      Button(
+                          onClick = { editingId = null; title = ""; body = ""; showDialog = true },
+                          modifier = Modifier.weight(1f)
+                      ) { Icon(Icons.Default.Add, null); Text("یادداشت جدید") }
+                      OutlinedButton(
+                          onClick = { exportLauncher.launch("MindUnlock-Notes.txt") },
+                          enabled = notes.isNotEmpty(),
+                          modifier = Modifier.weight(1f)
+                      ) { Icon(Icons.Default.Download, null); Text("خروجی همه") }
+                  }
+                  OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth(), label = { Text("جست‌وجو در یادداشت‌ها") }, singleLine = true)
+                  if (exportMessage.isNotBlank()) Text(exportMessage, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                  LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
+                      if (visible.isEmpty()) {
+                          item { EmptyMessage(if (notes.isEmpty()) "هنوز یادداشتی ذخیره نشده است." else "یادداشتی با این عبارت پیدا نشد.") }
+                      }
+                      items(visible, key = { it.id }) { note ->
+                          Card(onClick = { editingId = note.id; title = note.title; body = note.body; showDialog = true }, modifier = Modifier.fillMaxWidth()) {
+                              Column(Modifier.fillMaxWidth().padding(13.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                  Row(verticalAlignment = Alignment.CenterVertically) {
+                                      Text(note.title, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                                      IconButton(onClick = { scope.launch { userDb.noteDao().delete(note.id) } }) {
+                                          Icon(Icons.Default.Delete, contentDescription = "حذف")
+                                      }
+                                  }
+                                  Text(note.body, maxLines = 4, overflow = TextOverflow.Ellipsis)
+                                  if (!note.chapterId.isNullOrBlank()) Text("متصل به فصل", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                              }
+                          }
+                      }
+                  }
+              }
+              if (showDialog) AlertDialog(
+                  onDismissRequest = { showDialog = false },
+                  title = { Text(if (editingId == null) "یادداشت جدید" else "ویرایش یادداشت") },
+                  text = {
+                      Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                          OutlinedTextField(title, { title = it }, label = { Text("عنوان") }, singleLine = true)
+                          OutlinedTextField(body, { body = it }, label = { Text("متن") }, minLines = 4)
+                      }
+                  },
+                  confirmButton = {
+                      TextButton(onClick = {
+                          if (body.isNotBlank()) scope.launch {
+                              val old = notes.firstOrNull { it.id == editingId }
+                              userDb.noteDao().upsert(
+                                  NoteEntity(
+                                      id = editingId ?: 0L,
+                                      itemUid = old?.itemUid,
+                                      chapterId = old?.chapterId,
+                                      title = title.ifBlank { "یادداشت" },
+                                      body = body.trim(),
+                                      updatedAt = System.currentTimeMillis()
+                                  )
+                              )
+                          }
+                          showDialog = false
+                      }) { Text("ذخیره") }
+                  },
+                  dismissButton = { TextButton(onClick = { showDialog = false }) { Text("انصراف") } }
+              )
+          }'''
+
+          bookmarks_screen = r'''@Composable
+          fun BookmarksScreen(db: AppDatabase, userDb: UserDatabase, onOpenItem: (String) -> Unit) {
+              val bookmarks by userDb.bookmarkDao().observeAll().collectAsState(initial = emptyList())
+              val all by db.contentItemDao().observeAll().collectAsState(initial = emptyList())
+              val scope = rememberCoroutineScope()
+              var query by rememberSaveable { mutableStateOf("") }
+              var pendingRemoval by remember { mutableStateOf<String?>(null) }
+              val saved = bookmarks.mapNotNull { mark -> all.firstOrNull { it.uid == mark.itemUid } }
+              val visible = saved.filter { item ->
+                  query.isBlank() ||
+                      item.title.orEmpty().contains(query, true) ||
+                      item.summary.orEmpty().contains(query, true) ||
+                      item.content.orEmpty().contains(query, true) ||
+                      item.chapterId.contains(query, true)
+              }
+
+              Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                  Text("نشانک‌ها · " + bookmarks.size, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                  OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth(), label = { Text("جست‌وجو در نشانک‌ها") }, singleLine = true)
+                  LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                      if (visible.isEmpty()) {
+                          item { EmptyMessage(if (saved.isEmpty()) "هنوز نشانکی ذخیره نشده است." else "نشانکی با این عبارت پیدا نشد.") }
+                      }
+                      items(visible, key = { it.uid }) { item ->
+                          Card(Modifier.fillMaxWidth()) {
+                              Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                  Column(
+                                      Modifier.weight(1f).clickable { onOpenItem(item.uid) },
+                                      verticalArrangement = Arrangement.spacedBy(4.dp)
+                                  ) {
+                                      Text(item.title ?: "بدون عنوان", fontWeight = FontWeight.SemiBold)
+                                      Text(kindLabel(item.type), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                                      if (!item.summary.isNullOrBlank()) {
+                                          Text(cleanHtml(item.summary), maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
+                                      }
+                                  }
+                                  IconButton(onClick = { pendingRemoval = item.uid }) {
+                                      Icon(Icons.Default.Delete, contentDescription = "حذف نشانک")
+                                  }
+                              }
+                          }
+                      }
+                  }
+              }
+
+              pendingRemoval?.let { uid ->
+                  AlertDialog(
+                      onDismissRequest = { pendingRemoval = null },
+                      title = { Text("حذف نشانک") },
+                      text = { Text("این مطلب از فهرست نشانک‌ها حذف شود؟ محتوای اصلی و یادداشت‌های آن پاک نمی‌شوند.") },
+                      confirmButton = {
+                          TextButton(onClick = {
+                              scope.launch { userDb.bookmarkDao().delete(uid) }
+                              pendingRemoval = null
+                          }) { Text("حذف نشانک") }
+                      },
+                      dismissButton = { TextButton(onClick = { pendingRemoval = null }) { Text("انصراف") } }
+                  )
+              }
+          }'''
+
+          replace_composable("NotesScreen", notes_screen)
+          replace_composable("BookmarksScreen", bookmarks_screen)
+
+          path.write_text(source, encoding="utf-8")
+          print("Notes export, note editing timestamp, bookmark search and confirmed bookmark deletion added.")
+          PY
+
+
       - name: Inspect reader, notes, bookmarks and database integration points
         shell: bash
         run: |
