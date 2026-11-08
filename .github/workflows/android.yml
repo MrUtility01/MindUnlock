@@ -1197,6 +1197,16 @@ jobs:
           print("Chapter performance assertions passed.")
           PY
 
+      - name: Inspect optimized dashboard counters after chapter patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          SCREENS="$(find android-build/app/src/main/java -type f -name StudyScreens.kt -print -quit)"
+          echo "=== DASHBOARD SOURCE LINES 145-215 ==="
+          nl -ba "$SCREENS" | sed -n '145,215p'
+          echo "=== DASHBOARD COUNTER TOKENS ==="
+          grep -nE 'dueCards|dueCard|dueCount|flashcardCount|observeDue|Flashcard' "$SCREENS" | head -80 || true
+
       - name: Run JVM unit tests
         working-directory: android-build
         run: ./gradlew testDebugUnitTest --stacktrace
