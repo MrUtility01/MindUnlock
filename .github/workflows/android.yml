@@ -417,6 +417,17 @@ jobs:
           sync.write_text(source, encoding="utf-8")
           PY
 
+      - name: Inspect settings integration points
+        shell: bash
+        run: |
+          set -euo pipefail
+          SCREENS_FILE="$(find android-build/app/src/main/java -type f -name StudyScreens.kt -print -quit)"
+          MAIN_FILE="$(find android-build/app/src/main/java -type f -name MainActivity.kt -print -quit)"
+          echo "=== SETTINGS COMPOSABLE DECLARATIONS ==="
+          grep -nE '(@Composable|fun .*Setting|fun .*Setting|fun .*Screen|تنظیمات|امنیت برنامه|انتخاب صدای)' "$SCREENS_FILE" | tail -100 || true
+          echo "=== SETTINGS REFERENCES IN MAIN ==="
+          grep -nE 'Setting|setting|تنظیمات|MoreScreen|Settings' "$MAIN_FILE" "$SCREENS_FILE" | tail -140 || true
+
       - name: Fix unavailable FlashOn material icon
         shell: bash
         run: |
