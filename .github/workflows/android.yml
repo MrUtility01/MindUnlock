@@ -678,6 +678,61 @@ jobs:
           fi
           grep -n 'fillMaxWidth' "$MAIN_FILE"
 
+      - name: Add functional storage management to Android settings
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          matches = list(Path("android-build/app/src/main/java").rglob("StudyScreens.kt"))
+          if not matches:
+              raise SystemExit("StudyScreens.kt not found")
+          path = matches[0]
+          source = path.read_text(encoding="utf-8")
+          if "مدیریت حافظه و فضای ذخیره‌سازی" in source:
+              print("Storage settings already present; no duplicate patch applied.")
+              raise SystemExit(0)
+          marker = '        Text("امنیت برنامه", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)'
+          if source.count(marker) != 1:
+              raise SystemExit("Settings security section marker is missing or ambiguous")
+          state_marker = '    val voices = speech.voiceOptions\n'
+          state_code = '''    val voices = speech.voiceOptions
+              fun folderSize(file: java.io.File): Long =
+                  if (file.isFile) file.length() else file.listFiles()?.sumOf { folderSize(it) } ?: 0L
+              var cacheBytes by remember { mutableStateOf(folderSize(context.cacheDir)) }
+              var storageBytes by remember { mutableStateOf(folderSize(context.filesDir)) }
+              var storageMessage by remember { mutableStateOf("") }
+          '''
+          if source.count(state_marker) != 1:
+              raise SystemExit("Settings state insertion marker is missing or ambiguous")
+          source = source.replace(state_marker, state_code, 1)
+          storage_ui = '''        HorizontalDivider()
+                  Text("مدیریت حافظه و فضای ذخیره‌سازی", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                  Text("حجم داده‌های خصوصی برنامه: " + String.format(Locale.US, "%.1f", storageBytes / (1024.0 * 1024.0)) + " مگابایت", style = MaterialTheme.typography.bodyMedium)
+                  Text("حجم حافظهٔ موقت: " + String.format(Locale.US, "%.1f", cacheBytes / (1024.0 * 1024.0)) + " مگابایت", style = MaterialTheme.typography.bodyMedium)
+                  Text("پاک‌سازی حافظهٔ موقت، مدل‌های گفتار نصب‌شده و اطلاعات مطالعه را حذف نمی‌کند؛ فقط فایل‌های موقت برنامه پاک می‌شوند.", style = MaterialTheme.typography.bodySmall)
+                  OutlinedButton(onClick = {
+                      runCatching {
+                          context.cacheDir.listFiles()?.forEach { it.deleteRecursively() }
+                          cacheBytes = folderSize(context.cacheDir)
+                          storageBytes = folderSize(context.filesDir)
+                          storageMessage = "حافظهٔ موقت پاک‌سازی شد."
+                      }.onFailure { storageMessage = "پاک‌سازی ناموفق بود: " + (it.message ?: "خطای ناشناخته") }
+                  }, modifier = Modifier.fillMaxWidth()) { Text("پاک‌سازی حافظهٔ موقت") }
+                  TextButton(onClick = {
+                      cacheBytes = folderSize(context.cacheDir)
+                      storageBytes = folderSize(context.filesDir)
+                      storageMessage = "اطلاعات فضای ذخیره‌سازی به‌روزرسانی شد."
+                  }) { Text("به‌روزرسانی اطلاعات حافظه") }
+                  if (storageMessage.isNotBlank()) Text(storageMessage, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
+                  HorizontalDivider()
+          '''
+          source = source.replace(marker, storage_ui + marker, 1)
+          path.write_text(source, encoding="utf-8")
+          print("Added real cache-size reporting, safe cache cleanup and storage refresh controls.")
+          PY
+
       - name: Run JVM unit tests
         working-directory: android-build
         run: ./gradlew testDebugUnitTest --stacktrace
