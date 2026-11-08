@@ -826,21 +826,20 @@ jobs:
           echo "=== READER / NOTES / BOOKMARKS IMPLEMENTATIONS ==="
           python3 - "$SCREENS" <<'PY'
           from pathlib import Path
-          import re
           import sys
-          p = Path(sys.argv[1])
-          lines = p.read_text(encoding="utf-8").splitlines()
-          targets = ("ReaderScreen", "NotesScreen", "BookmarksScreen")
-          for target in targets:
-              starts = [i for i, line in enumerate(lines) if re.match(r"^fun " + target + r"\\(", line)]
+
+          path = Path(sys.argv[1])
+          lines = path.read_text(encoding="utf-8").splitlines()
+          for target in ("ReaderScreen", "NotesScreen", "BookmarksScreen"):
+              starts = [i for i, line in enumerate(lines) if line.startswith("fun " + target + "(")]
               if not starts:
-                  print(f"--- {target}: NOT FOUND ---")
+                  print("--- " + target + ": NOT FOUND ---")
                   continue
               start = starts[0]
               end = next((i for i in range(start + 1, len(lines)) if lines[i].startswith("@Composable")), min(len(lines), start + 180))
-              print(f"--- {target} lines {start+1}-{end} ---")
+              print("--- " + target + " lines " + str(start + 1) + "-" + str(end) + " ---")
               for n in range(start, min(end, start + 180)):
-                  print(f"{n+1}: {lines[n]}")
+                  print(str(n + 1) + ": " + lines[n])
           PY
           echo "=== DATABASE / DAO DECLARATIONS ==="
           find "$PACKAGE_DIR/data" -type f -name '*.kt' -print0 | while IFS= read -r -d '' file; do
@@ -849,7 +848,6 @@ jobs:
               grep -nE '(@Dao|@Entity|interface .*Dao|abstract class .*Database|data class .*Entity|@Query|@Upsert|@Insert|@Delete|fun (insert|update|delete|observe|get|all|save|upsert))' "$file" | head -220 || true
             fi
           done | tee "$GITHUB_STEP_SUMMARY"
-
       - name: Run JVM unit tests
         working-directory: android-build
         run: ./gradlew testDebugUnitTest --stacktrace
