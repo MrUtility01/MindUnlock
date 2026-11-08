@@ -816,6 +816,40 @@ jobs:
           print("Added persistent reading-only keep-screen-on preference with lifecycle cleanup.")
           PY
 
+
+      - name: Inspect reader, notes, bookmarks and database integration points
+        shell: bash
+        run: |
+          set -euo pipefail
+          PACKAGE_DIR="$(dirname "$(find android-build/app/src/main/java -type f -name MainActivity.kt -print -quit)")"
+          SCREENS="$PACKAGE_DIR/ui/StudyScreens.kt"
+          echo "=== READER / NOTES / BOOKMARKS IMPLEMENTATIONS ==="
+          python3 - "$SCREENS" <<'PY'
+          from pathlib import Path
+          import re
+          import sys
+          p = Path(sys.argv[1])
+          lines = p.read_text(encoding="utf-8").splitlines()
+          targets = ("ReaderScreen", "NotesScreen", "BookmarksScreen")
+          for target in targets:
+              starts = [i for i, line in enumerate(lines) if re.match(r"^fun " + target + r"\\(", line)]
+              if not starts:
+                  print(f"--- {target}: NOT FOUND ---")
+                  continue
+              start = starts[0]
+              end = next((i for i in range(start + 1, len(lines)) if lines[i].startswith("@Composable")), min(len(lines), start + 180))
+              print(f"--- {target} lines {start+1}-{end} ---")
+              for n in range(start, min(end, start + 180)):
+                  print(f"{n+1}: {lines[n]}")
+          PY
+          echo "=== DATABASE / DAO DECLARATIONS ==="
+          find "$PACKAGE_DIR/data" -type f -name '*.kt' -print0 | while IFS= read -r -d '' file; do
+            if grep -qE '(@Dao|@Entity|interface .*Dao|abstract class .*Database|data class .*Entity|@Query|@Upsert|@Insert|@Delete)' "$file"; then
+              echo "--- $file ---"
+              grep -nE '(@Dao|@Entity|interface .*Dao|abstract class .*Database|data class .*Entity|@Query|@Upsert|@Insert|@Delete|fun (insert|update|delete|observe|get|all|save|upsert))' "$file" | head -220 || true
+            fi
+          done | tee "$GITHUB_STEP_SUMMARY"
+
       - name: Run JVM unit tests
         working-directory: android-build
         run: ./gradlew testDebugUnitTest --stacktrace
