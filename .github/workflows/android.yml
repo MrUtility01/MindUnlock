@@ -1281,8 +1281,7 @@ jobs:
           if start < 0 or end < 0:
               raise SystemExit("Could not isolate SettingsScreen")
 
-          settings = r'''@Composable
-          fun SettingsScreen(
+          settings = r'''fun SettingsScreen(
               speech: PersianSpeech,
               preferences: android.content.SharedPreferences,
               theme: String,
