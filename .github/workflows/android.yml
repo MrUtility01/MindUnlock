@@ -1326,6 +1326,84 @@ jobs:
           print("Non-blocking startup assertions passed.")
           PY
 
+      - name: Move legacy database migration off the Android main thread
+        shell: bash
+        run: |
+          set -euo pipefail
+          MAIN_FILE="$(find android-build/app/src/main/java -type f -name MainActivity.kt -print -quit)"
+          test -n "$MAIN_FILE"
+          python3 - "$MAIN_FILE" <<'PY'
+          from pathlib import Path
+          import sys
+
+          path = Path(sys.argv[1])
+          source = path.read_text(encoding="utf-8")
+
+          # Compose owns the loading state while database migration runs on IO.
+          import_line = "import androidx.compose.runtime.LaunchedEffect"
+          if import_line not in source:
+              package_end = source.find(chr(10))
+              if package_end < 0:
+                  raise SystemExit("MainActivity package declaration not found")
+              source = source[:package_end + 1] + import_line + chr(10) + source[package_end + 1:]
+
+          source = source.replace("import kotlinx.coroutines.runBlocking" + chr(10), "")
+          blocking_line = "        runBlocking(Dispatchers.IO) { LegacyDatabaseMigrator.migrate(this@MainActivity, app.repository.database, userDatabase) }"
+          if blocking_line in source:
+              source = source.replace(blocking_line + chr(10), "", 1)
+          elif "LegacyDatabaseMigrator.migrate(this@MainActivity" in source:
+              raise SystemExit("Unexpected legacy migration invocation; refusing unsafe partial replacement")
+
+          state_anchor = '            var lockError by rememberSaveable { mutableStateOf("") }'
+          states = '''            var databaseReady by rememberSaveable { mutableStateOf(false) }
+                      var migrationError by rememberSaveable { mutableStateOf("") }
+                      var migrationAttempt by rememberSaveable { mutableStateOf(0) }
+
+                      LaunchedEffect(migrationAttempt) {
+                          migrationError = ""
+                          try {
+                              withContext(Dispatchers.IO) {
+                                  LegacyDatabaseMigrator.migrate(this@MainActivity, app.repository.database, userDatabase)
+                              }
+                              databaseReady = true
+                          } catch (error: Exception) {
+                              migrationError = error.message ?: "انتقال اطلاعات قدیمی ناموفق بود."
+                          }
+                      }'''
+          if "var databaseReady by rememberSaveable" not in source:
+              if source.count(state_anchor) != 1:
+                  raise SystemExit("Could not uniquely find MainActivity startup state insertion point")
+              source = source.replace(state_anchor, state_anchor + chr(10) + states, 1)
+
+          screen_anchor = "                    if (!unlocked) {"
+          loading = '''                    if (!databaseReady) {
+                                  Column(Modifier.fillMaxSize().padding(28.dp), verticalArrangement = Arrangement.Center) {
+                                      Text("MindUnlock · آماده‌سازی برنامه", style = MaterialTheme.typography.headlineSmall)
+                                      Text(
+                                          if (migrationError.isBlank()) "در حال آماده‌سازی و انتقال اطلاعات قبلی..." else "آماده‌سازی کامل نشد: $migrationError",
+                                          color = if (migrationError.isBlank()) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.error
+                                      )
+                                      if (migrationError.isNotBlank()) {
+                                          Button(onClick = { migrationAttempt += 1 }, modifier = Modifier.fillMaxWidth()) {
+                                              Text("تلاش مجدد")
+                                          }
+                                      }
+                                  }
+                              } else if (!unlocked) {'''
+          if "if (!databaseReady)" not in source:
+              if source.count(screen_anchor) != 1:
+                  raise SystemExit("Could not uniquely locate the startup screen branch")
+              source = source.replace(screen_anchor, loading, 1)
+
+          if "runBlocking" in source:
+              raise SystemExit("runBlocking remains in MainActivity after migration patch")
+          if "LaunchedEffect(migrationAttempt)" not in source or "withContext(Dispatchers.IO)" not in source or "if (!databaseReady)" not in source:
+              raise SystemExit("Non-blocking migration startup assertions failed")
+
+          path.write_text(source, encoding="utf-8")
+          print("Legacy migration now runs asynchronously on Dispatchers.IO; UI shows progress and retry on error.")
+          PY
+
       - name: Run JVM unit tests
         working-directory: android-build
         run: ./gradlew testDebugUnitTest --stacktrace
