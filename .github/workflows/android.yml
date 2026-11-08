@@ -836,7 +836,7 @@ jobs:
               "import androidx.activity.result.contract.ActivityResultContracts",
           ):
               if import_line not in source:
-          package_end = source.find(chr(10))
+                  package_end = source.find(chr(10))
                   if package_end < 0:
                       raise SystemExit("Kotlin package declaration not found")
                   source = source[:package_end + 1] + chr(10) + import_line + source[package_end + 1:]
