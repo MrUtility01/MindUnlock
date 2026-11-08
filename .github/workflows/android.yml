@@ -733,6 +733,83 @@ jobs:
           print("Added real cache-size reporting, safe cache cleanup and storage refresh controls.")
           PY
 
+
+      - name: Add persistent keep-screen-on reading preference
+        shell: bash
+        run: |
+          set -euo pipefail
+          SCREENS_FILE="$(find android-build/app/src/main/java -type f -name StudyScreens.kt -print -quit)"
+          test -n "$SCREENS_FILE"
+          python3 - "$SCREENS_FILE" <<'PY'
+          from pathlib import Path
+          import re
+          import sys
+
+          path = Path(sys.argv[1])
+          source = path.read_text(encoding="utf-8")
+
+          settings_marker = '    val voices = speech.voiceOptions\\n'
+          settings_state = '''    val voices = speech.voiceOptions
+              var keepScreenOnWhileReading by remember {
+                  mutableStateOf(preferences.getBoolean("keep_screen_on_while_reading", true))
+              }
+          '''
+          if "keepScreenOnWhileReading" not in source:
+              if source.count(settings_marker) != 1:
+                  raise SystemExit("Settings state insertion marker missing or ambiguous")
+              source = source.replace(settings_marker, settings_state, 1)
+
+          ui_marker = '        Text("خواندن با صدای فارسی", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)'
+          ui_block = '''        Text("مطالعه", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                  OutlinedButton(
+                      onClick = {
+                          keepScreenOnWhileReading = !keepScreenOnWhileReading
+                          preferences.edit().putBoolean("keep_screen_on_while_reading", keepScreenOnWhileReading).apply()
+                      },
+                      modifier = Modifier.fillMaxWidth()
+                  ) {
+                      Text(if (keepScreenOnWhileReading) "روشن ماندن صفحه هنگام مطالعه: فعال" else "روشن ماندن صفحه هنگام مطالعه: غیرفعال")
+                  }
+                  Text("این گزینه فقط هنگام باز بودن صفحهٔ مطالعه اثر می‌کند؛ پس از خروج از مطالعه، قفل خودکار گوشی به حالت عادی برمی‌گردد.", style = MaterialTheme.typography.bodySmall)
+          '''
+          if "روشن ماندن صفحه هنگام مطالعه:" not in source:
+              if source.count(ui_marker) != 1:
+                  raise SystemExit("Settings UI insertion marker missing or ambiguous")
+              source = source.replace(ui_marker, ui_block + ui_marker, 1)
+
+          reader_pattern = r'(fun ReaderScreen\\(db: AppDatabase, userDb: UserDatabase, itemUid: String, speech: PersianSpeech, preferences: android\\.content\\.SharedPreferences\\) \\{)'
+          match = re.search(reader_pattern, source)
+          if not match:
+              raise SystemExit("ReaderScreen signature not found; refusing to add a setting that would not affect reading")
+          if "keepAwakeActivity" not in source:
+              reader_code = '''
+              val keepAwakeContext = androidx.compose.ui.platform.LocalContext.current
+              val keepAwakeActivity = androidx.compose.runtime.remember(keepAwakeContext) {
+                  var node: android.content.Context? = keepAwakeContext
+                  while (node != null && node !is android.app.Activity) {
+                      node = (node as? android.content.ContextWrapper)?.baseContext
+                  }
+                  node as? android.app.Activity
+              }
+              val keepAwakeEnabled = preferences.getBoolean("keep_screen_on_while_reading", true)
+              androidx.compose.runtime.DisposableEffect(keepAwakeActivity, keepAwakeEnabled) {
+                  val window = keepAwakeActivity?.window
+                  if (keepAwakeEnabled) {
+                      window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                  } else {
+                      window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                  }
+                  onDispose {
+                      window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                  }
+              }
+          '''
+              source = source[:match.end()] + reader_code + source[match.end():]
+
+          path.write_text(source, encoding="utf-8")
+          print("Added persistent reading-only keep-screen-on preference and lifecycle cleanup.")
+          PY
+
       - name: Run JVM unit tests
         working-directory: android-build
         run: ./gradlew testDebugUnitTest --stacktrace
