@@ -256,8 +256,17 @@ jobs:
 
       - name: Create Gradle Wrapper
         working-directory: android-build
+        shell: bash
         run: |
-          gradle wrapper --gradle-version 8.9
+          set -euo pipefail
+          cat > /tmp/disable-wrapper-url-validation.gradle <<'GRADLE'
+          allprojects {
+              tasks.withType(org.gradle.api.tasks.wrapper.Wrapper).configureEach {
+                  validateDistributionUrl = false
+              }
+          }
+          GRADLE
+          gradle -I /tmp/disable-wrapper-url-validation.gradle wrapper --gradle-version 8.9 --distribution-type bin
           chmod +x gradlew
 
       - name: Replace Android system TTS controls with in-app Piper manager
