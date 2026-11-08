@@ -1896,7 +1896,11 @@ jobs:
           source = source.replace(gate_marker, loading_gate, 1)
 
           if "import androidx.compose.material3.CircularProgressIndicator" not in source:
-              source = source.replace("import androidx.compose.runtime.LaunchedEffect", "import androidx.compose.runtime.LaunchedEffect\\nimport androidx.compose.material3.CircularProgressIndicator", 1)
+              source = source.replace(
+                  "import androidx.compose.runtime.LaunchedEffect",
+                  "import androidx.compose.runtime.LaunchedEffect" + chr(10) + "import androidx.compose.material3.CircularProgressIndicator",
+                  1
+              )
 
           if "runBlocking" in source:
               raise SystemExit("Blocking code remains in MainActivity")
@@ -1928,7 +1932,9 @@ jobs:
           echo "=== ENTITIES ==="
           nl -ba "$PACKAGE_DIR/data/local/Entities.kt" | sed -n '1,260p'
           echo "=== SYNC MODELS ==="
-          nl -ba "$PACKAGE_DIR/data/model/SyncModels.kt" | sed -n '1,300p'
+          find "$PACKAGE_DIR" -type f -name '*.kt' | sort | sed -n '1,180p'
+          SYNC_MODELS="$(find "$PACKAGE_DIR" -type f -iname '*Sync*Model*.kt' -print -quit)"
+          if [ -n "$SYNC_MODELS" ]; then nl -ba "$SYNC_MODELS" | sed -n '1,300p'; else echo "No dedicated SyncModels file; see Kotlin file listing above."; fi
           echo "=== SYNC MAPPING ==="
           grep -RInE 'toItemEntity|ContentItemEntity\(|chapterId|metadataJson|category' "$PACKAGE_DIR/data" | head -240 | head -180 || true
           echo "=== CHAPTER SCREEN / CONTENT FILTERS ==="
