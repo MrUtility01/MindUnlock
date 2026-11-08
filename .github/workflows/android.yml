@@ -1255,6 +1255,77 @@ jobs:
           echo "=== MIGRATION MARKERS ==="
           grep -RInE 'legacy_migrat|migration_done|migrate\(' "$PACKAGE_DIR" | head -180 || true
 
+      - name: Move legacy migration off the Android startup thread
+        shell: bash
+        run: |
+          set -euo pipefail
+          MAIN_FILE="$(find android-build/app/src/main/java -type f -name MainActivity.kt -print -quit)"
+          test -n "$MAIN_FILE"
+          python3 - "$MAIN_FILE" <<'PY'
+          from pathlib import Path
+          import sys
+
+          path = Path(sys.argv[1])
+          source = path.read_text(encoding="utf-8")
+
+          source = source.replace(
+              "import kotlinx.coroutines.runBlocking",
+              "import androidx.compose.runtime.LaunchedEffect",
+              1
+          )
+
+          old_setup = '''        val userDatabase = UserDatabase.getInstance(this)
+                  runBlocking(Dispatchers.IO) { LegacyDatabaseMigrator.migrate(this@MainActivity, app.repository.database, userDatabase) }
+                  setContent {'''
+          new_setup = '''        val userDatabase = UserDatabase.getInstance(this)
+                  setContent {
+                      var startupReady by remember { mutableStateOf(false) }
+                      LaunchedEffect(Unit) {
+                          try {
+                              withContext(Dispatchers.IO) {
+                                  LegacyDatabaseMigrator.migrate(this@MainActivity, app.repository.database, userDatabase)
+                              }
+                          } catch (error: Exception) {
+                              android.util.Log.e("MindUnlockStartup", "Legacy database migration failed; continuing app startup", error)
+                          } finally {
+                              startupReady = true
+                          }
+                      }'''
+          if old_setup not in source:
+              raise SystemExit("MainActivity migration startup block marker not found")
+          source = source.replace(old_setup, new_setup, 1)
+
+          old_gate = '''                    if (!unlocked) {
+                          Column(Modifier.fillMaxSize().padding(28.dp), verticalArrangement = Arrangement.Center) {'''
+          new_gate = '''                    if (!startupReady) {
+                          Column(Modifier.fillMaxSize().padding(28.dp), verticalArrangement = Arrangement.Center) {
+                              Text("MindUnlock", style = MaterialTheme.typography.headlineSmall)
+                              Text("در حال آماده‌سازی اطلاعات برنامه…")
+                          }
+                      } else if (!unlocked) {
+                          Column(Modifier.fillMaxSize().padding(28.dp), verticalArrangement = Arrangement.Center) {'''
+          if old_gate not in source:
+              raise SystemExit("MainActivity startup UI gate marker not found")
+          source = source.replace(old_gate, new_gate, 1)
+
+          if "runBlocking(Dispatchers.IO)" in source or "import kotlinx.coroutines.runBlocking" in source:
+              raise SystemExit("Blocking migration call remains in MainActivity")
+          if "LaunchedEffect(Unit)" not in source or "MindUnlockStartup" not in source:
+              raise SystemExit("Non-blocking startup migration was not installed")
+          path.write_text(source, encoding="utf-8")
+          print("Legacy database migration now runs on Dispatchers.IO after Compose startup; failures are logged and do not terminate startup.")
+          PY
+          python3 - "$MAIN_FILE" <<'PY'
+          from pathlib import Path
+          import sys
+          s = Path(sys.argv[1]).read_text(encoding="utf-8")
+          assert "runBlocking(" not in s
+          assert "LaunchedEffect(Unit)" in s
+          assert "withContext(Dispatchers.IO)" in s
+          assert "startupReady = true" in s
+          print("Non-blocking startup assertions passed.")
+          PY
+
       - name: Run JVM unit tests
         working-directory: android-build
         run: ./gradlew testDebugUnitTest --stacktrace
