@@ -1187,7 +1187,7 @@ jobs:
               start = ui.index("fun " + screen + "(")
               end = ui.find("\n@Composable", start)
               block = ui[start:end if end >= 0 else len(ui)]
-              if "observeAll()" in block and screen != "ProgressScreen":
+              if "contentItemDao().observeAll()" in block:
                   raise SystemExit(screen + " still loads full content rows")
           chapter_start = ui.index("fun ChapterContentScreen(")
           chapter_end = ui.index("\n@Composable", chapter_start)
