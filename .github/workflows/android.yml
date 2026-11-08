@@ -323,7 +323,7 @@ jobs:
           test -n "$MAIN_FILE"
           PACKAGE_DIR="$(dirname "$MAIN_FILE")"
           python3 /tmp/mindunlock_optimization.py "$PACKAGE_DIR"
-          sed -i 's/versionCode = 3/versionCode = 5/; s/versionName = "0.3.1"/versionName = "0.5.0"/' android-build/app/build.gradle.kts
+          sed -i 's/versionCode = 3/versionCode = 6/; s/versionName = "0.3.1"/versionName = "0.5.1"/' android-build/app/build.gradle.kts
           python3 - "$PACKAGE_DIR" <<'PY'
           from pathlib import Path
           import sys
