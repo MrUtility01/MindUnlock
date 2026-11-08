@@ -458,25 +458,43 @@ jobs:
           fi
           grep -n 'fillMaxWidth' "$MAIN_FILE"
 
+      - name: Run JVM unit tests
+        working-directory: android-build
+        run: ./gradlew testDebugUnitTest --stacktrace
+
       - name: Build Debug APK
         working-directory: android-build
         run: ./gradlew assembleDebug --stacktrace
 
+      - name: Verify APK integrity and package metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="android-build/app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$APK"
+          unzip -t "$APK" >/dev/null
+          AAPT="$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -n1)"
+          test -n "$AAPT"
+          "$AAPT" dump badging "$APK" | tee /tmp/apk-badging.txt
+          grep -q "^package: name='com.mindunlock.app'" /tmp/apk-badging.txt
+          echo "APK_SIZE_BYTES=$(stat -c%s "$APK")" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "APK archive integrity and application package verified." | tee -a "$GITHUB_STEP_SUMMARY"
+
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: MindUnlock-Android-v0.5.0-debug
+          name: MindUnlock-Android-v0.5.1-debug
           path: android-build/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
       - name: Publish GitHub Release with APK
-        if: github.event_name == 'workflow_dispatch'
+        if: success()
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: android-v0.5.0-${{ github.run_number }}
-          name: MindUnlock Android 0.5.0 (#${{ github.run_number }})
+          tag_name: android-v0.5.1-${{ github.run_number }}
+          name: MindUnlock Android 0.5.1 (#${{ github.run_number }})
           body: |
-            Android Native 0.5.0 with separate content/user databases, on-demand Persian speech models and optimized chapter/media sync with topic/chapter navigation, image rendering, separate learning modes and three selectable Persian voices.
+            Android Native 0.5.1 with separate content/user databases, on-demand Persian speech models and optimized chapter/media sync with topic/chapter navigation, image rendering, separate learning modes and three selectable Persian voices.
             Launcher icon uses the portrait uploaded in the repository.
             HTTP sync is intended for trusted local networks only.
           files: android-build/app/build/outputs/apk/debug/app-debug.apk
