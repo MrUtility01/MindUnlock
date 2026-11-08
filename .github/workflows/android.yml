@@ -437,6 +437,27 @@ jobs:
           echo "=== SETTINGS REFERENCES IN MAIN ==="
           grep -nE 'Setting|setting|تنظیمات|MoreScreen|Settings' "$MAIN_FILE" "$SCREENS_FILE" | tail -140 || true
 
+      - name: Diagnose generated Persian voice manager and settings
+        shell: bash
+        run: |
+          set -euo pipefail
+          PACKAGE_DIR="$(dirname "$(find android-build/app/src/main/java -type f -name MainActivity.kt -print -quit)")"
+          SPEECH="$PACKAGE_DIR/PersianSpeech.kt"
+          SCREENS="$PACKAGE_DIR/ui/StudyScreens.kt"
+          test -s "$SPEECH" && test -s "$SCREENS"
+          {
+            echo "=== GENERATED PERSIAN SPEECH SOURCE ==="
+            nl -ba "$SPEECH" | sed -n '1,420p'
+            echo "=== SETTINGS SCREEN SOURCE ==="
+            START="$(grep -n '^fun SettingsScreen(' "$SCREENS" | cut -d: -f1)"
+            if [ -n "$START" ]; then
+              END=$((START + 100))
+              nl -ba "$SCREENS" | sed -n "${START},${END}p"
+            fi
+            echo "=== VOICE DOWNLOAD REFERENCES ==="
+            grep -nE 'https?://|URL\(|download|Download|voiceOptions|VoiceSpec|checksum|sha256|renameTo|\.onnx' "$SPEECH" || true
+          } | tee "$GITHUB_STEP_SUMMARY"
+
       - name: Fix unavailable FlashOn material icon
         shell: bash
         run: |
