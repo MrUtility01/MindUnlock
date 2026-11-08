@@ -1902,6 +1902,13 @@ jobs:
                   1
               )
 
+          if "import androidx.compose.ui.Alignment" not in source:
+              source = source.replace(
+                  "import androidx.compose.runtime.LaunchedEffect",
+                  "import androidx.compose.runtime.LaunchedEffect" + chr(10) + "import androidx.compose.ui.Alignment",
+                  1
+              )
+
           if "runBlocking" in source:
               raise SystemExit("Blocking code remains in MainActivity")
           if "LaunchedEffect(migrationAttempt)" not in source or "withContext(Dispatchers.IO)" not in source or "startupReady = true" not in source:
@@ -1923,6 +1930,104 @@ jobs:
           assert "CircularProgressIndicator()" in source
           print("Non-blocking startup assertions passed.")
           PY
+
+      - name: Diagnose topic and chapter navigation plus import paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          PACKAGE_DIR="$(dirname "$(find android-build/app/src/main/java -type f -name MainActivity.kt -print -quit)")"
+          SCREENS="$PACKAGE_DIR/ui/StudyScreens.kt"
+          echo "=== SUBJECT / CHAPTER COMPOSABLES ==="
+          python3 - "$SCREENS" <<'PY'
+          from pathlib import Path
+          import sys
+          lines = Path(sys.argv[1]).read_text(encoding="utf-8").splitlines()
+          for name in ("SubjectListScreen", "ChapterListScreen", "ChapterContentScreen"):
+              found = [i for i, line in enumerate(lines) if line.startswith("fun " + name + "(")]
+              if not found:
+                  print("MISSING: " + name)
+                  continue
+              start = found[0]
+              end = next((i for i in range(start + 1, len(lines)) if lines[i].startswith("@Composable")), min(len(lines), start + 220))
+              print("--- " + name + " lines " + str(start + 1) + "-" + str(end) + " ---")
+              for n in range(start, min(end, start + 220)):
+                  print(str(n + 1) + ": " + lines[n])
+          PY
+          echo "=== CHAPTER / SUBJECT DAO QUERIES ==="
+          grep -nE 'interface ChapterDao|interface ContentItemDao|observeAll\(|observeChapters\(|getChapters|groupName|chapterId|@Query' "$PACKAGE_DIR/data/local/AppDatabase.kt" | head -240 || true
+          echo "=== IMPORT AND FILE PICKER IMPLEMENTATION ==="
+          grep -RInE 'importDir|import_folder|/import|ACTION_OPEN_DOCUMENT|ACTION_GET_CONTENT|OpenDocument|GetContent|CreateDocument|FilePicker|Import|import' "$PACKAGE_DIR" | head -260 || true
+          echo "=== PROJECT IMPORT / WINDOWS SERVER SOURCES IN REPOSITORY ==="
+          find . -maxdepth 4 -type f | sort | grep -Ei 'windows|server|import|desktop|\.py$|\.csproj$|\.sln$|\.exe
+          echo "=== ENTITIES ==="
+          nl -ba "$PACKAGE_DIR/data/local/Entities.kt" | sed -n '1,260p'
+          echo "=== SYNC MODELS ==="
+          find "$PACKAGE_DIR" -type f -name '*.kt' | sort | sed -n '1,180p'
+          SYNC_MODELS="$(find "$PACKAGE_DIR" -type f -iname '*Sync*Model*.kt' -print -quit)"
+          if [ -n "$SYNC_MODELS" ]; then nl -ba "$SYNC_MODELS" | sed -n '1,300p'; else echo "No dedicated SyncModels file; see Kotlin file listing above."; fi
+          echo "=== SYNC MAPPING ==="
+          grep -RInE 'toItemEntity|ContentItemEntity\(|chapterId|metadataJson|category' "$PACKAGE_DIR/data" | head -240 | head -180 || true
+          echo "=== CHAPTER SCREEN / CONTENT FILTERS ==="
+          SCREENS="$PACKAGE_DIR/ui/StudyScreens.kt"
+          START="$(grep -n 'fun ChapterContentScreen(' "$SCREENS" | head -1 | cut -d: -f1)"
+          test -n "$START"
+          END="$(tail -n +$((START + 1)) "$SCREENS" | grep -n '^@Composable' | head -1 | cut -d: -f1 || true)"
+          if [ -n "$END" ]; then END=$((START + END)); else END="$(wc -l < "$SCREENS")"; fi
+          nl -ba "$SCREENS" | sed -n "${START},${END}p"
+          echo "=== CATEGORY SCHEMA SEARCH ==="
+          grep -RInE 'category(Id|Name)?|category_id|category_name|section(Id|Name)?' "$PACKAGE_DIR" | head -240 || true
+          echo "=== USER DATA / TASKS / NOTES SCREENS ==="
+          grep -RInE 'fun (Notes|Tasks|Task|Note)|StudyTaskEntity|NoteEntity|dueAt|remindAt|AlarmManager|WorkManager|Notification' "$PACKAGE_DIR" | head -260 || true
+          echo "=== DATABASE MIGRATIONS AND VERSION ==="
+          grep -nE 'version =|Migration\(|addMigrations|fallbackToDestructiveMigration|study_tasks|CREATE TABLE' "$PACKAGE_DIR/data/local/"*.kt | head -240 || true
+          echo "=== REMINDER / MANIFEST PERMISSIONS ==="
+          MANIFEST="$(find android-build/app/src/main -name AndroidManifest.xml -print -quit)"
+          grep -nE 'POST_NOTIFICATIONS|SCHEDULE_EXACT_ALARM|RECEIVE_BOOT_COMPLETED|uses-permission|receiver' "$MANIFEST" || true
+
+      - name: Run JVM unit tests
+        working-directory: android-build
+        run: ./gradlew testDebugUnitTest --stacktrace
+
+      - name: Build Debug APK
+        working-directory: android-build
+        run: ./gradlew assembleDebug --stacktrace
+
+      - name: Verify APK integrity and package metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="android-build/app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$APK"
+          unzip -t "$APK" >/dev/null
+          AAPT="$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -n1)"
+          test -n "$AAPT"
+          "$AAPT" dump badging "$APK" | tee /tmp/apk-badging.txt
+          grep -Eq "^package: name='com\\.mindunlock\\.app(\\.debug)?'" /tmp/apk-badging.txt
+          echo "APK_SIZE_BYTES=$(stat -c%s "$APK")" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "APK archive integrity and application package verified." | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MindUnlock-Android-v0.5.1-debug
+          path: android-build/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+      - name: Publish GitHub Release with APK
+        if: success()
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: android-v0.5.1-${{ github.run_number }}
+          name: MindUnlock Android 0.5.1 (#${{ github.run_number }})
+          body: |
+            Android Native 0.5.1 with separate content/user databases, on-demand Persian speech models and optimized chapter/media sync with topic/chapter navigation, image rendering, separate learning modes and three selectable Persian voices.
+            Launcher icon uses the portrait uploaded in the repository.
+            HTTP sync is intended for trusted local networks only.
+          files: android-build/app/build/outputs/apk/debug/app-debug.apk
+          prerelease: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+ | head -200 || true
 
       - name: Inspect subject chapter and category data contract
         shell: bash
