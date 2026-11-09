@@ -2072,6 +2072,166 @@ jobs:
           MANIFEST="$(find android-build/app/src/main -name AndroidManifest.xml -print -quit)"
           grep -nE 'POST_NOTIFICATIONS|SCHEDULE_EXACT_ALARM|RECEIVE_BOOT_COMPLETED|uses-permission|receiver' "$MANIFEST" || true
 
+      - name: Add in-app crash diagnostics and report sharing
+        shell: bash
+        run: |
+          set -euo pipefail
+          MAIN_FILE="$(find android-build/app/src/main/java -type f -name MainActivity.kt -print -quit)"
+          SCREENS_FILE="$(find android-build/app/src/main/java -type f -name StudyScreens.kt -print -quit)"
+          test -n "$MAIN_FILE" && test -n "$SCREENS_FILE"
+          PACKAGE_DIR="$(dirname "$MAIN_FILE")"
+          python3 - "$MAIN_FILE" "$SCREENS_FILE" "$PACKAGE_DIR" <<'PY'
+          from pathlib import Path
+          import re, sys
+          main_path, screens_path, package_dir = map(Path, sys.argv[1:])
+          main = main_path.read_text(encoding="utf-8")
+          screens = screens_path.read_text(encoding="utf-8")
+          diagnostics = r'''package com.mindunlock.app
+          import android.content.Context
+          import android.content.Intent
+          import android.os.Build
+          import java.io.File
+          import java.io.PrintWriter
+          import java.io.StringWriter
+          import java.text.SimpleDateFormat
+          import java.util.Date
+          import java.util.Locale
+          import kotlin.system.exitProcess
+          object CrashDiagnostics {
+              @Volatile private var currentScreen: String = "نامشخص"
+              @Volatile private var installed = false
+              fun setCurrentScreen(screen: String) { currentScreen = screen.take(160) }
+              @Synchronized fun install(context: Context) {
+                  if (installed) return
+                  installed = true
+                  val app = context.applicationContext
+                  val previous = Thread.getDefaultUncaughtExceptionHandler()
+                  Thread.setDefaultUncaughtExceptionHandler { thread, error ->
+                      try {
+                          val directory = File(app.filesDir, "diagnostics")
+                          directory.mkdirs()
+                          val version = runCatching { app.packageManager.getPackageInfo(app.packageName, 0).versionName ?: "unknown" }.getOrDefault("unknown")
+                          val trace = StringWriter()
+                          error.printStackTrace(PrintWriter(trace))
+                          val report = buildString {
+                              appendLine("MindUnlock crash report")
+                              appendLine("Time: " + SimpleDateFormat("yyyy-MM-dd HH:mm:ss Z", Locale.US).format(Date()))
+                              appendLine("App version: " + version)
+                              appendLine("Package: " + app.packageName)
+                              appendLine("Android: " + Build.VERSION.RELEASE + " (API " + Build.VERSION.SDK_INT + ")")
+                              appendLine("Device: " + Build.MANUFACTURER + " " + Build.MODEL)
+                              appendLine("Thread: " + thread.name)
+                              appendLine("Screen: " + currentScreen)
+                              appendLine()
+                              append(trace.toString())
+                          }
+                          File(directory, "last-crash.txt").writeText(report, Charsets.UTF_8)
+                      } catch (_: Throwable) { }
+                      if (previous != null) previous.uncaughtException(thread, error)
+                      else { android.os.Process.killProcess(android.os.Process.myPid()); exitProcess(10) }
+                  }
+              }
+              fun readLastReport(context: Context): String =
+                  runCatching { File(context.filesDir, "diagnostics/last-crash.txt").takeIf { it.isFile }?.readText(Charsets.UTF_8).orEmpty() }.getOrDefault("")
+              fun shareLastReport(context: Context) {
+                  val report = readLastReport(context)
+                  val text = if (report.isBlank()) "هنوز گزارش کرشی از MindUnlock ثبت نشده است." else report
+                  val send = Intent(Intent.ACTION_SEND).apply {
+                      type = "text/plain"
+                      putExtra(Intent.EXTRA_SUBJECT, "MindUnlock crash diagnostics")
+                      putExtra(Intent.EXTRA_TEXT, text)
+                      addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                  }
+                  context.startActivity(Intent.createChooser(send, "ارسال گزارش عیب‌یابی").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+              }
+          }
+          '''
+          (package_dir / "CrashDiagnostics.kt").write_text(diagnostics, encoding="utf-8")
+          if "CrashDiagnostics.install(this)" not in main:
+              marker = "super.onCreate(savedInstanceState)"
+              if main.count(marker) != 1: raise SystemExit("MainActivity onCreate marker not unique")
+              main = main.replace(marker, marker + "\n        CrashDiagnostics.install(this)", 1)
+          if "CrashDiagnostics.setCurrentScreen(screen)" not in main:
+              match = re.search(r'^(\s*)var screen by remember(?:Saveable)?[^\n]*        working-directory: android-build
+        run: ./gradlew testDebugUnitTest --stacktrace
+
+      - name: Build Debug APK
+        working-directory: android-build
+        run: ./gradlew assembleDebug --stacktrace
+
+      - name: Verify APK integrity and package metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="android-build/app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$APK"
+          unzip -t "$APK" >/dev/null
+          AAPT="$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -n1)"
+          test -n "$AAPT"
+          "$AAPT" dump badging "$APK" | tee /tmp/apk-badging.txt
+          grep -Eq "^package: name='com\\.mindunlock\\.app(\\.debug)?'" /tmp/apk-badging.txt
+          echo "APK_SIZE_BYTES=$(stat -c%s "$APK")" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "APK archive integrity and application package verified." | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MindUnlock-Android-v0.5.1-debug
+          path: android-build/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+      - name: Publish GitHub Release with APK
+        if: success()
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: android-v0.5.1-${{ github.run_number }}
+          name: MindUnlock Android 0.5.1 (#${{ github.run_number }})
+          body: |
+            Android Native 0.5.1 with non-blocking database migration, defensive chapter loading and validated APK packaging.
+            HTTP sync is intended for trusted local networks only.
+          files: android-build/app/build/outputs/apk/debug/app-debug.apk
+          prerelease: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+, main, re.M)
+              if not match: raise SystemExit("Navigation screen state not found for crash breadcrumbs")
+              indent = match.group(1)
+              main = main[:match.end()] + "\n" + indent + "LaunchedEffect(screen) { CrashDiagnostics.setCurrentScreen(screen) }" + main[match.end():]
+              if "import androidx.compose.runtime.LaunchedEffect" not in main:
+                  pkg_end = main.find("\n")
+                  main = main[:pkg_end+1] + "import androidx.compose.runtime.LaunchedEffect\n" + main[pkg_end+1:]
+          main_path.write_text(main, encoding="utf-8")
+          if "import com.mindunlock.app.CrashDiagnostics" not in screens:
+              pkg_end = screens.find("\n")
+              screens = screens[:pkg_end+1] + "\nimport com.mindunlock.app.CrashDiagnostics" + screens[pkg_end+1:]
+          sig = "fun SettingsScreen("
+          start = screens.find(sig)
+          if start < 0: raise SystemExit("SettingsScreen declaration missing")
+          opening = screens.find("{", start)
+          if opening < 0 or opening-start > 1400: raise SystemExit("SettingsScreen body boundary missing")
+          if "var crashReportPreview by remember" not in screens:
+              screens = screens[:opening+1] + "\n    var crashReportPreview by remember { mutableStateOf(\"\") }\n" + screens[opening+1:]
+          marker = 'Text("۷. درباره برنامه و عیب‌یابی",'
+          if marker not in screens: raise SystemExit("Settings diagnostics section marker missing")
+          if "گزارش آخرین کرش" not in screens:
+              block = '''Text("گزارش آخرین کرش", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                          Text("خطاهای برنامه به‌صورت محلی روی گوشی ذخیره می‌شوند؛ گزارش شامل زمان، صفحه، نسخه اندروید و Stack trace است.", style = MaterialTheme.typography.bodySmall)
+                          Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                              OutlinedButton(onClick = { crashReportPreview = CrashDiagnostics.readLastReport(context) }, modifier = Modifier.weight(1f)) { Text("بررسی گزارش ذخیره‌شده") }
+                              OutlinedButton(onClick = { CrashDiagnostics.shareLastReport(context) }, modifier = Modifier.weight(1f)) { Text("ارسال / اشتراک گزارش") }
+                          }
+                          if (crashReportPreview.isNotBlank()) {
+                              Text(crashReportPreview.takeLast(5000), style = MaterialTheme.typography.bodySmall, maxLines = 14, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                          }
+                          '''
+              screens = screens.replace(marker, block + marker, 1)
+          screens_path.write_text(screens, encoding="utf-8")
+          assert "CrashDiagnostics.install(this)" in main
+          assert "CrashDiagnostics.setCurrentScreen(screen)" in main
+          assert "گزارش آخرین کرش" in screens
+          print("Crash capture, screen breadcrumbs, local report preview and share sheet integrated.")
+          PY
+
       - name: Run JVM unit tests
         working-directory: android-build
         run: ./gradlew testDebugUnitTest --stacktrace
