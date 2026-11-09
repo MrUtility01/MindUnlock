@@ -2201,6 +2201,251 @@ jobs:
           print("Crash capture, local report preview and share sheet integrated.")
           PY
 
+      - name: Harden lesson opening, image decoding and crash diagnostics
+        shell: bash
+        run: |
+          set -euo pipefail
+          MAIN_FILE="$(find android-build/app/src/main/java -type f -name MainActivity.kt -print -quit)"
+          SCREENS_FILE="$(find android-build/app/src/main/java -type f -name StudyScreens.kt -print -quit)"
+          test -n "$MAIN_FILE" && test -n "$SCREENS_FILE"
+          PACKAGE_DIR="$(dirname "$MAIN_FILE")"
+          python3 - "$MAIN_FILE" "$SCREENS_FILE" "$PACKAGE_DIR/CrashDiagnostics.kt" <<'PY'
+          from pathlib import Path
+          import sys
+
+          main_path, screens_path, crash_path = map(Path, sys.argv[1:])
+          main = main_path.read_text(encoding="utf-8")
+          screens = screens_path.read_text(encoding="utf-8")
+          crash = crash_path.read_text(encoding="utf-8")
+
+          # Preserve stack traces for recoverable lesson/database/media errors too.
+          marker = "              fun readLastReport(context: Context): String ="
+          method = """              fun recordHandled(context: Context, stage: String, error: Throwable) {
+                  try {
+                      val folder = File(context.applicationContext.filesDir, "diagnostics")
+                      folder.mkdirs()
+                      val trace = StringWriter()
+                      error.printStackTrace(PrintWriter(trace))
+                      val entry = buildString {
+                          appendLine("Handled lesson error")
+                          appendLine("Time: " + SimpleDateFormat("yyyy-MM-dd HH:mm:ss Z", Locale.US).format(Date()))
+                          appendLine("Stage: " + stage.take(240))
+                          appendLine("Error: " + (error.message ?: error.javaClass.name))
+                          appendLine()
+                          append(trace.toString())
+                      }
+                      val reportFile = File(folder, "last-crash.txt")
+                      val previous = if (reportFile.isFile) reportFile.readText(Charsets.UTF_8) else ""
+                      reportFile.writeText((previous + "\\\\n\\\\n" + entry).takeLast(120_000), Charsets.UTF_8)
+                  } catch (_: Throwable) { }
+              }
+
+          """
+          if "fun recordHandled(context: Context" not in crash:
+              if marker not in crash:
+                  raise SystemExit("CrashDiagnostics insertion point missing")
+              crash = crash.replace(marker, method + marker, 1)
+              crash_path.write_text(crash, encoding="utf-8")
+
+          # Chapter screen: convert Room/SQLite failures into retryable UI instead of
+          # letting an exception escape the LaunchedEffect and terminate the app.
+          if "var lessonLoadError by remember(chapterId)" not in screens:
+              anchor = '    var loading by remember(chapterId) { mutableStateOf(false) }'
+              extra = anchor + '''
+              var lessonLoadError by remember(chapterId) { mutableStateOf("") }
+              var lessonLoadAttempt by remember(chapterId) { mutableIntStateOf(0) }
+              val lessonContext = LocalContext.current'''
+              if screens.count(anchor) != 1:
+                  raise SystemExit("ChapterContentScreen loading state marker missing or ambiguous")
+              screens = screens.replace(anchor, extra, 1)
+
+              screens = screens.replace(
+                  "LaunchedEffect(chapterId, selectedType, query) {",
+                  "LaunchedEffect(chapterId, selectedType, query, lessonLoadAttempt) {",
+                  1
+              )
+              screens = screens.replace(
+                  "        loadedItems.clear()\\n        try {",
+                  "        loadedItems.clear()\\n        lessonLoadError = \\"\\"\\n        try {",
+                  1
+              )
+              old_finally = """            loadedItems.addAll(firstPage)
+                  } finally {
+                      loading = false
+                  }"""
+              new_finally = """            loadedItems.addAll(firstPage)
+                  } catch (error: kotlinx.coroutines.CancellationException) {
+                      throw error
+                  } catch (error: Exception) {
+                      lessonLoadError = error.message ?: "خطا در بارگذاری فصل رخ داد."
+                      android.util.Log.e("MindUnlockLesson", "Chapter load failed: " + chapterId, error)
+                      CrashDiagnostics.recordHandled(lessonContext, "ChapterContentScreen:" + chapterId, error)
+                  } finally {
+                      loading = false
+                  }"""
+              if old_finally not in screens:
+                  raise SystemExit("Chapter first-page exception boundary not found")
+              screens = screens.replace(old_finally, new_finally, 1)
+
+              old_page = """                                    loadedItems.addAll(nextPage)
+                                        } finally {
+                                            loading = false
+                                        }"""
+              new_page = """                                    loadedItems.addAll(nextPage)
+                                        } catch (error: kotlinx.coroutines.CancellationException) {
+                                            throw error
+                                        } catch (error: Exception) {
+                                            lessonLoadError = error.message ?: "بارگذاری مطالب بعدی ناموفق بود."
+                                            android.util.Log.e("MindUnlockLesson", "Chapter pagination failed: " + chapterId, error)
+                                            CrashDiagnostics.recordHandled(lessonContext, "ChapterPagination:" + chapterId, error)
+                                        } finally {
+                                            loading = false
+                                        }"""
+              if old_page not in screens:
+                  raise SystemExit("Chapter pagination exception boundary not found")
+              screens = screens.replace(old_page, new_page, 1)
+
+              empty_anchor = '            if (loadedItems.isEmpty() && !loading) item { EmptyMessage("مطلبی با این فیلتر پیدا نشد.") }'
+              error_ui = """            if (lessonLoadError.isNotBlank()) item {
+                          Card(Modifier.fillMaxWidth()) {
+                              Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                  Text("بارگذاری درس با خطا روبه‌رو شد", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.SemiBold)
+                                  Text(lessonLoadError, style = MaterialTheme.typography.bodySmall)
+                                  TextButton(onClick = { lessonLoadAttempt += 1 }) { Text("تلاش مجدد") }
+                              }
+                          }
+                      }
+          """ + empty_anchor
+              if empty_anchor not in screens:
+                  raise SystemExit("Chapter error UI insertion point missing")
+              screens = screens.replace(empty_anchor, error_ui, 1)
+
+          # Reader data Flow: catch database errors, keep the page alive, and offer a retry.
+          old_reader = """    val item by db.contentItemDao().observe(itemUid).collectAsState(initial = null)
+              val scope = rememberCoroutineScope()
+              val context = LocalContext.current"""
+          new_reader = """    val context = LocalContext.current
+              var readerLoadError by remember(itemUid) { mutableStateOf("") }
+              var readerLoadAttempt by remember(itemUid) { mutableIntStateOf(0) }
+              val itemFlow = remember(db, itemUid, readerLoadAttempt, context) {
+                  db.contentItemDao().observe(itemUid).catch { error ->
+                      readerLoadError = error.message ?: "خواندن اطلاعات این مطلب ناموفق بود."
+                      android.util.Log.e("MindUnlockLesson", "Reader flow failed: " + itemUid, error)
+                      CrashDiagnostics.recordHandled(context, "ReaderScreen:" + itemUid, error)
+                      emit(null)
+                  }
+              }
+              val item by itemFlow.collectAsState(initial = null)
+              val scope = rememberCoroutineScope()"""
+          if old_reader not in screens:
+              raise SystemExit("ReaderScreen item Flow insertion point missing")
+          screens = screens.replace(old_reader, new_reader, 1)
+
+          old_missing = """    if (item == null) {
+                  EmptyMessage("این محتوا در حافظهٔ محلی پیدا نشد.")
+                  return
+              }"""
+          new_missing = """    if (item == null) {
+                  if (readerLoadError.isNotBlank()) {
+                      Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                          Text("باز کردن مطلب با خطا روبه‌رو شد", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.SemiBold)
+                          Text(readerLoadError, style = MaterialTheme.typography.bodySmall)
+                          OutlinedButton(onClick = { readerLoadError = ""; readerLoadAttempt += 1 }) { Text("تلاش مجدد") }
+                      }
+                  } else {
+                      EmptyMessage("در حال بارگذاری مطلب…")
+                  }
+                  return
+              }"""
+          if old_missing not in screens:
+              raise SystemExit("ReaderScreen missing-item UI marker not found")
+          screens = screens.replace(old_missing, new_missing, 1)
+
+          # Decode cached lesson images off the main thread and at bounded dimensions.
+          if "private fun SafeLocalCachedImage(" not in screens:
+              old_image_call = "LocalCachedImage(cached.localPath)"
+              if old_image_call not in screens:
+                  raise SystemExit("Reader image rendering call not found")
+              screens = screens.replace(old_image_call, "SafeLocalCachedImage(cached.localPath)", 1)
+              screens += '''
+
+          @Composable
+          private fun SafeLocalCachedImage(path: String) {
+              val bitmap by produceState<android.graphics.Bitmap?>(initialValue = null, path) {
+                  value = withContext(Dispatchers.IO) {
+                      try {
+                          val file = File(path)
+                          if (!file.isFile || file.length() <= 0L) {
+                              null
+                          } else {
+                              val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                              android.graphics.BitmapFactory.decodeFile(file.absolutePath, bounds)
+                              if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
+                                  null
+                              } else {
+                                  var sample = 1
+                                  while (bounds.outWidth / sample > 1440 || bounds.outHeight / sample > 1920) {
+                                      sample *= 2
+                                  }
+                                  val options = android.graphics.BitmapFactory.Options().apply {
+                                      inSampleSize = sample
+                                      inPreferredConfig = android.graphics.Bitmap.Config.RGB_565
+                                  }
+                                  android.graphics.BitmapFactory.decodeFile(file.absolutePath, options)
+                              }
+                          }
+                      } catch (error: Exception) {
+                          android.util.Log.w("MindUnlockImage", "Could not decode cached lesson image: " + path, error)
+                          null
+                      }
+                  }
+              }
+              if (bitmap != null) {
+                  Image(
+                      bitmap = bitmap!!.asImageBitmap(),
+                      contentDescription = "تصویر مطلب",
+                      modifier = Modifier.fillMaxWidth(),
+                      contentScale = ContentScale.Fit
+                  )
+              } else {
+                  Text("تصویر این مطلب قابل نمایش نیست.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+              }
+          }
+          '''
+
+          # All screen source changes are intentionally guarded by exact markers.
+          screens_path.write_text(screens, encoding="utf-8")
+
+          # Keep the crash report aware of the last active screen when an uncaught
+          # error does happen outside the recoverable data/image boundaries.
+          route_marker = "        when (screen) {"
+          if "CrashDiagnostics.setCurrentScreen(" not in main:
+              if route_marker not in main:
+                  raise SystemExit("MainActivity screen routing marker missing")
+              route = '        androidx.compose.runtime.SideEffect { CrashDiagnostics.setCurrentScreen("screen=" + screen + "; item=" + selectedItem) }\\n'
+              main = main.replace(route_marker, route + route_marker, 1)
+              main_path.write_text(main, encoding="utf-8")
+
+          assert "lessonLoadError" in screens
+          assert "readerLoadError" in screens
+          assert "SafeLocalCachedImage" in screens
+          assert "fun recordHandled(context: Context" in crash_path.read_text(encoding="utf-8")
+          print("Lesson loading now has retryable database error handling, bounded off-main-thread image decoding and detailed local diagnostics.")
+          PY
+
+          # Bump the Android package version after all source transformations.
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("android-build/app/build.gradle.kts")
+          source = p.read_text(encoding="utf-8")
+          if "versionCode = 6" not in source or 'versionName = "0.5.1"' not in source:
+              raise SystemExit("Expected v0.5.1 package version markers not found")
+          source = source.replace("versionCode = 6", "versionCode = 7", 1)
+          source = source.replace('versionName = "0.5.1"', 'versionName = "0.5.2"', 1)
+          p.write_text(source, encoding="utf-8")
+          print("Package version bumped to 0.5.2 (versionCode 7).")
+          PY
+
       - name: Run JVM unit tests
         working-directory: android-build
         run: ./gradlew testDebugUnitTest --stacktrace
@@ -2234,10 +2479,10 @@ jobs:
         if: success()
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: android-v0.5.1-${{ github.run_number }}
-          name: MindUnlock Android 0.5.1 (#${{ github.run_number }})
+          tag_name: android-v0.5.2-${{ github.run_number }}
+          name: MindUnlock Android 0.5.2 (#${{ github.run_number }})
           body: |
-            Android Native 0.5.1 with non-blocking database migration, defensive chapter loading and validated APK packaging.
+            Android Native 0.5.2 with guarded lesson loading, bounded image decoding, local error reports and non-blocking database migration, defensive chapter loading and validated APK packaging.
             HTTP sync is intended for trusted local networks only.
           files: android-build/app/build/outputs/apk/debug/app-debug.apk
           prerelease: true
