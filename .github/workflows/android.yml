@@ -2211,6 +2211,7 @@ jobs:
           PACKAGE_DIR="$(dirname "$MAIN_FILE")"
           python3 - "$MAIN_FILE" "$SCREENS_FILE" "$PACKAGE_DIR/CrashDiagnostics.kt" <<'PY'
           from pathlib import Path
+          import re
           import sys
 
           main_path, screens_path, crash_path = map(Path, sys.argv[1:])
@@ -2218,7 +2219,8 @@ jobs:
           screens = screens_path.read_text(encoding="utf-8")
           crash = crash_path.read_text(encoding="utf-8")
 
-          # Preserve stack traces for recoverable lesson/database/media errors too.
+          # Save recoverable database and media errors in the same report the
+          # Settings screen can preview and share.
           marker = "              fun readLastReport(context: Context): String ="
           method = """              fun recordHandled(context: Context, stage: String, error: Throwable) {
                   try {
@@ -2236,7 +2238,7 @@ jobs:
                       }
                       val reportFile = File(folder, "last-crash.txt")
                       val previous = if (reportFile.isFile) reportFile.readText(Charsets.UTF_8) else ""
-                      reportFile.writeText((previous + "\\\\n\\\\n" + entry).takeLast(120_000), Charsets.UTF_8)
+                      reportFile.writeText((previous + "\\n\\n" + entry).takeLast(120_000), Charsets.UTF_8)
                   } catch (_: Throwable) { }
               }
 
@@ -2247,34 +2249,31 @@ jobs:
               crash = crash.replace(marker, method + marker, 1)
               crash_path.write_text(crash, encoding="utf-8")
 
-          # Chapter screen: convert Room/SQLite failures into retryable UI instead of
-          # letting an exception escape the LaunchedEffect and terminate the app.
+          # Make chapter loading failures visible and retryable.
           if "var lessonLoadError by remember(chapterId)" not in screens:
               anchor = '    var loading by remember(chapterId) { mutableStateOf(false) }'
-              extra = anchor + '''
+              if screens.count(anchor) != 1:
+                  raise SystemExit("Chapter loading state marker missing or ambiguous")
+              screens = screens.replace(anchor, anchor + '''
               var lessonLoadError by remember(chapterId) { mutableStateOf("") }
               var lessonLoadAttempt by remember(chapterId) { mutableIntStateOf(0) }
-              val lessonContext = LocalContext.current'''
-              if screens.count(anchor) != 1:
-                  raise SystemExit("ChapterContentScreen loading state marker missing or ambiguous")
-              screens = screens.replace(anchor, extra, 1)
+              val lessonContext = LocalContext.current''', 1)
 
-              screens = screens.replace(
-                  "LaunchedEffect(chapterId, selectedType, query) {",
-                  "LaunchedEffect(chapterId, selectedType, query, lessonLoadAttempt) {",
-                  1
-              )
-              screens = screens.replace(
-                  "        loadedItems.clear()\\n        try {",
-                  "        loadedItems.clear()\\n        lessonLoadError = \\"\\"\\n        try {",
-                  1
-              )
-              old_finally = """            loadedItems.addAll(firstPage)
-                  } finally {
-                      loading = false
-                  }"""
-              new_finally = """            loadedItems.addAll(firstPage)
-                  } catch (error: kotlinx.coroutines.CancellationException) {
+              effect = "    LaunchedEffect(chapterId, selectedType, query) {"
+              if screens.count(effect) != 1:
+                  raise SystemExit("Chapter loading LaunchedEffect marker missing or ambiguous")
+              screens = screens.replace(effect, "    LaunchedEffect(chapterId, selectedType, query, lessonLoadAttempt) {", 1)
+
+              clear_block = """        loadedItems.clear()
+                  try {"""
+              if clear_block not in screens:
+                  raise SystemExit("Chapter loading try block marker missing")
+              screens = screens.replace(clear_block, """        loadedItems.clear()
+                  lessonLoadError = ""
+                  try {""", 1)
+
+              first_pattern = r'(loadedItems\.addAll\(firstPage\)\s*)\}\s*finally\s*\{\s*loading = false\s*\}'
+              first_replacement = r'''\1} catch (error: kotlinx.coroutines.CancellationException) {
                       throw error
                   } catch (error: Exception) {
                       lessonLoadError = error.message ?: "خطا در بارگذاری فصل رخ داد."
@@ -2282,17 +2281,13 @@ jobs:
                       CrashDiagnostics.recordHandled(lessonContext, "ChapterContentScreen:" + chapterId, error)
                   } finally {
                       loading = false
-                  }"""
-              if old_finally not in screens:
-                  raise SystemExit("Chapter first-page exception boundary not found")
-              screens = screens.replace(old_finally, new_finally, 1)
+                  }'''
+              screens, count = re.subn(first_pattern, first_replacement, screens, count=1)
+              if count != 1:
+                  raise SystemExit("Could not add ChapterContentScreen first-page error handling")
 
-              old_page = """                                    loadedItems.addAll(nextPage)
-                                        } finally {
-                                            loading = false
-                                        }"""
-              new_page = """                                    loadedItems.addAll(nextPage)
-                                        } catch (error: kotlinx.coroutines.CancellationException) {
+              next_pattern = r'(loadedItems\.addAll\(nextPage\)\s*)\}\s*finally\s*\{\s*loading = false\s*\}'
+              next_replacement = r'''\1} catch (error: kotlinx.coroutines.CancellationException) {
                                             throw error
                                         } catch (error: Exception) {
                                             lessonLoadError = error.message ?: "بارگذاری مطالب بعدی ناموفق بود."
@@ -2300,10 +2295,10 @@ jobs:
                                             CrashDiagnostics.recordHandled(lessonContext, "ChapterPagination:" + chapterId, error)
                                         } finally {
                                             loading = false
-                                        }"""
-              if old_page not in screens:
-                  raise SystemExit("Chapter pagination exception boundary not found")
-              screens = screens.replace(old_page, new_page, 1)
+                                        }'''
+              screens, count = re.subn(next_pattern, next_replacement, screens, count=1)
+              if count != 1:
+                  raise SystemExit("Could not add ChapterContentScreen pagination error handling")
 
               empty_anchor = '            if (loadedItems.isEmpty() && !loading) item { EmptyMessage("مطلبی با این فیلتر پیدا نشد.") }'
               error_ui = """            if (lessonLoadError.isNotBlank()) item {
@@ -2320,7 +2315,15 @@ jobs:
                   raise SystemExit("Chapter error UI insertion point missing")
               screens = screens.replace(empty_anchor, error_ui, 1)
 
-          # Reader data Flow: catch database errors, keep the page alive, and offer a retry.
+          # Protect ReaderScreen's database flow, preserve the stack trace, and let
+          # a user retry without restarting the entire application.
+          flow_import = "import kotlinx.coroutines.flow.catch"
+          if flow_import not in screens:
+              package_end = screens.find("\n")
+              if package_end < 0:
+                  raise SystemExit("StudyScreens package declaration missing")
+              screens = screens[:package_end + 1] + "\n" + flow_import + screens[package_end + 1:]
+
           old_reader = """    val item by db.contentItemDao().observe(itemUid).collectAsState(initial = null)
               val scope = rememberCoroutineScope()
               val context = LocalContext.current"""
@@ -2337,9 +2340,10 @@ jobs:
               }
               val item by itemFlow.collectAsState(initial = null)
               val scope = rememberCoroutineScope()"""
-          if old_reader not in screens:
+          if old_reader in screens:
+              screens = screens.replace(old_reader, new_reader, 1)
+          elif "val itemFlow = remember(db, itemUid, readerLoadAttempt, context)" not in screens:
               raise SystemExit("ReaderScreen item Flow insertion point missing")
-          screens = screens.replace(old_reader, new_reader, 1)
 
           old_missing = """    if (item == null) {
                   EmptyMessage("این محتوا در حافظهٔ محلی پیدا نشد.")
@@ -2357,11 +2361,13 @@ jobs:
                   }
                   return
               }"""
-          if old_missing not in screens:
+          if old_missing in screens:
+              screens = screens.replace(old_missing, new_missing, 1)
+          elif "باز کردن مطلب با خطا روبه‌رو شد" not in screens:
               raise SystemExit("ReaderScreen missing-item UI marker not found")
-          screens = screens.replace(old_missing, new_missing, 1)
 
-          # Decode cached lesson images off the main thread and at bounded dimensions.
+          # Decode lesson images on IO with a bounded bitmap size to avoid memory
+          # spikes from full-resolution camera/scanner images.
           if "private fun SafeLocalCachedImage(" not in screens:
               old_image_call = "LocalCachedImage(cached.localPath)"
               if old_image_call not in screens:
@@ -2371,7 +2377,7 @@ jobs:
 
           @Composable
           private fun SafeLocalCachedImage(path: String) {
-              val bitmap by produceState<android.graphics.Bitmap?>(initialValue = null, path) {
+              val bitmap by produceState<android.graphics.Bitmap?>(initialValue = null, key1 = path) {
                   value = withContext(Dispatchers.IO) {
                       try {
                           val file = File(path)
@@ -2413,16 +2419,14 @@ jobs:
           }
           '''
 
-          # All screen source changes are intentionally guarded by exact markers.
           screens_path.write_text(screens, encoding="utf-8")
 
-          # Keep the crash report aware of the last active screen when an uncaught
-          # error does happen outside the recoverable data/image boundaries.
+          # Crash report also records which route was last composed.
           route_marker = "        when (screen) {"
           if "CrashDiagnostics.setCurrentScreen(" not in main:
               if route_marker not in main:
                   raise SystemExit("MainActivity screen routing marker missing")
-              route = '        androidx.compose.runtime.SideEffect { CrashDiagnostics.setCurrentScreen("screen=" + screen + "; item=" + selectedItem) }\\n'
+              route = '        androidx.compose.runtime.SideEffect { CrashDiagnostics.setCurrentScreen("screen=" + screen + "; item=" + selectedItem) }\n'
               main = main.replace(route_marker, route + route_marker, 1)
               main_path.write_text(main, encoding="utf-8")
 
@@ -2433,7 +2437,6 @@ jobs:
           print("Lesson loading now has retryable database error handling, bounded off-main-thread image decoding and detailed local diagnostics.")
           PY
 
-          # Bump the Android package version after all source transformations.
           python3 - <<'PY'
           from pathlib import Path
           p = Path("android-build/app/build.gradle.kts")
