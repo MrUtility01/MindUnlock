@@ -2221,7 +2221,7 @@ jobs:
 
           # Save recoverable database and media errors in the same report the
           # Settings screen can preview and share.
-          marker = "              fun readLastReport(context: Context): String ="
+          marker = "fun readLastReport(context: Context): String ="
           method = """              fun recordHandled(context: Context, stage: String, error: Throwable) {
                   try {
                       val folder = File(context.applicationContext.filesDir, "diagnostics")
