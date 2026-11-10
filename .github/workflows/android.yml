@@ -2315,6 +2315,27 @@ jobs:
                   raise SystemExit("Chapter error UI insertion point missing")
               screens = screens.replace(empty_anchor, error_ui, 1)
 
+          # Keep oversized lesson bodies out of CursorWindow rows. Room projections
+          # read metadata and the large text column separately.
+          dao_path = main_path.parent / "data" / "local" / "AppDatabase.kt"
+          dao = dao_path.read_text(encoding="utf-8")
+          if "fun observeMetadata(uid: String)" not in dao:
+              dao_anchor = "interface ContentItemDao {"
+              if dao_anchor not in dao:
+                  raise SystemExit("ContentItemDao declaration missing")
+              dao = dao.replace(dao_anchor, dao_anchor + """
+              @Query("SELECT uid, chapterId, type, title, orderIndex, optionsJson, answer, explanation, metadataJson FROM content_items WHERE uid = :uid LIMIT 1")
+              fun observeMetadata(uid: String): Flow<ContentItemEntity?>
+
+              @Query("SELECT content FROM content_items WHERE uid = :uid LIMIT 1")
+              fun observeContent(uid: String): Flow<String?>
+              """, 1)
+          dao = dao.replace(
+              'SELECT * FROM content_items WHERE chapterId = :chapterId ORDER BY orderIndex, title LIMIT :limit OFFSET :offset',
+              'SELECT uid, chapterId, type, title, orderIndex, optionsJson, answer, explanation, metadataJson FROM content_items WHERE chapterId = :chapterId ORDER BY orderIndex, title LIMIT :limit OFFSET :offset'
+          )
+          dao_path.write_text(dao, encoding="utf-8")
+
           # Protect ReaderScreen's database flow, preserve the stack trace, and let
           # a user retry without restarting the entire application.
           flow_import = "import kotlinx.coroutines.flow.catch"
@@ -2330,20 +2351,30 @@ jobs:
           new_reader = """    val context = LocalContext.current
               var readerLoadError by remember(itemUid) { mutableStateOf("") }
               var readerLoadAttempt by remember(itemUid) { mutableIntStateOf(0) }
-              val itemFlow = remember(db, itemUid, readerLoadAttempt, context) {
-                  db.contentItemDao().observe(itemUid).catch { error ->
+              val metadataFlow = remember(db, itemUid, readerLoadAttempt, context) {
+                  db.contentItemDao().observeMetadata(itemUid).catch { error ->
                       readerLoadError = error.message ?: "خواندن اطلاعات این مطلب ناموفق بود."
-                      android.util.Log.e("MindUnlockLesson", "Reader flow failed: " + itemUid, error)
-                      CrashDiagnostics.recordHandled(context, "ReaderScreen:" + itemUid, error)
+                      android.util.Log.e("MindUnlockLesson", "Reader metadata failed: " + itemUid, error)
+                      CrashDiagnostics.recordHandled(context, "ReaderMetadata:" + itemUid, error)
                       emit(null)
                   }
               }
-              val item by itemFlow.collectAsState(initial = null)
+              val contentFlow = remember(db, itemUid, readerLoadAttempt, context) {
+                  db.contentItemDao().observeContent(itemUid).catch { error ->
+                      readerLoadError = error.message ?: "خواندن متن این مطلب ناموفق بود."
+                      android.util.Log.e("MindUnlockLesson", "Reader content failed: " + itemUid, error)
+                      CrashDiagnostics.recordHandled(context, "ReaderContent:" + itemUid, error)
+                      emit(null)
+                  }
+              }
+              val itemMetadata by metadataFlow.collectAsState(initial = null)
+              val itemContent by contentFlow.collectAsState(initial = null)
+              val item = itemMetadata?.copy(content = itemContent)
               val scope = rememberCoroutineScope()"""
           if old_reader in screens:
               screens = screens.replace(old_reader, new_reader, 1)
-          elif "val itemFlow = remember(db, itemUid, readerLoadAttempt, context)" not in screens:
-              raise SystemExit("ReaderScreen item Flow insertion point missing")
+          elif "val metadataFlow = remember(db, itemUid, readerLoadAttempt, context)" not in screens:
+              raise SystemExit("ReaderScreen metadata Flow insertion point missing")
 
           old_missing = """    if (item == null) {
                   EmptyMessage("این محتوا در حافظهٔ محلی پیدا نشد.")
