@@ -847,7 +847,8 @@ jobs:
               at = source.find(signature)
               if at < 0:
                   raise SystemExit(name + " declaration not found")
-              start = source.rfind("@Composable", 0, at)              if start < 0:
+              start = source.rfind("@Composable", 0, at)
+              if start < 0:
                   raise SystemExit(name + " @Composable annotation not found")
               end = source.find(chr(10) + "@Composable", at)
               if end < 0:
