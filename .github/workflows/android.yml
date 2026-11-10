@@ -847,8 +847,7 @@ jobs:
               at = source.find(signature)
               if at < 0:
                   raise SystemExit(name + " declaration not found")
-              start = source.rfind("@Composable", 0, at)
-              if start < 0:
+              start = source.rfind("@Composable", 0, at)              if start < 0:
                   raise SystemExit(name + " @Composable annotation not found")
               end = source.find(chr(10) + "@Composable", at)
               if end < 0:
@@ -1697,8 +1696,7 @@ jobs:
               "import androidx.compose.material3.RadioButton",
               "import androidx.compose.material3.Slider",
               "import androidx.compose.material3.Text",
-              "import androidx.compose.material3.TextButton",
-              "import androidx.compose.runtime.Composable",
+              "import androidx.compose.material3.TextButton",              "import androidx.compose.runtime.Composable",
               "import androidx.compose.runtime.getValue",
               "import androidx.compose.runtime.mutableStateOf",
               "import androidx.compose.runtime.remember",
@@ -2478,6 +2476,27 @@ jobs:
           source = source.replace('versionName = "0.5.1"', 'versionName = "0.5.2"', 1)
           p.write_text(source, encoding="utf-8")
           print("Package version bumped to 0.5.2 (versionCode 7).")
+          PY
+
+      - name: Fix Room projections to include required sourceStatus column
+        shell: bash
+        run: |
+          set -euo pipefail
+          DAO_FILE="$(find android-build/app/src/main/java -type f -path '*/data/local/AppDatabase.kt' -print -quit)"
+          test -n "$DAO_FILE"
+          python3 - "$DAO_FILE" <<'PY'
+          from pathlib import Path
+          import sys
+          p = Path(sys.argv[1])
+          s = p.read_text(encoding="utf-8")
+          old = "explanation, metadataJson FROM content_items"
+          new = "explanation, sourceStatus, metadataJson FROM content_items"
+          count = s.count(old)
+          if count < 2:
+              raise SystemExit(f"Expected at least two Room projections, found {count}; refusing incomplete fix")
+          s = s.replace(old, new)
+          p.write_text(s, encoding="utf-8")
+          print(f"Added sourceStatus to {count} Room projections.")
           PY
 
       - name: Run JVM unit tests
