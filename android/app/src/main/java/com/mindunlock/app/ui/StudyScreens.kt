@@ -563,7 +563,7 @@ fun ReaderScreen(db: AppDatabase, userDb: UserDatabase, itemUid: String, speech:
     }
     if (noteDialog) {
         AlertDialog(onDismissRequest = { noteDialog = false }, title = { Text("یادداشت برای این مطلب") },
-            text = { OutlinedTextField(noteText, { noteText = it }, label = { Text("متن یادداشت") }, minLines = 3) },
+            text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { OutlinedTextField(noteText, { noteText = it }, label = { Text("متن یادداشت") }, minLines = 3); PersianVoiceInputButton { spoken -> noteText = listOf(noteText, spoken).filter { it.isNotBlank() }.joinToString("\\n") } } },
             confirmButton = { TextButton(onClick = {
                 if (noteText.isNotBlank()) scope.launch { userDb.noteDao().upsert(NoteEntity(itemUid = current.uid, chapterId = current.chapterId, title = current.title ?: "یادداشت", body = noteText.trim())) }
                 noteText = ""; noteDialog = false
@@ -635,7 +635,7 @@ fun FlashcardsScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeec
 }
 
 @Composable
-fun QuizScreen(db: AppDatabase, userDb: UserDatabase, examMode: Boolean = false) {
+fun QuizScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeech, examMode: Boolean = false) {
     val questions by db.contentItemDao().observeByTypes(listOf("question", "quiz", "exercise", "practice", "exam")).collectAsState(initial = emptyList())
     val valid = questions.filter { it.sourceStatus == "verified" && readStringArray(it.optionsJson ?: runCatching { JsonParser.parseString(it.metadataJson ?: "{}").asJsonObject.get("options")?.toString() }.getOrNull() ).isNotEmpty() }
     val scope = rememberCoroutineScope()
@@ -706,7 +706,7 @@ fun QuizScreen(db: AppDatabase, userDb: UserDatabase, examMode: Boolean = false)
 }
 
 @Composable
-fun NotesScreen(userDb: UserDatabase) {
+fun NotesScreen(userDb: UserDatabase, speech: PersianSpeech) {
     val notes by userDb.noteDao().observeAll().collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -794,7 +794,9 @@ fun NotesScreen(userDb: UserDatabase) {
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(title, { title = it }, label = { Text("عنوان") }, singleLine = true)
+                PersianVoiceInputButton { spoken -> title = listOf(title, spoken).filter { it.isNotBlank() }.joinToString(" ") }
                 OutlinedTextField(body, { body = it }, label = { Text("متن") }, minLines = 4)
+                PersianVoiceInputButton { spoken -> body = listOf(body, spoken).filter { it.isNotBlank() }.joinToString("\\n") }
             }
         },
         confirmButton = {
@@ -820,7 +822,7 @@ fun NotesScreen(userDb: UserDatabase) {
 }
 
 @Composable
-fun LabsScreen(db: AppDatabase, userDb: UserDatabase, onOpenItem: (String) -> Unit) {
+fun LabsScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeech, onOpenItem: (String) -> Unit) {
     val content by db.contentItemDao().observeByTypes(listOf("lab", "command", "example", "exercise", "practice", "project")).collectAsState(initial = emptyList())
     val tasks by userDb.studyTaskDao().observeAll().collectAsState(initial = emptyList())
     var selected by rememberSaveable { mutableStateOf("همه") }
@@ -844,7 +846,7 @@ fun LabsScreen(db: AppDatabase, userDb: UserDatabase, onOpenItem: (String) -> Un
 }
 
 @Composable
-fun PlannerScreen(userDb: UserDatabase) {
+fun PlannerScreen(userDb: UserDatabase, speech: PersianSpeech) {
     val tasks by userDb.studyTaskDao().observeAll().collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -856,7 +858,9 @@ fun PlannerScreen(userDb: UserDatabase) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("برنامهٔ روزانه، تکلیف و پروژهٔ شخصی", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         OutlinedTextField(title, { title = it }, Modifier.fillMaxWidth(), label = { Text("عنوان") }, singleLine = true)
+        PersianVoiceInputButton { spoken -> title = listOf(title, spoken).filter { it.isNotBlank() }.joinToString(" ") }
         OutlinedTextField(details, { details = it }, Modifier.fillMaxWidth(), label = { Text("توضیحات") }, minLines = 2)
+        PersianVoiceInputButton { spoken -> details = listOf(details, spoken).filter { it.isNotBlank() }.joinToString("\\n") }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(selected = type == "task", onClick = { type = "task" }, label = { Text("کار مطالعاتی") })
             FilterChip(selected = type == "project", onClick = { type = "project" }, label = { Text("پروژه") })
@@ -892,7 +896,7 @@ fun PlannerScreen(userDb: UserDatabase) {
 }
 
 @Composable
-fun ProgressScreen(db: AppDatabase, userDb: UserDatabase) {
+fun ProgressScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeech) {
     val itemCount by db.contentItemDao().observeItemCount().collectAsState(initial = 0)
     val progress by userDb.progressDao().observeAll().collectAsState(initial = emptyList())
     val tasks by userDb.studyTaskDao().observeAll().collectAsState(initial = emptyList())
@@ -912,7 +916,7 @@ fun ProgressScreen(db: AppDatabase, userDb: UserDatabase) {
 }
 
 @Composable
-fun BookmarksScreen(db: AppDatabase, userDb: UserDatabase, onOpenItem: (String) -> Unit) {
+fun BookmarksScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeech, onOpenItem: (String) -> Unit) {
     val bookmarks by userDb.bookmarkDao().observeAll().collectAsState(initial = emptyList())
     val bookmarkUids = remember(bookmarks) { bookmarks.map { it.itemUid }.distinct() }
     val saved by db.contentItemDao().observeByUids(bookmarkUids).collectAsState(initial = emptyList())
