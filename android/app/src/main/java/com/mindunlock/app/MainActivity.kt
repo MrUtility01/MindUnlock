@@ -451,10 +451,16 @@ internal object OfflinePersianSpeech {
 
         if (!modelFile.exists() || modelFile.length() < 1_000_000L || !tokensFile.exists()) {
             withContext(Dispatchers.Main) { onStatus("دریافت یک‌باره مدل فارسی؛ پس از آن تشخیص بدون اینترنت انجام می‌شود.") }
-            download(MODEL_URL, modelFile) { percent ->
-                onStatus("دریافت مدل فارسی: $percent٪")
+            if (!modelFile.exists() || modelFile.length() < 1_000_000L) {
+                download(MODEL_URL, modelFile) { percent ->
+                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                        onStatus("دریافت مدل فارسی: $percent٪")
+                    }
+                }
             }
-            download(TOKENS_URL, tokensFile) { }
+            if (!tokensFile.exists() || tokensFile.length() < 100L) {
+                download(TOKENS_URL, tokensFile) { }
+            }
         }
 
         withContext(Dispatchers.Main) { onStatus("مدل آماده است؛ اکنون صحبت کن و برای پایان دوباره دکمه را بزن.") }
