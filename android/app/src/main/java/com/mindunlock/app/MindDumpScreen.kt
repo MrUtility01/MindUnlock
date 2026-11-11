@@ -106,6 +106,7 @@ fun MindDumpScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
                 items(visibleEntries, key = { it.id }) { entry ->
                     MindDumpCard(
                         entry = entry,
+                        speech = speech,
                         onConvertToTask = {
                             scope.launch {
                                 val taskId = userDatabase.studyTaskDao().upsert(
@@ -147,6 +148,7 @@ fun MindDumpScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
 @Composable
 private fun MindDumpCard(
     entry: MindDumpEntity,
+    speech: PersianSpeech,
     onConvertToTask: () -> Unit,
     onSaveAsNote: () -> Unit,
     onArchive: () -> Unit,
