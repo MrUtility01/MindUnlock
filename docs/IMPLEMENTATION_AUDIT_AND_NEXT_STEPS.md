@@ -192,3 +192,40 @@ Mind Dump/Inbox، Tasks، Daily Plan، Journal، Knowledge، Review، Reports، 
 - طراحی backup/restore قابل بازیابی: باز.
 
 **محدودیت شواهد:** این ممیزی از سورس استخراج‌شده و لاگ Build #110 استفاده می‌کند. فایل دیتابیس خصوصی گوشی کاربر یا وضعیت واقعی داده‌های نصب‌شده در دسترس ممیزی نبوده است؛ بنابراین هیچ ادعایی درباره سالم‌بودن/خراب‌بودن دیتابیس نصب‌شده مطرح نمی‌شود.
+
+
+## 10. Source reconstruction map — 2026-11-11
+
+### 10.1 Verified workflow structure
+
+The active `.github/workflows/android.yml` is 154,656 characters and contains 38 named steps. The build is not a direct Gradle build of the checked-in `android/` directory. It performs these classes of transformations against a temporary `android-build/` tree:
+
+1. Extracts `MindUnlock-Android-v0.3.1-source.zip` and copies the nested Android project into `android-build/`.
+2. Applies password-length changes and generates launcher icons from the checked-in portrait asset.
+3. Integrates the offline Persian Piper TTS engine and later hardens its on-demand voice loading/management.
+4. Applies the study workflow/UI redesign from `.github/refactor_android.py.xz.b64`.
+5. Applies database split, sync, and speech optimizations using the concatenated compressed scripts `.github/mindunlock_optimization.py.xz.b64` and `.github/mindunlock_optimization_part2.b64`.
+6. Applies numerous additional direct Python/sed transformations for settings, storage controls, reading preferences, notes/bookmarks, typography, reset/diagnostics, chapter pagination, database initialization/migration, crash diagnostics, lesson loading, image decoding, and Room projections.
+7. Generates the Gradle wrapper, runs JVM unit tests, builds the debug APK, verifies package metadata/integrity, uploads the APK, and publishes a prerelease.
+
+Other compressed patch assets referenced by the workflow include `.github/patch_chapters.py.xz.b64`. The workflow also references `.github/refactor_android.py.xz.b64`, which must be included in the reconstruction inventory. A complete reconstruction must include every named workflow step, every referenced patch asset, every inline script, and all input assets—not only the three optimization files initially identified.
+
+### 10.2 Checked-in Android tree differs from the ZIP baseline
+
+The ZIP was fetched from the main branch and its SHA-1 matches the previously recorded value: `bb35cab525b86b2ed5136360985c96451c4daf16`. Its central directory contains 50 entries, including the Android source baseline. The checked-in `android/` tree currently contains 33 Git tree entries (including directories), and is not a faithful copy of that baseline.
+
+Examples of baseline source files present in the ZIP but absent from the checked-in `android/` tree include:
+- `app/src/main/java/com/mindunlock/app/AppLock.kt`
+- `app/src/main/java/com/mindunlock/app/PersianSpeech.kt`
+- `app/src/main/java/com/mindunlock/app/StudyReminderReceiver.kt`
+- `app/src/main/java/com/mindunlock/app/ui/StudyScreens.kt`
+
+The checked-in tree also has a different shape in key source areas (for example, the tracked `MainActivity.kt`, `Entities.kt`, and `AppDatabase.kt` have different file sizes from the ZIP baseline). File-size differences alone do not prove semantic changes, but combined with missing baseline files and build-time patching they confirm that `android/` cannot currently be treated as the effective APK source.
+
+### 10.3 Current decision and next safe action
+
+No Android source files, build scripts, workflow files, APKs, or database files were changed as part of this reconstruction-map pass. No migration or replacement was attempted.
+
+Next, create a reproducible source snapshot from the ZIP plus all 38 workflow transformations in a disposable CI workspace, then record a manifest containing relative path, byte size, and SHA-256 for every effective source file. Compare that manifest with the tracked `android/` tree and identify exact file-level differences. Only after this snapshot can be reproduced should the effective source be promoted into the normal tracked Android project and the workflow simplified.
+
+**Status:** workflow inventory and source-tree mismatch confirmed; exact effective-source reconstruction and file-by-file diff remain pending. This is not yet source stabilization.
