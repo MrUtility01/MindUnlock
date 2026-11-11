@@ -2592,6 +2592,50 @@ jobs:
           path: android-source-comparison.txt
           if-no-files-found: error
 
+      - name: Package effective Android source snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile, ZIP_DEFLATED
+          import os
+          root = Path("android-build")
+          output = Path("effective-android-source-snapshot.zip")
+          excluded_dirs = {".git", ".gradle", "build"}
+          excluded_names = {"local.properties", "google-services.json"}
+          excluded_suffixes = {".jks", ".keystore", ".p12", ".pfx"}
+          count = 0
+          with ZipFile(output, "w", ZIP_DEFLATED, compresslevel=6) as archive:
+              for path in sorted(root.rglob("*")):
+                  if not path.is_file():
+                      continue
+                  rel = path.relative_to(root)
+                  if any(part in excluded_dirs for part in rel.parts):
+                      continue
+                  if path.name in excluded_names or path.suffix.lower() in excluded_suffixes:
+                      continue
+                  archive.write(path, rel.as_posix())
+                  count += 1
+          if count == 0:
+              raise SystemExit("No source files were packaged")
+          print(f"Packaged {count} effective source files")
+          print(f"Snapshot size: {output.stat().st_size} bytes")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+              summary.write("### Effective Android source snapshot\n")
+              summary.write(f"- Files: {count}\n")
+              summary.write(f"- ZIP size: {output.stat().st_size} bytes\n")
+              summary.write("- Excluded: build/cache directories, local.properties, google-services.json, and keystore files\n")
+          PY
+
+      - name: Upload effective Android source snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: MindUnlock-effective-source-snapshot-\${{ github.run_number }}
+          path: effective-android-source-snapshot.zip
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Run JVM unit tests
         working-directory: android-build
         run: ./gradlew testDebugUnitTest --stacktrace
