@@ -4,7 +4,7 @@ on:
   push:
     branches: [ main ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, review/android-migration-tests ]
   workflow_dispatch:
 
 permissions:
@@ -2475,10 +2475,10 @@ jobs:
           source = p.read_text(encoding="utf-8")
           if "versionCode = 6" not in source or 'versionName = "0.5.1"' not in source:
               raise SystemExit("Expected v0.5.1 package version markers not found")
-          source = source.replace("versionCode = 6", "versionCode = 7", 1)
-          source = source.replace('versionName = "0.5.1"', 'versionName = "0.5.2"', 1)
+          source = source.replace("versionCode = 6", "versionCode = 17", 1)
+          source = source.replace('versionName = "0.5.1"', 'versionName = "0.6.2"', 1)
           p.write_text(source, encoding="utf-8")
-          print("Package version bumped to 0.5.2 (versionCode 7).")
+          print("Package version bumped to 0.6.2 (versionCode 17).")
           PY
 
       - name: Fix Room projections to include required sourceStatus column
@@ -2959,6 +2959,252 @@ jobs:
           EOF
           echo "Added Robolectric migration characterization test." | tee -a "$GITHUB_STEP_SUMMARY"
 
+      - name: Overlay tracked MindUnlock feature source
+        shell: bash
+        run: |
+          set -euo pipefail
+          for relative in \
+            app/src/main/java/com/mindunlock/app/MainActivity.kt \
+            app/src/main/java/com/mindunlock/app/MindDumpScreen.kt \
+            app/src/main/java/com/mindunlock/app/LaterTopicsScreen.kt \
+            app/src/main/java/com/mindunlock/app/JournalScreen.kt \
+            app/src/main/java/com/mindunlock/app/LearningProfileScreen.kt \
+            app/src/main/java/com/mindunlock/app/LearningEngineScreen.kt \
+            app/src/main/java/com/mindunlock/app/ui/StudyScreens.kt \
+            app/src/main/java/com/mindunlock/app/LearningPathPolicy.kt \
+            app/src/main/java/com/mindunlock/app/ReviewScheduler.kt \
+            app/src/main/java/com/mindunlock/app/LabScenarioMetadata.kt \
+            app/src/main/AndroidManifest.xml \
+            app/src/main/java/com/mindunlock/app/data/local/Entities.kt \
+            app/src/main/java/com/mindunlock/app/data/local/UserDatabase.kt \
+            app/build.gradle.kts \
+            app/src/test/java/com/mindunlock/app/data/local/UserDatabaseMindDumpMigrationTest.kt \
+            app/src/test/java/com/mindunlock/app/LearningPathPolicyTest.kt \
+            app/src/test/java/com/mindunlock/app/ReviewSchedulerTest.kt \
+            app/src/test/java/com/mindunlock/app/LabScenarioParserTest.kt
+          do
+            test -f "android/$relative"
+            mkdir -p "android-build/$(dirname "$relative")"
+            cp "android/$relative" "android-build/$relative"
+          done
+          echo "Mind Dump source and its Room migration test are now part of the effective APK build."
+
+      - name: Expand dashboard into the complete app control center
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          path = next(Path("android-build/app/src/main/java").rglob("StudyScreens.kt"))
+          source = path.read_text(encoding="utf-8")
+          if "import com.mindunlock.app.data.local.MindDumpEntity" not in source:
+              source = source.replace("import com.mindunlock.app.data.local.UserDatabase", "import com.mindunlock.app.data.local.UserDatabase\nimport com.mindunlock.app.data.local.MindDumpEntity")
+          if "import com.mindunlock.app.PersianSpeech" not in source:
+              source = source.replace("import com.mindunlock.app.data.local.UserDatabase", "import com.mindunlock.app.PersianSpeech\nimport com.mindunlock.app.data.local.UserDatabase")
+          start = source.index("@Composable\nfun DashboardScreen(")
+          next_screen = source.find("\n@Composable", start + 20)
+          if next_screen < 0:
+              raise SystemExit("Could not locate the end of DashboardScreen")
+          dashboard = r'''@Composable
+          fun DashboardScreen(
+              db: AppDatabase,
+              userDb: UserDatabase,
+              speech: PersianSpeech,
+              onNavigate: (String) -> Unit,
+              onContinue: (String) -> Unit
+          ) {
+              val chapters by db.chapterDao().observeAll().collectAsState(initial = emptyList())
+              val itemCount by db.contentItemDao().observeItemCount().collectAsState(initial = 0)
+              val flashcardCount by db.contentItemDao().observeFlashcardCount().collectAsState(initial = 0)
+              val progress by userDb.progressDao().observeAll().collectAsState(initial = emptyList())
+              val tasks by userDb.studyTaskDao().observeAll().collectAsState(initial = emptyList())
+              val inboxEntries by userDb.mindDumpDao().observeAll().collectAsState(initial = emptyList())
+              val journalEntries by userDb.journalEntryDao().observeAll().collectAsState(initial = emptyList())
+              var quickCapture by rememberSaveable { mutableStateOf("") }
+              var captureMessage by remember { mutableStateOf("") }
+              val scope = rememberCoroutineScope()
+              val completed = progress.count { it.completed }
+              val progressRate = if (progress.isEmpty()) 0f else completed.toFloat() / progress.size.toFloat()
+              val pendingTasks = tasks.count { !it.completed }
+              val inboxCount = inboxEntries.count { it.status == "inbox" }
+              val last = chapters.firstOrNull()
+              Column(
+                  Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+                  verticalArrangement = Arrangement.spacedBy(12.dp)
+              ) {
+                  Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                      Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                          Text("MindUnlock", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                          Text("مرکز کنترل یادگیری و مدیریت ذهن", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                      }
+                      Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.primaryContainer) {
+                          Icon(Icons.Default.Bookmark, contentDescription = null, modifier = Modifier.padding(12.dp), tint = MaterialTheme.colorScheme.primary)
+                      }
+                  }
+                  Card(
+                      modifier = Modifier.fillMaxWidth(),
+                      shape = MaterialTheme.shapes.extraLarge,
+                      colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                      elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+                  ) {
+                      Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                          Text("قدم بعدی تو مهم‌تر از برنامه کامل است ✨", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                          Text("پیشرفت ثبت‌شده در مسیر یادگیری", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                          LinearProgressIndicator(progress = progressRate, modifier = Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.primary)
+                          Text("$completed از ${progress.size} مورد تکمیل شده", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                      }
+                  }
+                  Text("نمای کلی امروز", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                  Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                      MetricCard("فصل‌ها", chapters.size.toString(), Modifier.weight(1f))
+                      MetricCard("مطالب", itemCount.toString(), Modifier.weight(1f))
+                      MetricCard("تکمیل‌شده", completed.toString(), Modifier.weight(1f))
+                  }
+                  Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                      MetricCard("کارهای باز", pendingTasks.toString(), Modifier.weight(1f))
+                      MetricCard("ورودی ذهن", inboxCount.toString(), Modifier.weight(1f))
+                      MetricCard("نوشته‌ها", journalEntries.size.toString(), Modifier.weight(1f))
+                  }
+                  Card(
+                      Modifier.fillMaxWidth(),
+                      shape = MaterialTheme.shapes.extraLarge,
+                      elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                  ) {
+                      Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                          Text("ثبت سریع فکر یا سؤال", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                          OutlinedTextField(
+                              value = quickCapture,
+                              onValueChange = { quickCapture = it },
+                              modifier = Modifier.fillMaxWidth(),
+                              label = { Text("هر چیزی که می‌خواهی ثبت کنی…") },
+                              minLines = 2,
+                              maxLines = 4
+                          )
+                          Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                              PersianVoiceInputButton { spoken -> quickCapture = listOf(quickCapture, spoken).filter { it.isNotBlank() }.joinToString("\\n") }
+                              OutlinedButton(onClick = { speech.speak(quickCapture) }, enabled = quickCapture.isNotBlank()) { Text("خواندن متن") }
+                          }
+                          Button(
+                              onClick = {
+                                  val value = quickCapture.trim()
+                                  if (value.isNotEmpty()) {
+                                      scope.launch {
+                                          userDb.mindDumpDao().insert(MindDumpEntity(content = value))
+                                      }
+                                      quickCapture = ""
+                                      captureMessage = "در صندوق ورودی ذخیره شد."
+                                  }
+                              },
+                              enabled = quickCapture.isNotBlank(),
+                              modifier = Modifier.fillMaxWidth()
+                          ) { Text("ذخیره در صندوق ورودی") }
+                          if (captureMessage.isNotBlank()) Text(captureMessage, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
+                      }
+                  }
+                  Text("تمام بخش‌های برنامه", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                  Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                      ActionTile("صندوق ورودی ذهن", "inbox", onNavigate, Modifier.weight(1f))
+                      ActionTile("دفتر روزانه", "journal", onNavigate, Modifier.weight(1f))
+                  }
+                  Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                      ActionTile("وظایف و برنامه روزانه", "planner", onNavigate, Modifier.weight(1f))
+                      ActionTile("آرشیو دانش و یادداشت‌ها", "notes", onNavigate, Modifier.weight(1f))
+                  }
+                  Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                      ActionTile("مسیرهای آموزشی", "courses", onNavigate, Modifier.weight(1f))
+                      ActionTile("فلش‌کارت‌ها", "flashcards", onNavigate, Modifier.weight(1f))
+                  }
+                  Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                      ActionTile("مرور فاصله‌دار", "review", onNavigate, Modifier.weight(1f))
+                      ActionTile("تمرین", "quiz", onNavigate, Modifier.weight(1f))
+                  }
+                  Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                      ActionTile("آزمون", "exam", onNavigate, Modifier.weight(1f))
+                      ActionTile("آزمایشگاه و پروژه‌ها", "labs", onNavigate, Modifier.weight(1f))
+                  }
+                  Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                      ActionTile("نشانک‌ها", "bookmarks", onNavigate, Modifier.weight(1f))
+                      ActionTile("گزارش پیشرفت", "progress", onNavigate, Modifier.weight(1f))
+                  }
+                  Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                      ActionTile("تنظیمات و صدا", "settings", onNavigate, Modifier.weight(1f))
+                      ActionTile("ابزارهای بیشتر", "more", onNavigate, Modifier.weight(1f))
+                  }
+                  Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                      ActionTile("دریافت محتوا و اتصال", "sync", onNavigate, Modifier.weight(1f))
+                      ActionTile("مدیریت یادگیری", "courses", onNavigate, Modifier.weight(1f))
+                  }
+                  Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                      ActionTile("موضوعات برای بعد", "later", onNavigate, Modifier.weight(1f))
+                      ActionTile("تخلیه ذهن", "inbox", onNavigate, Modifier.weight(1f))
+                  }
+                  Text("ادامه از آخرین فصل", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                  if (last != null) {
+                      Card(onClick = { onContinue(last.id) }, modifier = Modifier.fillMaxWidth()) {
+                          Row(Modifier.fillMaxWidth().padding(15.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                              Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                  Text(last.title, fontWeight = FontWeight.SemiBold)
+                                  Text(last.groupName ?: "بدون موضوع", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                              }
+                              Icon(Icons.Default.PlayArrow, contentDescription = "ادامه")
+                          }
+                      }
+                  } else EmptyMessage("هنوز محتوایی دریافت نشده است.")
+                  Text("تعداد فلش‌کارت‌ها: $flashcardCount", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+              }
+          }'''
+          source = source[:start] + dashboard + source[next_screen:]
+          source = source.replace("fun NotesScreen(userDb: UserDatabase)", "fun NotesScreen(userDb: UserDatabase, speech: PersianSpeech)")
+          source = source.replace(
+              'Text(note.body, maxLines = 4, overflow = TextOverflow.Ellipsis)',
+              'Text(note.body, maxLines = 4, overflow = TextOverflow.Ellipsis)\n                        OutlinedButton(onClick = { speech.speak(note.title + ". " + note.body) }, modifier = Modifier.fillMaxWidth()) { Text("خواندن یادداشت") }'
+          )
+          source = source.replace("fun PlannerScreen(userDb: UserDatabase)", "fun PlannerScreen(userDb: UserDatabase, speech: PersianSpeech)")
+          source = source.replace(
+              'if (task.details.isNotBlank()) Text(task.details, style = MaterialTheme.typography.bodySmall)',
+              'if (task.details.isNotBlank()) Text(task.details, style = MaterialTheme.typography.bodySmall)\n                        OutlinedButton(onClick = { speech.speak(task.title + ". " + task.details) }) { Text("خواندن کار") }'
+          )
+          source = source.replace("fun ProgressScreen(db: AppDatabase, userDb: UserDatabase)", "fun ProgressScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeech)")
+          source = source.replace(
+              'Text("این آمار فقط روی همین گوشی ذخیره می‌شود و با ویندوز ادغام نشده است.", style = MaterialTheme.typography.bodySmall)',
+              'Text("این آمار فقط روی همین گوشی ذخیره می‌شود و با ویندوز ادغام نشده است.", style = MaterialTheme.typography.bodySmall)\n        OutlinedButton(onClick = { speech.speak("گزارش پیشرفت. " + completed + " از " + total + " مطلب تکمیل شده. " + tasks.count { !it.completed } + " کار باز.") }, modifier = Modifier.fillMaxWidth()) { Text("خواندن گزارش") }'
+          )
+          source = source.replace("fun QuizScreen(db: AppDatabase, userDb: UserDatabase, examMode: Boolean = false)", "fun QuizScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeech, examMode: Boolean = false)")
+          source = source.replace(
+              'val options = readStringArray(item.optionsJson ?: meta?.get("options")?.toString())',
+              'val options = readStringArray(item.optionsJson ?: meta?.get("options")?.toString())\n            OutlinedButton(onClick = { speech.speak(item.title.orEmpty() + ". " + cleanHtml(item.content.orEmpty()) + ". " + options.joinToString(". ")) }, modifier = Modifier.fillMaxWidth()) { Text("خواندن سؤال و گزینه‌ها") }'
+          )
+          source = source.replace("fun LabsScreen(db: AppDatabase, userDb: UserDatabase, onOpenItem: (String) -> Unit)", "fun LabsScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeech, onOpenItem: (String) -> Unit)")
+          source = source.replace(
+              'items(visible, key = { it.uid }) { item -> ContentItemCard(item) { onOpenItem(item.uid) } }',
+              'items(visible, key = { it.uid }) { item ->\n                Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {\n                    ContentItemCard(item) { onOpenItem(item.uid) }\n                    OutlinedButton(onClick = { speech.speak(item.title.orEmpty() + ". " + cleanHtml(item.summary.orEmpty()) + ". " + cleanHtml(item.content.orEmpty())) }, modifier = Modifier.fillMaxWidth()) { Text("خواندن راهنمای آزمایشگاه") }\n                }\n            }'
+          )
+          source = source.replace("fun BookmarksScreen(db: AppDatabase, userDb: UserDatabase, onOpenItem: (String) -> Unit)", "fun BookmarksScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeech, onOpenItem: (String) -> Unit)")
+          source = source.replace(
+              'Text(cleanHtml(item.summary), maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)',
+              'Text(cleanHtml(item.summary), maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)\n                            OutlinedButton(onClick = { speech.speak(item.title.orEmpty() + ". " + cleanHtml(item.summary.orEmpty())) }) { Text("خواندن") }'
+          )
+          required = [
+              "speech: PersianSpeech,",
+              "PersianVoiceInputButton { spoken -> quickCapture",
+              "val scope = rememberCoroutineScope()",
+              "fun NotesScreen(userDb: UserDatabase, speech: PersianSpeech)",
+              "fun PlannerScreen(userDb: UserDatabase, speech: PersianSpeech)",
+              "fun ProgressScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeech)",
+              "fun QuizScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeech, examMode: Boolean = false)",
+              "fun LabsScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeech, onOpenItem: (String) -> Unit)",
+              "fun BookmarksScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeech, onOpenItem: (String) -> Unit)",
+              "خواندن سؤال و گزینه‌ها",
+              "خواندن راهنمای آزمایشگاه"
+          ]
+          missing = [token for token in required if token not in source]
+          if missing:
+              raise SystemExit("Dashboard/voice integration incomplete: " + ", ".join(missing))
+          path.write_text(source, encoding="utf-8")
+          print("Dashboard expanded and Persian read-aloud wired into notes, tasks, reports, quizzes, labs and bookmarks.")
+          PY
+
       - name: Generate effective Android source manifest
         shell: bash
         run: |
@@ -3188,7 +3434,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: MindUnlock-Android-v0.5.2-debug
+          name: MindUnlock-Android-v0.6.2-debug
           path: android-build/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
@@ -3196,10 +3442,10 @@ jobs:
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' && success()
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: android-v0.5.2-${{ github.run_number }}
-          name: MindUnlock Android 0.5.2 (#${{ github.run_number }})
+          tag_name: android-v0.6.2-${{ github.run_number }}
+          name: MindUnlock Android 0.6.2 (#${{ github.run_number }})
           body: |
-            Android Native 0.5.2 with guarded lesson loading, bounded image decoding, local error reports and non-blocking database migration, defensive chapter loading and validated APK packaging.
+            Android Native 0.6.2 adds a persistent, Room-backed lab execution checklist, per-step progress, completion gating and a migration from user database v4 to v5. It retains structured Lab and Practice scenarios, spaced-repetition review, the Learning Engine, Learning Profile, offline Persian speech features, and local-first personal modules. It retains the spaced-repetition Review System, Learning Engine, 20-question Learning Profile, local Persian speech-to-text, Later / Curiosity, Mind Dump, Journal, Persian Piper TTS and the refreshed dashboard.
             HTTP sync is intended for trusted local networks only.
           files: android-build/app/build/outputs/apk/debug/app-debug.apk
           prerelease: true
