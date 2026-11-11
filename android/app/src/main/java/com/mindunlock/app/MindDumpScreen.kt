@@ -67,7 +67,8 @@ fun MindDumpScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
             minLines = 3,
             maxLines = 6
         )
-        PersianVoiceInputButton { spoken -> draft = listOf(draft, spoken).filter { it.isNotBlank() }.joinToString("\n") }
+        PersianVoiceInputButton { spoken -> draft = listOf(draft, spoken).filter { it.isNotBlank() }.joinToString("
+") }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
             OutlinedButton(onClick = { speech.speak(draft) }, enabled = draft.isNotBlank()) { Text("خواندن متن") }
         }
@@ -108,7 +109,13 @@ fun MindDumpScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
                     MindDumpCard(
                         entry = entry,
                         speech = speech,
-                        onConvertToLater = {\n                            scope.launch {\n                                userDatabase.laterTopicDao().insert(LaterTopicEntity(title = entry.content.lineSequence().first().take(120), details = entry.content, sourceMindDumpId = entry.id))\n                                userDatabase.mindDumpDao().updateStatus(entry.id, "later", System.currentTimeMillis(), entry.linkedTaskId)\n                                message = "به موضوعات برای بعد منتقل شد؛ متن اصلی حفظ شده است."\n                            }\n                        },
+                        onConvertToLater = {
+                            scope.launch {
+                                userDatabase.laterTopicDao().insert(LaterTopicEntity(title = entry.content.lineSequence().first().take(120), details = entry.content, sourceMindDumpId = entry.id))
+                                userDatabase.mindDumpDao().updateStatus(entry.id, "later", System.currentTimeMillis(), entry.linkedTaskId)
+                                message = "به موضوعات برای بعد منتقل شد؛ متن اصلی حفظ شده است."
+                            }
+                        },
                         onConvertToTask = {
                             scope.launch {
                                 val taskId = userDatabase.studyTaskDao().upsert(
