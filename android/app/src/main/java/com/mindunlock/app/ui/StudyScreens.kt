@@ -563,7 +563,7 @@ fun ReaderScreen(db: AppDatabase, userDb: UserDatabase, itemUid: String, speech:
     }
     if (noteDialog) {
         AlertDialog(onDismissRequest = { noteDialog = false }, title = { Text("یادداشت برای این مطلب") },
-            text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { OutlinedTextField(noteText, { noteText = it }, label = { Text("متن یادداشت") }, minLines = 3); PersianVoiceInputButton { spoken -> noteText = listOf(noteText, spoken).filter { it.isNotBlank() }.joinToString("\\n") } } },
+            text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { OutlinedTextField(noteText, { noteText = it }, label = { Text("متن یادداشت") }, minLines = 3); PersianVoiceInputButton { spoken -> noteText = listOf(noteText, spoken).filter { it.isNotBlank() }.joinToString("\n") } } },
             confirmButton = { TextButton(onClick = {
                 if (noteText.isNotBlank()) scope.launch { userDb.noteDao().upsert(NoteEntity(itemUid = current.uid, chapterId = current.chapterId, title = current.title ?: "یادداشت", body = noteText.trim())) }
                 noteText = ""; noteDialog = false
@@ -796,7 +796,7 @@ fun NotesScreen(userDb: UserDatabase, speech: PersianSpeech) {
                 OutlinedTextField(title, { title = it }, label = { Text("عنوان") }, singleLine = true)
                 PersianVoiceInputButton { spoken -> title = listOf(title, spoken).filter { it.isNotBlank() }.joinToString(" ") }
                 OutlinedTextField(body, { body = it }, label = { Text("متن") }, minLines = 4)
-                PersianVoiceInputButton { spoken -> body = listOf(body, spoken).filter { it.isNotBlank() }.joinToString("\\n") }
+                PersianVoiceInputButton { spoken -> body = listOf(body, spoken).filter { it.isNotBlank() }.joinToString("\n") }
             }
         },
         confirmButton = {
@@ -860,7 +860,7 @@ fun PlannerScreen(userDb: UserDatabase, speech: PersianSpeech) {
         OutlinedTextField(title, { title = it }, Modifier.fillMaxWidth(), label = { Text("عنوان") }, singleLine = true)
         PersianVoiceInputButton { spoken -> title = listOf(title, spoken).filter { it.isNotBlank() }.joinToString(" ") }
         OutlinedTextField(details, { details = it }, Modifier.fillMaxWidth(), label = { Text("توضیحات") }, minLines = 2)
-        PersianVoiceInputButton { spoken -> details = listOf(details, spoken).filter { it.isNotBlank() }.joinToString("\\n") }
+        PersianVoiceInputButton { spoken -> details = listOf(details, spoken).filter { it.isNotBlank() }.joinToString("\n") }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(selected = type == "task", onClick = { type = "task" }, label = { Text("کار مطالعاتی") })
             FilterChip(selected = type == "project", onClick = { type = "project" }, label = { Text("پروژه") })
