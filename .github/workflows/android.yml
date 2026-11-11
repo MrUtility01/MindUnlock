@@ -2500,6 +2500,113 @@ jobs:
           print(f"Added sourceStatus to {count} Room projections.")
           PY
 
+      - name: Add first real Android JVM migration test
+        working-directory: android-build
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("app/build.gradle.kts")
+          s = p.read_text(encoding="utf-8")
+          if 'testOptions { unitTests.isIncludeAndroidResources = true }' not in s:
+              s = s.replace('    buildFeatures { compose = true }', '    testOptions { unitTests.isIncludeAndroidResources = true }\\n    buildFeatures { compose = true }')
+          deps = '''
+          dependencies {
+              testImplementation("junit:junit:4.13.2")
+              testImplementation("org.robolectric:robolectric:4.14.1")
+          }
+          '''
+          if 'testImplementation("org.robolectric:robolectric:4.14.1")' not in s:
+              s += deps
+          p.write_text(s, encoding="utf-8")
+          PY
+          TEST_DIR="app/src/test/java/com/mindunlock/app/data/local"
+          mkdir -p "$TEST_DIR"
+          cat > "$TEST_DIR/LegacyDatabaseMigratorTest.kt" <<'EOF'
+          package com.mindunlock.app.data.local
+
+          import android.database.sqlite.SQLiteDatabase
+          import androidx.room.Room
+          import kotlinx.coroutines.runBlocking
+          import org.junit.After
+          import org.junit.Assert.assertEquals
+          import org.junit.Assert.assertTrue
+          import org.junit.Before
+          import org.junit.Test
+          import org.junit.runner.RunWith
+          import org.robolectric.RobolectricTestRunner
+          import org.robolectric.RuntimeEnvironment
+          import org.robolectric.annotation.Config
+
+          @RunWith(RobolectricTestRunner::class)
+          @Config(sdk = [35])
+          class LegacyDatabaseMigratorTest {
+              private val context = RuntimeEnvironment.getApplication()
+              private lateinit var content: AppDatabase
+              private lateinit var user: UserDatabase
+
+              @Before
+              fun setUp() {
+                  context.deleteDatabase("mindunlock.db")
+                  context.getSharedPreferences("mindunlock_db_migration", 0)
+                      .edit().clear().commit()
+                  content = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java)
+                      .allowMainThreadQueries().build()
+                  user = Room.inMemoryDatabaseBuilder(context, UserDatabase::class.java)
+                      .allowMainThreadQueries().build()
+              }
+
+              @After
+              fun tearDown() {
+                  content.close()
+                  user.close()
+                  context.deleteDatabase("mindunlock.db")
+              }
+
+              @Test
+              fun copiesLegacyChapterAndMarksMigrationComplete() = runBlocking {
+                  val legacyFile = context.getDatabasePath("mindunlock.db")
+                  legacyFile.parentFile?.mkdirs()
+                  val source = SQLiteDatabase.openOrCreateDatabase(legacyFile, null)
+                  try {
+                      source.execSQL(
+                          """CREATE TABLE chapters (
+                              id TEXT NOT NULL PRIMARY KEY,
+                              title TEXT NOT NULL,
+                              orderIndex INTEGER NOT NULL,
+                              groupName TEXT,
+                              description TEXT,
+                              itemCount INTEGER NOT NULL,
+                              contentHash TEXT,
+                              rawJson TEXT,
+                              syncedAt INTEGER NOT NULL
+                          )"""
+                      )
+                      source.execSQL(
+                          """INSERT INTO chapters
+                              (id, title, orderIndex, groupName, description, itemCount, contentHash, rawJson, syncedAt)
+                              VALUES ('chapter-test', 'فصل آزمایشی', 7, 'مبانی', 'شرح آزمایشی', 3, 'hash-1', '{}', 123456789)"""
+                      )
+                  } finally {
+                      source.close()
+                  }
+
+                  LegacyDatabaseMigrator.migrate(context, content, user)
+
+                  val copied = content.chapterDao().get("chapter-test")
+                  assertEquals("فصل آزمایشی", copied?.title)
+                  assertEquals(7, copied?.orderIndex)
+                  assertEquals("hash-1", copied?.contentHash)
+                  assertTrue(
+                      context.getSharedPreferences("mindunlock_db_migration", 0)
+                          .getBoolean("split_v1_complete", false)
+                  )
+              }
+          }
+          EOF
+          echo "Added Robolectric migration characterization test." | tee -a "$GITHUB_STEP_SUMMARY"
+
       - name: Generate effective Android source manifest
         shell: bash
         run: |
