@@ -108,6 +108,7 @@ import com.mindunlock.app.PersianSpeech
 import com.mindunlock.app.StudyReminderReceiver
 import com.mindunlock.app.data.local.AppDatabase
 import com.mindunlock.app.data.local.UserDatabase
+import com.mindunlock.app.data.local.MindDumpEntity
 import com.mindunlock.app.data.local.BookmarkEntity
 import com.mindunlock.app.data.local.ContentItemEntity
 import com.mindunlock.app.data.local.ContentItemListEntry
@@ -162,41 +163,102 @@ fun DashboardScreen(
     val itemCount by db.contentItemDao().observeItemCount().collectAsState(initial = 0)
     val flashcardCount by db.contentItemDao().observeFlashcardCount().collectAsState(initial = 0)
     val progress by userDb.progressDao().observeAll().collectAsState(initial = emptyList())
+    val tasks by userDb.studyTaskDao().observeAll().collectAsState(initial = emptyList())
+    val inboxEntries by userDb.mindDumpDao().observeAll().collectAsState(initial = emptyList())
+    val journalEntries by userDb.journalEntryDao().observeAll().collectAsState(initial = emptyList())
+    var quickCapture by rememberSaveable { mutableStateOf("") }
+    var captureMessage by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
     val completed = progress.count { it.completed }
+    val pendingTasks = tasks.count { !it.completed }
+    val inboxCount = inboxEntries.count { it.status == "inbox" }
     val last = chapters.firstOrNull()
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
             Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text("MindUnlock", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                Text("ادامه بده؛ یادگیری پیوسته نتیجه می‌دهد", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("مرکز کنترل یادگیری و مدیریت ذهن", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.primaryContainer) {
                 Icon(Icons.Default.Bookmark, contentDescription = null, modifier = Modifier.padding(12.dp), tint = MaterialTheme.colorScheme.primary)
             }
         }
+        Text("نمای کلی امروز", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             MetricCard("فصل‌ها", chapters.size.toString(), Modifier.weight(1f))
             MetricCard("مطالب", itemCount.toString(), Modifier.weight(1f))
             MetricCard("تکمیل‌شده", completed.toString(), Modifier.weight(1f))
         }
-        Text("شروع یادگیری", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-        Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-            ActionTile("موضوع‌ها و فصل‌ها", "courses", onNavigate, Modifier.weight(1f))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            MetricCard("کارهای باز", pendingTasks.toString(), Modifier.weight(1f))
+            MetricCard("ورودی ذهن", inboxCount.toString(), Modifier.weight(1f))
+            MetricCard("نوشته‌ها", journalEntries.size.toString(), Modifier.weight(1f))
+        }
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("ثبت سریع فکر یا سؤال", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                OutlinedTextField(
+                    value = quickCapture,
+                    onValueChange = { quickCapture = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("هر چیزی که می‌خواهی ثبت کنی…") },
+                    minLines = 2,
+                    maxLines = 4
+                )
+                Button(
+                    onClick = {
+                        val value = quickCapture.trim()
+                        if (value.isNotEmpty()) {
+                            scope.launch {
+                                userDb.mindDumpDao().insert(MindDumpEntity(content = value))
+                            }
+                            quickCapture = ""
+                            captureMessage = "در صندوق ورودی ذخیره شد."
+                        }
+                    },
+                    enabled = quickCapture.isNotBlank(),
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("ذخیره در صندوق ورودی") }
+                if (captureMessage.isNotBlank()) Text(captureMessage, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
+            }
+        }
+        Text("تمام بخش‌های برنامه", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ActionTile("صندوق ورودی ذهن", "inbox", onNavigate, Modifier.weight(1f))
+            ActionTile("دفتر روزانه", "journal", onNavigate, Modifier.weight(1f))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ActionTile("وظایف و برنامه روزانه", "planner", onNavigate, Modifier.weight(1f))
+            ActionTile("آرشیو دانش و یادداشت‌ها", "notes", onNavigate, Modifier.weight(1f))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ActionTile("مسیرهای آموزشی", "courses", onNavigate, Modifier.weight(1f))
             ActionTile("فلش‌کارت‌ها", "flashcards", onNavigate, Modifier.weight(1f))
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-            ActionTile("مرور امروز", "review", onNavigate, Modifier.weight(1f))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ActionTile("مرور فاصله‌دار", "review", onNavigate, Modifier.weight(1f))
             ActionTile("تمرین", "quiz", onNavigate, Modifier.weight(1f))
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ActionTile("آزمون", "exam", onNavigate, Modifier.weight(1f))
-            ActionTile("آزمایشگاه", "labs", onNavigate, Modifier.weight(1f))
+            ActionTile("آزمایشگاه و پروژه‌ها", "labs", onNavigate, Modifier.weight(1f))
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-            ActionTile("دفتر یادداشت", "notes", onNavigate, Modifier.weight(1f))
-            ActionTile("برنامه‌ریز", "planner", onNavigate, Modifier.weight(1f))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ActionTile("نشانک‌ها", "bookmarks", onNavigate, Modifier.weight(1f))
+            ActionTile("گزارش پیشرفت", "progress", onNavigate, Modifier.weight(1f))
         }
-        Text("ادامهٔ مطالعه", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ActionTile("تنظیمات و صدا", "settings", onNavigate, Modifier.weight(1f))
+            ActionTile("ابزارهای بیشتر", "more", onNavigate, Modifier.weight(1f))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ActionTile("دریافت محتوا و اتصال", "sync", onNavigate, Modifier.weight(1f))
+            ActionTile("مدیریت یادگیری", "courses", onNavigate, Modifier.weight(1f))
+        }
+        Text("ادامه از آخرین فصل", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         if (last != null) {
             Card(onClick = { onContinue(last.id) }, modifier = Modifier.fillMaxWidth()) {
                 Row(Modifier.fillMaxWidth().padding(15.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
@@ -208,9 +270,9 @@ fun DashboardScreen(
                 }
             }
         } else EmptyMessage("هنوز محتوایی دریافت نشده است.")
+        Text("تعداد فلش‌کارت‌ها: $flashcardCount", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
-
 @Composable
 private fun MetricCard(label: String, value: String, modifier: Modifier = Modifier) {
     Card(modifier = modifier) {
@@ -635,7 +697,7 @@ fun FlashcardsScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeec
 }
 
 @Composable
-fun QuizScreen(db: AppDatabase, userDb: UserDatabase, examMode: Boolean = false) {
+fun QuizScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeech, examMode: Boolean = false) {
     val questions by db.contentItemDao().observeByTypes(listOf("question", "quiz", "exercise", "practice", "exam")).collectAsState(initial = emptyList())
     val valid = questions.filter { it.sourceStatus == "verified" && readStringArray(it.optionsJson ?: runCatching { JsonParser.parseString(it.metadataJson ?: "{}").asJsonObject.get("options")?.toString() }.getOrNull() ).isNotEmpty() }
     val scope = rememberCoroutineScope()
@@ -664,6 +726,7 @@ fun QuizScreen(db: AppDatabase, userDb: UserDatabase, examMode: Boolean = false)
             Text(cleanHtml(item.content.orEmpty()), style = MaterialTheme.typography.bodyLarge)
             val meta = runCatching { JsonParser.parseString(item.metadataJson ?: "{}").asJsonObject }.getOrNull()
             val options = readStringArray(item.optionsJson ?: meta?.get("options")?.toString())
+            OutlinedButton(onClick = { speech.speak(item.title.orEmpty() + ". " + cleanHtml(item.content.orEmpty()) + ". " + options.joinToString(". ")) }, modifier = Modifier.fillMaxWidth()) { Text("خواندن سؤال و گزینه‌ها") }
             options.forEachIndexed { i, option ->
                 Card(
                     onClick = { if (!checked) answer = i },
@@ -706,7 +769,7 @@ fun QuizScreen(db: AppDatabase, userDb: UserDatabase, examMode: Boolean = false)
 }
 
 @Composable
-fun NotesScreen(userDb: UserDatabase) {
+fun NotesScreen(userDb: UserDatabase, speech: PersianSpeech) {
     val notes by userDb.noteDao().observeAll().collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -782,6 +845,7 @@ fun NotesScreen(userDb: UserDatabase) {
                             }
                         }
                         Text(note.body, maxLines = 4, overflow = TextOverflow.Ellipsis)
+                        OutlinedButton(onClick = { speech.speak(note.title + ". " + note.body) }, modifier = Modifier.fillMaxWidth()) { Text("خواندن یادداشت") }
                         if (!note.chapterId.isNullOrBlank()) Text("متصل به فصل", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                     }
                 }
@@ -820,7 +884,7 @@ fun NotesScreen(userDb: UserDatabase) {
 }
 
 @Composable
-fun LabsScreen(db: AppDatabase, userDb: UserDatabase, onOpenItem: (String) -> Unit) {
+fun LabsScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeech, onOpenItem: (String) -> Unit) {
     val content by db.contentItemDao().observeByTypes(listOf("lab", "command", "example", "exercise", "practice", "project")).collectAsState(initial = emptyList())
     val tasks by userDb.studyTaskDao().observeAll().collectAsState(initial = emptyList())
     var selected by rememberSaveable { mutableStateOf("همه") }
@@ -834,7 +898,12 @@ fun LabsScreen(db: AppDatabase, userDb: UserDatabase, onOpenItem: (String) -> Un
             }
         }
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
-            items(visible, key = { it.uid }) { item -> ContentItemCard(item) { onOpenItem(item.uid) } }
+            items(visible, key = { it.uid }) { item ->
+                Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                    ContentItemCard(item) { onOpenItem(item.uid) }
+                    OutlinedButton(onClick = { speech.speak(item.title.orEmpty() + ". " + cleanHtml(item.summary.orEmpty()) + ". " + cleanHtml(item.content.orEmpty())) }, modifier = Modifier.fillMaxWidth()) { Text("خواندن راهنمای آزمایشگاه") }
+                }
+            }
             items(tasks.filter { it.taskType == "project" }, key = { "project-${it.id}" }) { task ->
                 Card(Modifier.fillMaxWidth()) { Column(Modifier.fillMaxWidth().padding(13.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) { Text(task.title, fontWeight = FontWeight.SemiBold); Text(task.details) } }
             }
@@ -844,7 +913,7 @@ fun LabsScreen(db: AppDatabase, userDb: UserDatabase, onOpenItem: (String) -> Un
 }
 
 @Composable
-fun PlannerScreen(userDb: UserDatabase) {
+fun PlannerScreen(userDb: UserDatabase, speech: PersianSpeech) {
     val tasks by userDb.studyTaskDao().observeAll().collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -882,6 +951,7 @@ fun PlannerScreen(userDb: UserDatabase) {
                         Text(if (task.taskType == "project") "پروژه" else "کار مطالعاتی", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall)
                         if (task.dueAt != null) Text(java.text.SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.getDefault()).format(java.util.Date(task.dueAt)), style = MaterialTheme.typography.bodySmall)
                         if (task.details.isNotBlank()) Text(task.details, style = MaterialTheme.typography.bodySmall)
+                        OutlinedButton(onClick = { speech.speak(task.title + ". " + task.details) }) { Text("خواندن کار") }
                     }
                     Checkbox(task.completed, onCheckedChange = { checked -> scope.launch { userDb.studyTaskDao().upsert(task.copy(completed = checked)) } })
                     IconButton(onClick = { scope.launch { userDb.studyTaskDao().delete(task.id) } }) { Icon(Icons.Default.Delete, null) }
@@ -892,7 +962,7 @@ fun PlannerScreen(userDb: UserDatabase) {
 }
 
 @Composable
-fun ProgressScreen(db: AppDatabase, userDb: UserDatabase) {
+fun ProgressScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeech) {
     val itemCount by db.contentItemDao().observeItemCount().collectAsState(initial = 0)
     val progress by userDb.progressDao().observeAll().collectAsState(initial = emptyList())
     val tasks by userDb.studyTaskDao().observeAll().collectAsState(initial = emptyList())
@@ -908,11 +978,12 @@ fun ProgressScreen(db: AppDatabase, userDb: UserDatabase) {
         MetricCard("یادداشت‌ها و مرورهای ثبت‌شده", "${progress.count { it.intervalDays > 0 }} مرور زمان‌بندی‌شده", Modifier.fillMaxWidth())
         MetricCard("کارهای باز", tasks.count { !it.completed }.toString(), Modifier.fillMaxWidth())
         Text("این آمار فقط روی همین گوشی ذخیره می‌شود و با ویندوز ادغام نشده است.", style = MaterialTheme.typography.bodySmall)
+        OutlinedButton(onClick = { speech.speak("گزارش پیشرفت. " + completed + " از " + total + " مطلب تکمیل شده. " + tasks.count { !it.completed } + " کار باز.") }, modifier = Modifier.fillMaxWidth()) { Text("خواندن گزارش") }
     }
 }
 
 @Composable
-fun BookmarksScreen(db: AppDatabase, userDb: UserDatabase, onOpenItem: (String) -> Unit) {
+fun BookmarksScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeech, onOpenItem: (String) -> Unit) {
     val bookmarks by userDb.bookmarkDao().observeAll().collectAsState(initial = emptyList())
     val bookmarkUids = remember(bookmarks) { bookmarks.map { it.itemUid }.distinct() }
     val saved by db.contentItemDao().observeByUids(bookmarkUids).collectAsState(initial = emptyList())
@@ -946,6 +1017,7 @@ fun BookmarksScreen(db: AppDatabase, userDb: UserDatabase, onOpenItem: (String) 
                             Text(kindLabel(item.type), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                             if (!item.summary.isNullOrBlank()) {
                                 Text(cleanHtml(item.summary), maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
+                            OutlinedButton(onClick = { speech.speak(item.title.orEmpty() + ". " + cleanHtml(item.summary.orEmpty())) }) { Text("خواندن") }
                             }
                         }
                         IconButton(onClick = { pendingRemoval = item.uid }) {
