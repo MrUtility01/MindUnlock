@@ -78,7 +78,7 @@ interface LaterTopicDao {
     suspend fun insert(topic: LaterTopicEntity): Long
 
     @Query("UPDATE later_topics SET status = :status, updatedAt = :updatedAt WHERE id = :id")
-    suspend fun updateStatus(id: Long, status: String, updatedAt: Long = System.currentTimeMillis())
+    suspend fun updateStatus(id: Long, status: String, updatedAt: Long)
 
     @Query("DELETE FROM later_topics WHERE id = :id")
     suspend fun delete(id: Long)
