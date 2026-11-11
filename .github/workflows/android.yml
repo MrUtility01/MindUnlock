@@ -2534,6 +2534,7 @@ jobs:
           import kotlinx.coroutines.runBlocking
           import org.junit.After
           import org.junit.Assert.assertEquals
+          import org.junit.Assert.assertNull
           import org.junit.Assert.assertTrue
           import org.junit.Before
           import org.junit.Test
@@ -2744,6 +2745,53 @@ jobs:
               assertRowCount(user.openHelper.readableDatabase, "notes", 0)
               assertRowCount(user.openHelper.readableDatabase, "bookmarks", 0)
               assertRowCount(user.openHelper.readableDatabase, "study_tasks", 0)
+          }
+
+          @Test
+          fun preservesNullableColumnsAndMigratesWhenOnlyOneLegacyTableExists() {
+              val legacyFile = context.getDatabasePath("mindunlock.db")
+              legacyFile.parentFile?.mkdirs()
+              val source = SQLiteDatabase.openOrCreateDatabase(legacyFile, null)
+              try {
+                  source.execSQL("""CREATE TABLE chapters (
+                      id TEXT NOT NULL PRIMARY KEY, title TEXT NOT NULL, orderIndex INTEGER NOT NULL,
+                      groupName TEXT, description TEXT, itemCount INTEGER NOT NULL, contentHash TEXT,
+                      rawJson TEXT, syncedAt INTEGER NOT NULL
+                  )""")
+                  source.execSQL("""INSERT INTO chapters
+                      (id, title, orderIndex, groupName, description, itemCount, contentHash, rawJson, syncedAt)
+                      VALUES ('nullable-chapter', 'فصل با مقادیر تهی', 3, NULL, NULL, 0, NULL, NULL, 77)""")
+              } finally {
+                  source.close()
+              }
+
+              LegacyDatabaseMigrator.migrate(context, content, user)
+
+              val contentDb = content.openHelper.readableDatabase
+              assertRowCount(contentDb, "chapters", 1)
+              assertQuery(contentDb, "SELECT title, orderIndex, groupName, description, contentHash, rawJson, syncedAt FROM chapters WHERE id='nullable-chapter'") {
+                  assertEquals("فصل با مقادیر تهی", getString(0))
+                  assertEquals(3, getInt(1))
+                  assertNull(getString(2))
+                  assertNull(getString(3))
+                  assertNull(getString(4))
+                  assertNull(getString(5))
+                  assertEquals(77L, getLong(6))
+              }
+
+              // All other legacy tables are absent; their target Room tables must remain empty.
+              assertRowCount(contentDb, "content_items", 0)
+              assertRowCount(contentDb, "server_config", 0)
+              assertRowCount(contentDb, "media_cache", 0)
+              val userDb = user.openHelper.readableDatabase
+              assertRowCount(userDb, "progress", 0)
+              assertRowCount(userDb, "notes", 0)
+              assertRowCount(userDb, "bookmarks", 0)
+              assertRowCount(userDb, "study_tasks", 0)
+              assertTrue(
+                  context.getSharedPreferences("mindunlock_db_migration", 0)
+                      .getBoolean("split_v1_complete", false)
+              )
           }
 
           private fun assertRowCount(db: SupportSQLiteDatabase, table: String, expected: Int) {
