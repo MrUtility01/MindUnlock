@@ -2978,7 +2978,7 @@ jobs:
             app/src/main/java/com/mindunlock/app/data/local/UserDatabase.kt \
             app/build.gradle.kts \
             app/src/test/java/com/mindunlock/app/data/local/UserDatabaseMindDumpMigrationTest.kt \
-            app/src/test/java/com/mindunlock/app/LearningPathPolicyTest.kt
+            app/src/test/java/com/mindunlock/app/LearningPathPolicyTest.kt \
             app/src/test/java/com/mindunlock/app/ReviewSchedulerTest.kt
           do
             test -f "android/$relative"
