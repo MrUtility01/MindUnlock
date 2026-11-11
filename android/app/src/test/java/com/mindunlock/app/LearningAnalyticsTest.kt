@@ -19,20 +19,21 @@ class LearningAnalyticsTest {
         val items = listOf(
             ContentItemEntity(uid = "a", chapterId = "network", type = "flashcard"),
             ContentItemEntity(uid = "b", chapterId = "network", type = "question"),
-            ContentItemEntity(uid = "c", chapterId = "network", type = "lesson", sourceStatus = "unverified")
+            ContentItemEntity(uid = "c", chapterId = "network", type = "question", metadataJson = "{\"options\":[\"A\",\"B\"],\"correct_index\":1}"),
+            ContentItemEntity(uid = "d", chapterId = "network", type = "lesson", sourceStatus = "unverified")
         )
         val progress = listOf(
-            ProgressEntity(itemUid = "a", chapterId = "network", completed = true, attempts = 2, correct = 1, wrong = 1, quality = 2, dueAt = now - 1, updatedAt = now),
+            ProgressEntity(itemUid = "a", chapterId = "network", completed = true, attempts = 3, correct = 0, wrong = 3, quality = 2, dueAt = now - 1, updatedAt = now),
             ProgressEntity(itemUid = "b", chapterId = "network", attempts = 3, correct = 3, wrong = 0, quality = 4, dueAt = now + 1000, updatedAt = now)
         )
         val result = LearningAnalytics.build(listOf(chapter), items, progress, emptyList(), now, ZoneOffset.UTC)
-        assertEquals(2, result.totalItems)
+        assertEquals(3, result.totalItems)
         assertEquals(1, result.completedItems)
-        assertEquals(5, result.attempts)
-        assertEquals(4, result.correct)
-        assertEquals(1, result.wrong)
-        assertEquals(80, result.accuracyPercent)
-        assertEquals(2, result.scheduledReviewsDue) // unseen question plus overdue flashcard
+        assertEquals(6, result.attempts)
+        assertEquals(3, result.correct)
+        assertEquals(3, result.wrong)
+        assertEquals(50, result.accuracyPercent)
+        assertEquals(2, result.scheduledReviewsDue) // unseen valid question plus overdue flashcard
         assertEquals(1, result.weakItems)
         assertTrue(result.chapters.single().needsPractice)
     }
