@@ -199,6 +199,7 @@ private fun MindUnlockRoot(
         "notes" -> "دفتر یادداشت"
         "inbox" -> "تخلیه ذهن / صندوق ورودی"
         "journal" -> "دفتر روزانه"
+        "later" -> "موضوعات برای بعد"
         "quiz" -> "تمرین"
         "exam" -> "آزمون"
         "review" -> "مرور امروز"
@@ -216,7 +217,7 @@ private fun MindUnlockRoot(
             "reader" -> previousScreen
             "chapter" -> "subject"
             "subject" -> "courses"
-            "sync", "settings", "more", "quiz", "exam", "review", "labs", "planner", "progress", "bookmarks", "inbox", "journal" -> "home"
+            "sync", "settings", "more", "quiz", "exam", "review", "labs", "planner", "progress", "bookmarks", "inbox", "journal", "later" -> "home"
             else -> "home"
         }
     }
@@ -271,6 +272,7 @@ private fun MindUnlockRoot(
                 "notes" -> NotesScreen(userDatabase, speech)
                 "inbox" -> MindDumpScreen(userDatabase, speech)
                 "journal" -> JournalScreen(userDatabase, speech)
+                "later" -> LaterTopicsScreen(userDatabase, speech)
                 "quiz" -> QuizScreen(repository.database, userDatabase, speech, examMode = false)
                 "exam" -> QuizScreen(repository.database, userDatabase, speech, examMode = true)
                 "labs" -> LabsScreen(repository.database, userDatabase, speech, onOpenItem = { uid -> selectedItem = uid; previousScreen = "labs"; screen = "reader" })
@@ -312,7 +314,7 @@ private fun MoreScreen(onNavigate: (String) -> Unit) {
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ActionTile("دفتر روزانه", "journal", onNavigate, Modifier.weight(1f))
-            ActionTile("دفتر یادداشت آموزشی", "notes", onNavigate, Modifier.weight(1f))
+            ActionTile("موضوعات برای بعد", "later", onNavigate, Modifier.weight(1f))
         }
     }
 }
