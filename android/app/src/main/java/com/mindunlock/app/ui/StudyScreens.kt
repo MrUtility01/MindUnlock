@@ -1172,21 +1172,84 @@ fun PlannerScreen(userDb: UserDatabase, speech: PersianSpeech) {
 
 @Composable
 fun ProgressScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeech) {
-    val itemCount by db.contentItemDao().observeItemCount().collectAsState(initial = 0)
+    val items by db.contentItemDao().observeAll().collectAsState(initial = emptyList())
+    val chapters by db.chapterDao().observeAll().collectAsState(initial = emptyList())
     val progress by userDb.progressDao().observeAll().collectAsState(initial = emptyList())
     val tasks by userDb.studyTaskDao().observeAll().collectAsState(initial = emptyList())
-    val completed = progress.count { it.completed }
-    val total = itemCount
-    val ratio = if (total == 0) 0f else completed.toFloat() / total
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("گزارش پیشرفت محلی", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-        Text("$completed از $total مطلب تکمیل شده")
-        LinearProgressIndicator(progress = { ratio }, modifier = Modifier.fillMaxWidth())
-        MetricCard("تلاش‌های آزمون و تمرین", progress.sumOf { it.attempts }.toString(), Modifier.fillMaxWidth())
-        MetricCard("پاسخ‌های درست", progress.sumOf { it.correct }.toString(), Modifier.fillMaxWidth())
-        MetricCard("یادداشت‌ها و مرورهای ثبت‌شده", "${progress.count { it.intervalDays > 0 }} مرور زمان‌بندی‌شده", Modifier.fillMaxWidth())
-        MetricCard("کارهای باز", tasks.count { !it.completed }.toString(), Modifier.fillMaxWidth())
-        Text("این آمار فقط روی همین گوشی ذخیره می‌شود و با ویندوز ادغام نشده است.", style = MaterialTheme.typography.bodySmall)
+    val snapshot = remember(chapters, items, progress, tasks) {
+        LearningAnalytics.build(chapters, items, progress, tasks, System.currentTimeMillis())
+    }
+    val completion = if (snapshot.totalItems == 0) 0f else snapshot.completedItems.toFloat() / snapshot.totalItems
+    val maxActivity = snapshot.recentActivity.maxOfOrNull { it.updatedItems }?.coerceAtLeast(1) ?: 1
+
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Text("گزارش پیشرفت و تحلیل یادگیری", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        Text("آمار از محتوای تأییدشده و پیشرفت آموزشی همین دستگاه محاسبه می‌شود.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
+            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("پیشرفت محتوای آموزشی", fontWeight = FontWeight.SemiBold)
+                    Text("${if (snapshot.totalItems == 0) 0 else (completion * 100).toInt()}٪", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                }
+                LinearProgressIndicator(progress = { completion }, modifier = Modifier.fillMaxWidth())
+                Text("${snapshot.completedItems} تکمیل‌شده از ${snapshot.totalItems} مطلب تأییدشده", style = MaterialTheme.typography.bodySmall)
+            }
+        }
+        Text("عملکرد تمرین و مرور", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            MetricCard("کل تلاش‌ها", snapshot.attempts.toString(), Modifier.weight(1f))
+            MetricCard("دقت پاسخ‌ها", "${snapshot.accuracyPercent}٪", Modifier.weight(1f))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            MetricCard("پاسخ درست", snapshot.correct.toString(), Modifier.weight(1f))
+            MetricCard("پاسخ اشتباه", snapshot.wrong.toString(), Modifier.weight(1f))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            MetricCard("مرورهای سررسیدشده", snapshot.scheduledReviewsDue.toString(), Modifier.weight(1f))
+            MetricCard("موارد نیازمند تقویت", snapshot.weakItems.toString(), Modifier.weight(1f))
+        }
+        Text("فعالیت هفت روز اخیر", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                snapshot.recentActivity.forEach { day ->
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text(day.label, modifier = Modifier.size(width = 66.dp, height = 24.dp), style = MaterialTheme.typography.labelSmall)
+                        LinearProgressIndicator(
+                            progress = { day.updatedItems.toFloat() / maxActivity },
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text(day.updatedItems.toString(), modifier = Modifier.size(width = 24.dp, height = 24.dp), style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+                Text("این نمودار تعداد آیتم‌هایی را نشان می‌دهد که آخرین وضعیتشان در هر روز به‌روزرسانی شده؛ زمان واقعی مطالعه را اندازه‌گیری نمی‌کند.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        Text("وضعیت برنامه‌ریزی", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            MetricCard("کارهای باز", snapshot.openTasks.toString(), Modifier.weight(1f))
+            MetricCard("کارهای عقب‌افتاده", snapshot.overdueTasks.toString(), Modifier.weight(1f))
+            MetricCard("کارهای تکمیل‌شده", snapshot.completedTasks.toString(), Modifier.weight(1f))
+        }
+        Text("تحلیل فصل‌ها و نقاط نیازمند تمرین", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        if (snapshot.chapters.isEmpty()) {
+            EmptyMessage("هنوز محتوای آموزشی تأییدشده‌ای برای تحلیل فصل‌ها وجود ندارد.")
+        } else {
+            snapshot.chapters.forEach { chapter ->
+                Card(Modifier.fillMaxWidth()) {
+                    Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Text(chapter.title, modifier = Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
+                            if (chapter.needsPractice) Text("نیازمند تمرین", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall)
+                        }
+                        val chapterCompletion = if (chapter.totalItems == 0) 0f else chapter.completedItems.toFloat() / chapter.totalItems
+                        LinearProgressIndicator(progress = { chapterCompletion }, modifier = Modifier.fillMaxWidth())
+                        Text("${chapter.completedItems} از ${chapter.totalItems} مطلب · دقت ${chapter.accuracyPercent}٪ · ${chapter.attempts} تلاش", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        if (chapter.needsPractice) Text("پیشنهاد: این فصل را با تمرین و مرور فعال دوباره بررسی کن.", style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+            }
+        }
+        Text("حریم خصوصی: این گزارش فقط از محتوای آموزشی، پیشرفت و کارهای برنامه‌ریز استفاده می‌کند؛ متن دفتر روزانه و صندوق ورودی وارد گزارش نمی‌شود و داده‌ای به سرور ارسال نمی‌شود.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
