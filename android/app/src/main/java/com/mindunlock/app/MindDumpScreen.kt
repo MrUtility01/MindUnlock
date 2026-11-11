@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Card
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
@@ -36,7 +38,7 @@ import java.util.Date
 import java.util.Locale
 
 @Composable
-fun MindDumpScreen(userDatabase: UserDatabase) {
+fun MindDumpScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
     val scope = rememberCoroutineScope()
     val entries by userDatabase.mindDumpDao().observeAll().collectAsState(initial = emptyList())
     var draft by rememberSaveable { mutableStateOf("") }
@@ -64,6 +66,9 @@ fun MindDumpScreen(userDatabase: UserDatabase) {
             minLines = 3,
             maxLines = 6
         )
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            OutlinedButton(onClick = { speech.speak(draft) }, enabled = draft.isNotBlank()) { Text("خواندن متن") }
+        }
         Text("نوع ورودی", style = MaterialTheme.typography.labelLarge)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf("thought" to "فکر", "task" to "کار", "idea" to "ایده", "learning" to "یادگیری").forEach { (value, label) ->
@@ -170,6 +175,7 @@ private fun MindDumpCard(
                 )
             }
             Text(entry.content, style = MaterialTheme.typography.bodyLarge)
+            OutlinedButton(onClick = { speech.speak(entry.content) }, modifier = Modifier.fillMaxWidth()) { Text("خواندن با صدا") }
             Text(statusLabel, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (entry.status == "archived") {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
