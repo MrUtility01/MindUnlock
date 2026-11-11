@@ -110,6 +110,7 @@ import com.mindunlock.app.data.local.AppDatabase
 import com.mindunlock.app.data.local.UserDatabase
 import com.mindunlock.app.data.local.BookmarkEntity
 import com.mindunlock.app.data.local.ContentItemEntity
+import com.mindunlock.app.data.local.LabStepProgressEntity
 import com.mindunlock.app.data.local.ContentItemListEntry
 import com.mindunlock.app.data.local.NoteEntity
 import com.mindunlock.app.data.local.ProgressEntity
