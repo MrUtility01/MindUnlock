@@ -2475,10 +2475,10 @@ jobs:
           source = p.read_text(encoding="utf-8")
           if "versionCode = 6" not in source or 'versionName = "0.5.1"' not in source:
               raise SystemExit("Expected v0.5.1 package version markers not found")
-          source = source.replace("versionCode = 6", "versionCode = 19", 1)
-          source = source.replace('versionName = "0.5.1"', 'versionName = "0.6.4"', 1)
+          source = source.replace("versionCode = 6", "versionCode = 20", 1)
+          source = source.replace('versionName = "0.5.1"', 'versionName = "0.6.5"', 1)
           p.write_text(source, encoding="utf-8")
-          print("Package version bumped to 0.6.4 (versionCode 19).")
+          print("Package version bumped to 0.6.5 (versionCode 20).")
           PY
 
       - name: Fix Room projections to include required sourceStatus column
@@ -2975,6 +2975,9 @@ jobs:
             app/src/main/java/com/mindunlock/app/ReviewScheduler.kt \
             app/src/main/java/com/mindunlock/app/LabScenarioMetadata.kt \
             app/src/main/java/com/mindunlock/app/LearningAnalytics.kt \
+            app/src/main/java/com/mindunlock/app/UserDataBackupCodec.kt \
+            app/src/main/java/com/mindunlock/app/UserDataBackupManager.kt \
+            app/src/main/java/com/mindunlock/app/BackupRestoreScreen.kt \
             app/src/main/AndroidManifest.xml \
             app/src/main/java/com/mindunlock/app/data/local/Entities.kt \
             app/src/main/java/com/mindunlock/app/data/local/UserDatabase.kt \
@@ -2983,7 +2986,8 @@ jobs:
             app/src/test/java/com/mindunlock/app/LearningPathPolicyTest.kt \
             app/src/test/java/com/mindunlock/app/ReviewSchedulerTest.kt \
             app/src/test/java/com/mindunlock/app/LabScenarioParserTest.kt \
-            app/src/test/java/com/mindunlock/app/LearningAnalyticsTest.kt
+            app/src/test/java/com/mindunlock/app/LearningAnalyticsTest.kt \
+            app/src/test/java/com/mindunlock/app/UserDataBackupCodecTest.kt
           do
             test -f "android/$relative"
             mkdir -p "android-build/$(dirname "$relative")"
@@ -3436,7 +3440,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: MindUnlock-Android-v0.6.4-debug
+          name: MindUnlock-Android-v0.6.5-debug
           path: android-build/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
@@ -3444,10 +3448,10 @@ jobs:
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' && success()
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: android-v0.6.4-${{ github.run_number }}
-          name: MindUnlock Android 0.6.4 (#${{ github.run_number }})
+          tag_name: android-v0.6.5-${{ github.run_number }}
+          name: MindUnlock Android 0.6.5 (#${{ github.run_number }})
           body: |
-            Android Native 0.6.3 adds local learning analytics: verified-content completion, quiz accuracy, weak-topic insights, review queue counts, seven-day item-update activity, per-chapter analysis and planner task status. Journal and Mind Dump text remain excluded. It retains persistent lab checklists, structured scenarios, spaced-repetition review, the Learning Engine, Learning Profile, offline Persian speech features, and local-first personal modules.
+            Android Native 0.6.5 adds versioned user-data backup and restore with SHA-256 integrity validation, bounded JSON import, transactional replacement and automatic rolling pre-restore safety snapshots. The backup includes private progress, notes, bookmarks, tasks, Mind Dump, Journal, Later topics, lab checklists and learning sessions; downloaded content, speech models, preferences and connection settings are intentionally excluded. It retains local learning analytics, persistent lab checklists, structured scenarios, spaced-repetition review, the Learning Engine, Learning Profile and offline Persian speech features.
             HTTP sync is intended for trusted local networks only.
           files: android-build/app/build/outputs/apk/debug/app-debug.apk
           prerelease: true
