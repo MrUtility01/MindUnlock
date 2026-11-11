@@ -148,6 +148,7 @@ abstract class UserDatabase : RoomDatabase() {
     abstract fun journalEntryDao(): JournalEntryDao
     abstract fun laterTopicDao(): LaterTopicDao
     abstract fun labStepProgressDao(): LabStepProgressDao
+    abstract fun learningSessionDao(): LearningSessionDao
     companion object {
         val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
