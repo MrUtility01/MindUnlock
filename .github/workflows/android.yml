@@ -2636,6 +2636,35 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+      - name: Publish review-only effective source candidate branch
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: bash
+        run: |
+          set -euo pipefail
+          BRANCH="review/effective-source-\${GITHUB_RUN_NUMBER}"
+          mkdir -p /tmp/effective-source-candidate
+          unzip -q effective-android-source-snapshot.zip -d /tmp/effective-source-candidate
+          test -f /tmp/effective-source-candidate/app/build.gradle.kts
+          test -f /tmp/effective-source-candidate/app/src/main/AndroidManifest.xml
+          git switch --create "$BRANCH"
+          rm -rf android
+          mkdir -p android
+          cp -a /tmp/effective-source-candidate/. android/
+          cat > android/SOURCE_CANDIDATE_NOT_APPROVED.md <<'EOF'
+          # Review-only effective source candidate
+
+          This directory is a review snapshot reconstructed from the effective CI source after all workflow patches.
+          It is NOT approved as the production source of truth.
+          Do not merge this branch into main or install an APK based solely on this snapshot.
+          Generated assets, Gradle wrapper files, and CI-derived changes still require classification.
+          Database migration, HTTP transport security, backup/restore, and real-device behavior remain under audit.
+          Source snapshot artifact and build run are linked from the originating GitHub Actions run.
+          EOF
+          git add -A android
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -m "review: capture effective Android source candidate #\${GITHUB_RUN_NUMBER}"
+          git push origin "$BRANCH"
+          echo "Review branch created: $BRANCH" | tee -a "$GITHUB_STEP_SUMMARY"
+
       - name: Run JVM unit tests
         working-directory: android-build
         run: ./gradlew testDebugUnitTest --stacktrace
