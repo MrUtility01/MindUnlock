@@ -2475,10 +2475,10 @@ jobs:
           source = p.read_text(encoding="utf-8")
           if "versionCode = 6" not in source or 'versionName = "0.5.1"' not in source:
               raise SystemExit("Expected v0.5.1 package version markers not found")
-          source = source.replace("versionCode = 6", "versionCode = 13", 1)
-          source = source.replace('versionName = "0.5.1"', 'versionName = "0.5.8"', 1)
+          source = source.replace("versionCode = 6", "versionCode = 14", 1)
+          source = source.replace('versionName = "0.5.1"', 'versionName = "0.5.9"', 1)
           p.write_text(source, encoding="utf-8")
-          print("Package version bumped to 0.5.8 (versionCode 13).")
+          print("Package version bumped to 0.5.9 (versionCode 14).")
           PY
 
       - name: Fix Room projections to include required sourceStatus column
@@ -2969,6 +2969,7 @@ jobs:
             app/src/main/java/com/mindunlock/app/LaterTopicsScreen.kt \
             app/src/main/java/com/mindunlock/app/JournalScreen.kt \
             app/src/main/java/com/mindunlock/app/LearningProfileScreen.kt \
+            app/src/main/java/com/mindunlock/app/LearningEngineScreen.kt \
             app/src/main/AndroidManifest.xml \
             app/src/main/java/com/mindunlock/app/data/local/Entities.kt \
             app/src/main/java/com/mindunlock/app/data/local/UserDatabase.kt \
@@ -3426,7 +3427,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: MindUnlock-Android-v0.5.8-debug
+          name: MindUnlock-Android-v0.5.9-debug
           path: android-build/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
@@ -3434,10 +3435,10 @@ jobs:
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' && success()
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: android-v0.5.8-${{ github.run_number }}
-          name: MindUnlock Android 0.5.8 (#${{ github.run_number }})
+          tag_name: android-v0.5.9-${{ github.run_number }}
+          name: MindUnlock Android 0.5.9 (#${{ github.run_number }})
           body: |
-            Android Native 0.5.8 adds a local 20-question learning profile, editable study preferences and a clear separation between self-reported preferences and measured learning performance. It retains local Persian speech-to-text, the Later / Curiosity module, Mind Dump, Journal, Persian Piper TTS and the refreshed dashboard.
+            Android Native 0.5.9 adds a guided Learning Engine with searchable downloaded chapters, next incomplete chapter selection, saved learning position and configurable study-session structure. It retains the 20-question Learning Profile, local Persian speech-to-text, Later / Curiosity, Mind Dump, Journal, Persian Piper TTS and the refreshed dashboard.
             HTTP sync is intended for trusted local networks only.
           files: android-build/app/build/outputs/apk/debug/app-debug.apk
           prerelease: true
