@@ -217,6 +217,7 @@ private fun MindUnlockRoot(
         "bookmarks" -> "نشانک‌ها"
         "settings" -> "تنظیمات"
         "profile" -> "پروفایل یادگیری"
+        "learning" -> "موتور یادگیری"
         "sync" -> "اتصال و دریافت محتوا"
         "more" -> "ابزارهای یادگیری"
         else -> "MindUnlock"
@@ -226,7 +227,7 @@ private fun MindUnlockRoot(
             "reader" -> previousScreen
             "chapter" -> "subject"
             "subject" -> "courses"
-            "sync", "settings", "profile", "more", "quiz", "exam", "review", "labs", "planner", "progress", "bookmarks", "inbox", "journal", "later" -> "home"
+            "sync", "settings", "profile", "learning", "more", "quiz", "exam", "review", "labs", "planner", "progress", "bookmarks", "inbox", "journal", "later" -> "home"
             else -> "home"
         }
     }
@@ -288,6 +289,7 @@ private fun MindUnlockRoot(
                 "bookmarks" -> BookmarksScreen(repository.database, userDatabase, speech, onOpenItem = { uid -> selectedItem = uid; previousScreen = "bookmarks"; screen = "reader" })
                 "settings" -> SettingsScreen(speech, preferences, initialTheme, onThemeChange, onFontScaleChange, onLockApp, { screen = "sync" })
                 "profile" -> LearningProfileScreen(preferences)
+                "learning" -> LearningEngineScreen(repository.database, userDatabase, preferences, onOpenChapter = { id -> selectedChapter = id; screen = "chapter" }, onNavigate = { screen = it })
                 "sync" -> SyncScreen(repository, onDone = { screen = "courses" })
                 else -> MoreScreen(onNavigate = { screen = it })
             }
@@ -326,6 +328,7 @@ private fun MoreScreen(onNavigate: (String) -> Unit) {
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ActionTile("پروفایل یادگیری", "profile", onNavigate, Modifier.weight(1f))
+            ActionTile("موتور یادگیری", "learning", onNavigate, Modifier.weight(1f))
         }
     }
 }
