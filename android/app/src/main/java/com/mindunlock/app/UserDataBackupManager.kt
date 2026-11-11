@@ -4,6 +4,7 @@ import android.content.Context
 import com.mindunlock.app.data.local.UserDatabase
 import androidx.room.withTransaction
 import kotlinx.coroutines.Dispatchers
+import java.io.File
 import kotlinx.coroutines.withContext
 
 object UserDataBackupManager {
@@ -31,10 +32,17 @@ object UserDataBackupManager {
         UserDataBackupCodec.encode(payload, exportedAt, version)
     }
 
-    suspend fun restore(userDb: UserDatabase, document: UserDataBackupDocument) = withContext(Dispatchers.IO) {
+    suspend fun restore(context: Context, userDb: UserDatabase, document: UserDataBackupDocument) = withContext(Dispatchers.IO) {
         require(document.schemaVersion == UserDataBackupCodec.CURRENT_SCHEMA_VERSION) {
             "نسخه ساختار پشتیبان پشتیبانی نمی‌شود."
         }
+        val safetyDirectory = File(context.filesDir, "backup-safety").apply { mkdirs() }
+        val safetyJson = export(context, userDb)
+        File(safetyDirectory, "before-restore-${System.currentTimeMillis()}.json")
+            .writeText(safetyJson, Charsets.UTF_8)
+        safetyDirectory.listFiles()?.filter { it.isFile }?.sortedByDescending { it.lastModified() }
+            ?.drop(3)?.forEach { it.delete() }
+
         userDb.withTransaction {
             userDb.progressDao().deleteAll()
             userDb.noteDao().deleteAll()
