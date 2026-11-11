@@ -597,6 +597,7 @@ fun ReaderScreen(db: AppDatabase, userDb: UserDatabase, itemUid: String, speech:
 }
 
 @Composable
+@Composable
 private fun LabScenarioReaderPanel(
     item: ContentItemEntity,
     details: LabScenarioMetadata,
@@ -605,13 +606,12 @@ private fun LabScenarioReaderPanel(
     preferences: android.content.SharedPreferences
 ) {
     val scope = rememberCoroutineScope()
-    val steps = remember(item.uid, details.commands) {
-        mutableStateListOf<Boolean>().apply { repeat(details.commands.size) { add(false) } }
-    }
+    val savedSteps by userDb.labStepProgressDao().observeByItem(item.uid).collectAsState(initial = emptyList())
+    val completedIndexes = remember(savedSteps) { savedSteps.filter { it.completed }.map { it.stepIndex }.toSet() }
     val progress by userDb.progressDao().observeAll().collectAsState(initial = emptyList())
     val saved = progress.firstOrNull { it.itemUid == item.uid }
-    val finishedSteps = steps.count { it }
-    val allStepsDone = steps.isEmpty() || finishedSteps == steps.size
+    val finishedSteps = completedIndexes.count { it in details.commands.indices }
+    val allStepsDone = details.commands.isEmpty() || finishedSteps == details.commands.size
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         HorizontalDivider()
         Text("راهنمای اجرای آزمایشگاه", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -628,7 +628,22 @@ private fun LabScenarioReaderPanel(
             )
             details.commands.forEachIndexed { index, command ->
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = steps[index], onCheckedChange = { steps[index] = it })
+                    Checkbox(
+                        checked = index in completedIndexes,
+                        onCheckedChange = { checked ->
+                            scope.launch {
+                                if (checked) {
+                                    userDb.labStepProgressDao().upsert(LabStepProgressEntity(item.uid, index, true))
+                                } else {
+                                    userDb.labStepProgressDao().delete(item.uid, index)
+                                    val old = userDb.progressDao().get(item.uid)
+                                    if (old?.completed == true && old.lastResult == "lab_completed") {
+                                        userDb.progressDao().upsert(old.copy(completed = false, completedAt = null, lastResult = "lab_in_progress", updatedAt = System.currentTimeMillis()))
+                                    }
+                                }
+                            }
+                        }
+                    )
                     Text("${index + 1}. $command", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
                 }
             }
