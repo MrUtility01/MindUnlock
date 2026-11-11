@@ -51,7 +51,8 @@ fun LearningEngineScreen(
     val completedItems = progress.count { it.completed }
     val selected = chapters.firstOrNull { it.id == selectedId }
     val nextChapter = chapters.firstOrNull { chapter ->
-        progress.none { it.chapterId == chapter.id && it.completed }
+        val chapterItems = progress.filter { it.chapterId == chapter.id }
+        chapterItems.isEmpty() || (chapter.itemCount > 0 && chapterItems.count { it.completed } < chapter.itemCount)
     } ?: chapters.firstOrNull()
     val visibleChapters = chapters.filter {
         search.isBlank() || it.title.contains(search, ignoreCase = true) ||
