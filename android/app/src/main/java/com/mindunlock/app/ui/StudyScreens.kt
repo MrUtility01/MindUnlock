@@ -1003,6 +1003,8 @@ fun SettingsScreen(
     var settingsMessage by remember { mutableStateOf("") }
     var showResetDialog by remember { mutableStateOf(false) }
     var showDeleteVoiceDialog by remember { mutableStateOf(false) }
+    var asrModelPresent by remember { mutableStateOf(OfflinePersianSpeech.isInstalled(context)) }
+    var showDeleteAsrDialog by remember { mutableStateOf(false) }
 
     fun folderSize(file: java.io.File): Long =
         if (!file.exists()) 0L else if (file.isFile) file.length()
@@ -1179,6 +1181,42 @@ fun SettingsScreen(
                     Text("حذف مدل صوتی انتخاب‌شده از حافظه")
                 }
             }
+        }
+
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("تشخیص گفتار فارسی آفلاین", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(
+                    if (asrModelPresent) "مدل Shenava روی همین گوشی نصب است؛ تبدیل گفتار بدون اینترنت و بدون ارسال صدا انجام می‌شود."
+                    else "مدل فارسی هنوز دریافت نشده است. با اولین استفاده از میکروفون، حدود ۱۱۷ مگابایت دریافت می‌شود؛ پس از آن تشخیص گفتار کاملاً محلی است.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Text("موتور: sherpa-onnx · مدل فارسی Shenava Rizeh · مجوز Apache 2.0", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (asrModelPresent) {
+                    OutlinedButton(onClick = { showDeleteAsrDialog = true }, modifier = Modifier.fillMaxWidth()) {
+                        Icon(Icons.Default.Delete, contentDescription = null)
+                        Text("حذف مدل تشخیص گفتار و آزادسازی فضا")
+                    }
+                } else {
+                    Text("برای دریافت مدل، از دکمه «گفتار آفلاین» کنار یکی از فیلدهای متنی استفاده کن.", style = MaterialTheme.typography.labelSmall)
+                }
+            }
+        }
+        if (showDeleteAsrDialog) {
+            AlertDialog(
+                onDismissRequest = { showDeleteAsrDialog = false },
+                title = { Text("حذف مدل گفتار فارسی؟") },
+                text = { Text("فایل مدل حدود ۱۱۷ مگابایت است. با حذف آن، تشخیص گفتار آفلاین تا دریافت دوباره مدل غیرفعال می‌شود؛ نوشته‌ها و داده‌های برنامه دست‌نخورده می‌مانند.") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        OfflinePersianSpeech.deleteModel(context)
+                        asrModelPresent = OfflinePersianSpeech.isInstalled(context)
+                        storageBytes = privateDataSize()
+                        showDeleteAsrDialog = false
+                    }) { Text("حذف مدل") }
+                },
+                dismissButton = { TextButton(onClick = { showDeleteAsrDialog = false }) { Text("انصراف") } }
+            )
         }
 
         Card(Modifier.fillMaxWidth()) {
