@@ -131,3 +131,11 @@ data class LaterTopicEntity(
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )
+
+@Entity(tableName = "lab_step_progress", primaryKeys = ["itemUid", "stepIndex"], indices = [Index("itemUid")])
+data class LabStepProgressEntity(
+    val itemUid: String,
+    val stepIndex: Int,
+    val completed: Boolean = false,
+    val updatedAt: Long = System.currentTimeMillis()
+)
