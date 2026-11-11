@@ -175,6 +175,7 @@ private fun MindUnlockRoot(
         "flashcards" -> "فلش‌کارت و مرور فاصله‌دار"
         "notes" -> "دفتر یادداشت"
         "inbox" -> "تخلیه ذهن / صندوق ورودی"
+        "journal" -> "دفتر روزانه"
         "quiz" -> "تمرین"
         "exam" -> "آزمون"
         "review" -> "مرور امروز"
@@ -192,7 +193,7 @@ private fun MindUnlockRoot(
             "reader" -> previousScreen
             "chapter" -> "subject"
             "subject" -> "courses"
-            "sync", "settings", "more", "quiz", "exam", "review", "labs", "planner", "progress", "bookmarks", "inbox" -> "home"
+            "sync", "settings", "more", "quiz", "exam", "review", "labs", "planner", "progress", "bookmarks", "inbox", "journal" -> "home"
             else -> "home"
         }
     }
@@ -236,6 +237,7 @@ private fun MindUnlockRoot(
                 "review" -> FlashcardsScreen(repository.database, userDatabase, speech, preferences, reviewOnly = true)
                 "notes" -> NotesScreen(userDatabase)
                 "inbox" -> MindDumpScreen(userDatabase)
+                "journal" -> JournalScreen(userDatabase)
                 "quiz" -> QuizScreen(repository.database, userDatabase, examMode = false)
                 "exam" -> QuizScreen(repository.database, userDatabase, examMode = true)
                 "labs" -> LabsScreen(repository.database, userDatabase, onOpenItem = { uid -> selectedItem = uid; previousScreen = "labs"; screen = "reader" })
@@ -274,6 +276,10 @@ private fun MoreScreen(onNavigate: (String) -> Unit) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ActionTile("تخلیه ذهن / صندوق ورودی", "inbox", onNavigate, Modifier.weight(1f))
             ActionTile("دفتر یادداشت", "notes", onNavigate, Modifier.weight(1f))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ActionTile("دفتر روزانه", "journal", onNavigate, Modifier.weight(1f))
+            ActionTile("دفتر یادداشت آموزشی", "notes", onNavigate, Modifier.weight(1f))
         }
     }
 }
