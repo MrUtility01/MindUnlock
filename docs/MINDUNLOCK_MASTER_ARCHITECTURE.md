@@ -549,3 +549,12 @@ Workflow باید فقط سورس version-controlled را build و test کند؛
 The effective APK build uses a 38-step GitHub Actions workflow that extracts `MindUnlock-Android-v0.3.1-source.zip` into a temporary directory and applies many inline and compressed source transformations before Gradle runs. The checked-in `android/` tree is not the same source tree: the archive contains baseline Kotlin files such as `AppLock.kt`, `PersianSpeech.kt`, `StudyReminderReceiver.kt`, and `ui/StudyScreens.kt` that are absent from the tracked Android tree. The archive SHA-1 is `bb35cab525b86b2ed5136360985c96451c4daf16`; the workflow file is 154,656 characters and has 38 named steps.
 
 **Architecture rule:** do not replace the checked-in Android tree with the ZIP baseline and do not remove CI patches until a disposable CI reconstruction reproduces the effective source and generates a per-file SHA-256 manifest. The detailed workflow inventory and current divergence are recorded in `docs/IMPLEMENTATION_AUDIT_AND_NEXT_STEPS.md`, section 10. Source stabilization is still pending; this finding does not mean the app source has been unified.
+
+
+## 28. نتیجه مقایسه هش‌به‌هش سورس مؤثر و پوشه android
+
+مقایسه انجام‌شده در Build #121 نشان داد از 17 فایل ردیابی‌شده در android/ و 31 فایل سورس مؤثر APK، فقط 2 فایل در مسیر نسبی یکسان و با SHA-256 یکسان هستند؛ 13 مسیر محتوای متفاوت دارند، 2 فایل فقط در android/ و 16 فایل فقط در سورس مؤثر build وجود دارد. فهرست مسیرها و محدودیت‌های تفسیر در گزارش IMPLEMENTATION_AUDIT_AND_NEXT_STEPS.md بخش 11 ثبت شده است.
+
+**تصمیم معماری:** پوشه android/ هنوز منبع قابل اتکای APK نیست. انتقال مستقیم آرشیو یا کپی یک‌باره خروجی مؤثر به آن ممنوع است. ابتدا باید خروجی کامل مؤثر در محیط موقت بازسازی، فایل‌های تولیدشده از تغییرات دائمی جدا و تمام patchهای CI به تغییرات منبع قابل بازبینی تبدیل شوند. پس از تست و تأیید، منبع یگانه تثبیت می‌شود.
+
+Build #121 فقط در مرحله بارگذاری Artifact گزارش مقایسه شکست خورد؛ خود مقایسه موفق بود. علت نامعتبر بودن نام Artifact در Workflow اصلاح شده و Build #122 برای تأیید اصلاح اجرا می‌شود. این مرحله صرفاً ممیزی است و هیچ تغییری در سورس Android یا دیتابیس ایجاد نکرده است.
