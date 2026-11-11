@@ -216,6 +216,7 @@ private fun MindUnlockRoot(
         "progress" -> "گزارش پیشرفت"
         "bookmarks" -> "نشانک‌ها"
         "settings" -> "تنظیمات"
+        "profile" -> "پروفایل یادگیری"
         "sync" -> "اتصال و دریافت محتوا"
         "more" -> "ابزارهای یادگیری"
         else -> "MindUnlock"
@@ -225,7 +226,7 @@ private fun MindUnlockRoot(
             "reader" -> previousScreen
             "chapter" -> "subject"
             "subject" -> "courses"
-            "sync", "settings", "more", "quiz", "exam", "review", "labs", "planner", "progress", "bookmarks", "inbox", "journal", "later" -> "home"
+            "sync", "settings", "profile", "more", "quiz", "exam", "review", "labs", "planner", "progress", "bookmarks", "inbox", "journal", "later" -> "home"
             else -> "home"
         }
     }
@@ -286,6 +287,7 @@ private fun MindUnlockRoot(
                 "progress" -> ProgressScreen(repository.database, userDatabase, speech)
                 "bookmarks" -> BookmarksScreen(repository.database, userDatabase, speech, onOpenItem = { uid -> selectedItem = uid; previousScreen = "bookmarks"; screen = "reader" })
                 "settings" -> SettingsScreen(speech, preferences, initialTheme, onThemeChange, onFontScaleChange, onLockApp, { screen = "sync" })
+                "profile" -> LearningProfileScreen(preferences)
                 "sync" -> SyncScreen(repository, onDone = { screen = "courses" })
                 else -> MoreScreen(onNavigate = { screen = it })
             }
@@ -321,6 +323,9 @@ private fun MoreScreen(onNavigate: (String) -> Unit) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ActionTile("دفتر روزانه", "journal", onNavigate, Modifier.weight(1f))
             ActionTile("موضوعات برای بعد", "later", onNavigate, Modifier.weight(1f))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ActionTile("پروفایل یادگیری", "profile", onNavigate, Modifier.weight(1f))
         }
     }
 }
