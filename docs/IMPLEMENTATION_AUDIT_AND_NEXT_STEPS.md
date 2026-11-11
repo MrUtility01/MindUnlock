@@ -229,3 +229,70 @@ No Android source files, build scripts, workflow files, APKs, or database files 
 Next, create a reproducible source snapshot from the ZIP plus all 38 workflow transformations in a disposable CI workspace, then record a manifest containing relative path, byte size, and SHA-256 for every effective source file. Compare that manifest with the tracked `android/` tree and identify exact file-level differences. Only after this snapshot can be reproduced should the effective source be promoted into the normal tracked Android project and the workflow simplified.
 
 **Status:** workflow inventory and source-tree mismatch confirmed; exact effective-source reconstruction and file-by-file diff remain pending. This is not yet source stabilization.
+
+
+## 11. File-by-file source comparison — Build #121
+
+A comparison step was added after the effective-source manifest generation. It compares paths relative to the project roots (android/ versus android-build/) and computes SHA-256 for each file, excluding generated/cache directories named .gradle, build, and .git.
+
+The comparison itself completed successfully in Build #121 (commit dd44b4393384687514dd32440a159e357c5b57ea). The subsequent artifact upload failed only because the artifact name accidentally contained a literal backslash before the run-number expression. The comparison output was nevertheless present in the job log and is recorded here:
+
+| Measure | Count |
+|---|---:|
+| Tracked files under android/ | 17 |
+| Effective build files under android-build/ | 31 |
+| Identical relative paths and SHA-256 | 2 |
+| Same relative path, different content | 13 |
+| Only in tracked android/ | 2 |
+| Only in effective android-build/ | 16 |
+
+**Identical files:** the comparison reports 2 matching files. The available log excerpt does not enumerate their names, so they are not guessed here.
+
+**Different content (13 paths):**
+- README.md
+- README_FA.md
+- app/build.gradle.kts
+- app/proguard-rules.pro
+- app/src/main/AndroidManifest.xml
+- app/src/main/java/com/mindunlock/app/MainActivity.kt
+- app/src/main/java/com/mindunlock/app/data/local/AppDatabase.kt
+- app/src/main/java/com/mindunlock/app/data/local/Entities.kt
+- app/src/main/java/com/mindunlock/app/data/repository/SyncRepository.kt
+- app/src/main/java/com/mindunlock/app/ui/theme/Theme.kt
+- gradle.properties
+- gradle/wrapper/gradle-wrapper.properties
+- settings.gradle.kts
+
+**Only in tracked android/ (2 paths):**
+- app/src/main/java/com/mindunlock/app/data/model/SyncModels.kt
+- app/src/main/java/com/mindunlock/app/data/remote/SyncApi.kt
+
+**Only in effective android-build/ (16 paths):**
+- .gitignore
+- app/src/main/java/com/mindunlock/app/AppLock.kt
+- app/src/main/java/com/mindunlock/app/CrashDiagnostics.kt
+- app/src/main/java/com/mindunlock/app/PersianSpeech.kt
+- app/src/main/java/com/mindunlock/app/StudyReminderReceiver.kt
+- app/src/main/java/com/mindunlock/app/data/local/LegacyDatabaseMigrator.kt
+- app/src/main/java/com/mindunlock/app/data/local/UserDatabase.kt
+- app/src/main/java/com/mindunlock/app/ui/StudyScreens.kt
+- app/src/main/res/mipmap-hdpi/ic_launcher.png
+- app/src/main/res/mipmap-mdpi/ic_launcher.png
+- app/src/main/res/mipmap-xhdpi/ic_launcher.png
+- app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+- app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+- gradle/wrapper/gradle-wrapper.jar
+- gradlew
+- gradlew.bat
+
+### 11.1 Interpretation and safety decision
+
+This is a substantial source divergence, not a small drift: only 2 of 17 tracked files are byte-identical to a same-path effective file, while 13 same-path files differ and 16 effective files have no tracked counterpart. The result validates that the current android/ directory is not a faithful, build-ready representation of the source used for the APK.
+
+The comparison is path-and-hash evidence only. It does not establish that each difference is a defect, nor does it establish semantic equivalence or correctness. Some differences are expected from generated launcher assets, wrapper generation, package version changes, and CI patches.
+
+**Do not copy the 31 effective files blindly into android/ yet.** The next safe operation is to publish the comparison report as an artifact, then reconstruct a clean source tree from the exact effective build output and classify generated files, intentional CI modifications, and durable source changes. Only after that should a reviewed promotion into the tracked Android project be considered.
+
+### 11.2 Build #121 and correction
+
+Build #121 reached and completed the comparison step, but the artifact upload failed because its configured name contained a literal backslash before the run-number expression. This stopped later tests and APK packaging in that run. The workflow expression was corrected in commit 90f92ee4375a19979eb5fb3f4b811130d4175f6c; Build #122 is the verification run. No Android app source or database code was changed by either workflow-only commit.
