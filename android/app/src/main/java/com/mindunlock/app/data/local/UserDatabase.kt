@@ -15,6 +15,9 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface ProgressDao {
     @Query("SELECT * FROM progress ORDER BY updatedAt DESC") fun observeAll(): Flow<List<ProgressEntity>>
+    @Query("SELECT * FROM progress") suspend fun getAll(): List<ProgressEntity>
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertAll(items: List<ProgressEntity>)
+    @Query("DELETE FROM progress") suspend fun deleteAll()
     @Query("SELECT * FROM progress WHERE itemUid = :uid LIMIT 1") suspend fun get(uid: String): ProgressEntity?
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsert(progress: ProgressEntity)
 }
@@ -23,6 +26,9 @@ interface ProgressDao {
 interface LearningSessionDao {
     @Query("SELECT * FROM learning_sessions ORDER BY startedAt DESC")
     fun observeAll(): Flow<List<LearningSessionEntity>>
+    @Query("SELECT * FROM learning_sessions") suspend fun getAll(): List<LearningSessionEntity>
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertAll(items: List<LearningSessionEntity>)
+    @Query("DELETE FROM learning_sessions") suspend fun deleteAll()
 
     @Query("SELECT * FROM learning_sessions WHERE endedAt IS NULL ORDER BY startedAt DESC LIMIT 1")
     fun observeActive(): Flow<LearningSessionEntity?>
@@ -38,6 +44,9 @@ interface LearningSessionDao {
 interface LabStepProgressDao {
     @Query("SELECT * FROM lab_step_progress WHERE itemUid = :uid ORDER BY stepIndex ASC")
     fun observeByItem(uid: String): Flow<List<LabStepProgressEntity>>
+    @Query("SELECT * FROM lab_step_progress") suspend fun getAll(): List<LabStepProgressEntity>
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertAll(items: List<LabStepProgressEntity>)
+    @Query("DELETE FROM lab_step_progress") suspend fun deleteAll()
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(step: LabStepProgressEntity)
@@ -49,6 +58,9 @@ interface LabStepProgressDao {
 @Dao
 interface NoteDao {
     @Query("SELECT * FROM notes ORDER BY updatedAt DESC") fun observeAll(): Flow<List<NoteEntity>>
+    @Query("SELECT * FROM notes") suspend fun getAll(): List<NoteEntity>
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertAll(items: List<NoteEntity>)
+    @Query("DELETE FROM notes") suspend fun deleteAll()
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsert(note: NoteEntity)
     @Query("DELETE FROM notes WHERE id = :id") suspend fun delete(id: Long)
 }
@@ -56,6 +68,9 @@ interface NoteDao {
 @Dao
 interface BookmarkDao {
     @Query("SELECT * FROM bookmarks ORDER BY createdAt DESC") fun observeAll(): Flow<List<BookmarkEntity>>
+    @Query("SELECT * FROM bookmarks") suspend fun getAll(): List<BookmarkEntity>
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertAll(items: List<BookmarkEntity>)
+    @Query("DELETE FROM bookmarks") suspend fun deleteAll()
     @Query("SELECT EXISTS(SELECT 1 FROM bookmarks WHERE itemUid = :uid)") suspend fun exists(uid: String): Boolean
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsert(bookmark: BookmarkEntity)
     @Query("DELETE FROM bookmarks WHERE itemUid = :uid") suspend fun delete(uid: String)
@@ -64,6 +79,9 @@ interface BookmarkDao {
 @Dao
 interface StudyTaskDao {
     @Query("SELECT * FROM study_tasks ORDER BY completed ASC, COALESCE(dueAt, 9223372036854775807) ASC, createdAt DESC") fun observeAll(): Flow<List<StudyTaskEntity>>
+    @Query("SELECT * FROM study_tasks") suspend fun getAll(): List<StudyTaskEntity>
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertAll(items: List<StudyTaskEntity>)
+    @Query("DELETE FROM study_tasks") suspend fun deleteAll()
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsert(task: StudyTaskEntity): Long
     @Query("DELETE FROM study_tasks WHERE id = :id") suspend fun delete(id: Long)
 }
@@ -72,6 +90,9 @@ interface StudyTaskDao {
 interface MindDumpDao {
     @Query("SELECT * FROM mind_dump ORDER BY updatedAt DESC")
     fun observeAll(): Flow<List<MindDumpEntity>>
+    @Query("SELECT * FROM mind_dump") suspend fun getAll(): List<MindDumpEntity>
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertAll(items: List<MindDumpEntity>)
+    @Query("DELETE FROM mind_dump") suspend fun deleteAll()
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(item: MindDumpEntity): Long
@@ -87,6 +108,9 @@ interface MindDumpDao {
 interface JournalEntryDao {
     @Query("SELECT * FROM journal_entries ORDER BY updatedAt DESC")
     fun observeAll(): Flow<List<JournalEntryEntity>>
+    @Query("SELECT * FROM journal_entries") suspend fun getAll(): List<JournalEntryEntity>
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertAll(items: List<JournalEntryEntity>)
+    @Query("DELETE FROM journal_entries") suspend fun deleteAll()
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(entry: JournalEntryEntity): Long
@@ -100,6 +124,9 @@ interface JournalEntryDao {
 interface LaterTopicDao {
     @Query("SELECT * FROM later_topics ORDER BY CASE status WHEN 'active' THEN 0 WHEN 'parked' THEN 1 ELSE 2 END, priority ASC, COALESCE(revisitAt, 9223372036854775807) ASC, updatedAt DESC")
     fun observeAll(): Flow<List<LaterTopicEntity>>
+    @Query("SELECT * FROM later_topics") suspend fun getAll(): List<LaterTopicEntity>
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertAll(items: List<LaterTopicEntity>)
+    @Query("DELETE FROM later_topics") suspend fun deleteAll()
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(topic: LaterTopicEntity): Long
