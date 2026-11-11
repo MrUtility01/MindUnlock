@@ -117,3 +117,17 @@ data class MediaCacheEntity(
     val size: Long,
     val downloadedAt: Long = System.currentTimeMillis()
 )
+
+
+@Entity(tableName = "later_topics", indices = [Index("status"), Index("revisitAt")])
+data class LaterTopicEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val title: String,
+    val details: String = "",
+    val priority: Int = 2,
+    val revisitAt: Long? = null,
+    val status: String = "parked",
+    val sourceMindDumpId: Long? = null,
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis()
+)
