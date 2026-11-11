@@ -894,25 +894,105 @@ fun NotesScreen(userDb: UserDatabase, speech: PersianSpeech) {
 fun LabsScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeech, onOpenItem: (String) -> Unit) {
     val content by db.contentItemDao().observeByTypes(listOf("lab", "command", "example", "exercise", "practice", "project")).collectAsState(initial = emptyList())
     val tasks by userDb.studyTaskDao().observeAll().collectAsState(initial = emptyList())
+    val progress by userDb.progressDao().observeAll().collectAsState(initial = emptyList())
     var selected by rememberSaveable { mutableStateOf("همه") }
+    var query by rememberSaveable { mutableStateOf("") }
     val verified = content.filter { it.sourceStatus == "verified" }
-    val visible = verified.filter { selected == "همه" || kindLabel(it.type) == selected }
+    val progressByUid = remember(progress) { progress.associateBy { it.itemUid } }
+    val visible = verified.filter { item ->
+        (selected == "همه" || kindLabel(item.type) == selected) &&
+            (query.isBlank() || listOf(item.title, item.summary, item.content, item.chapterId)
+                .any { it.orEmpty().contains(query, ignoreCase = true) })
+    }
+    val projectTasks = tasks.filter { it.taskType == "project" }
+    val completed = verified.count { progressByUid[it.uid]?.completed == true }
     Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("آزمایشگاه و تمرین عملی", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        Text("سناریوهای مرحله‌ای، تجهیزات، دستورات، خروجی مورد انتظار و عیب‌یابی را در کنار هم دنبال کن.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            MetricCard("سناریوها", verified.size.toString(), Modifier.weight(1f))
+            MetricCard("تکمیل‌شده", completed.toString(), Modifier.weight(1f))
+            MetricCard("پروژه‌ها", projectTasks.size.toString(), Modifier.weight(1f))
+        }
+        OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth(), label = { Text("جست‌وجوی سناریو، دستور یا موضوع") }, singleLine = true)
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             listOf("همه", "آزمایشگاه", "تمرین", "دستور", "مثال", "پروژه").forEach { label ->
                 FilterChip(selected = selected == label, onClick = { selected = label }, label = { Text(label) })
             }
         }
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
-            items(visible, key = { it.uid }) { item -> ContentItemCard(item) { onOpenItem(item.uid) } }
-            items(tasks.filter { it.taskType == "project" }, key = { "project-${it.id}" }) { task ->
-                Card(Modifier.fillMaxWidth()) { Column(Modifier.fillMaxWidth().padding(13.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) { Text(task.title, fontWeight = FontWeight.SemiBold); Text(task.details) } }
+            items(visible, key = { it.uid }) { item ->
+                LabScenarioCard(
+                    item = item,
+                    progress = progressByUid[item.uid],
+                    onOpen = { onOpenItem(item.uid) },
+                    onSpeak = { speech.speak(listOfNotNull(item.title, item.summary).joinToString(". ")) }
+                )
             }
-            if (visible.isEmpty() && tasks.none { it.taskType == "project" }) item { EmptyMessage("مورد عملی برای نمایش پیدا نشد.") }
+            items(projectTasks, key = { "project-${it.id}" }) { task ->
+                Card(Modifier.fillMaxWidth()) {
+                    Column(Modifier.fillMaxWidth().padding(13.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("پروژه شخصی", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                        Text(task.title, fontWeight = FontWeight.SemiBold)
+                        if (task.details.isNotBlank()) Text(task.details, style = MaterialTheme.typography.bodySmall)
+                        Text(if (task.completed) "تکمیل‌شده" else "در حال انجام", style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+            }
+            if (visible.isEmpty() && projectTasks.isEmpty()) {
+                item { EmptyMessage(if (verified.isEmpty()) "مورد عملی تأییدشده‌ای دریافت نشده است." else "با این فیلتر موردی پیدا نشد.") }
+            }
         }
     }
 }
+
+@Composable
+private fun LabScenarioCard(
+    item: ContentItemEntity,
+    progress: ProgressEntity?,
+    onOpen: () -> Unit,
+    onSpeak: () -> Unit
+) {
+    val details = remember(item.metadataJson) { LabScenarioParser.parse(item.metadataJson) }
+    Card(onClick = onOpen, modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.fillMaxWidth().padding(13.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text(kindLabel(item.type), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                Text(if (progress?.completed == true) "تکمیل‌شده" else if ((progress?.attempts ?: 0) > 0) "در حال تمرین" else "شروع‌نشده", style = MaterialTheme.typography.labelSmall)
+            }
+            Text(item.title ?: "سناریوی بدون عنوان", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            if (!item.summary.isNullOrBlank()) Text(cleanHtml(item.summary), style = MaterialTheme.typography.bodyMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
+            if (details.goal.isNotBlank()) LabDetailLine("هدف", details.goal)
+            if (details.topology.isNotBlank()) LabDetailLine("توپولوژی", details.topology)
+            if (details.prerequisites.isNotEmpty()) LabDetailLine("پیش‌نیازها", details.prerequisites.joinToString("، "))
+            if (details.equipment.isNotEmpty()) LabDetailLine("تجهیزات", details.equipment.joinToString("، "))
+            if (details.services.isNotEmpty()) LabDetailLine("سرویس‌ها", details.services.joinToString("، "))
+            if (details.commands.isNotEmpty()) LabDetailLine("مراحل / دستورات", details.commands.take(3).joinToString("  •  "))
+            if (details.expectedOutput.isNotEmpty()) LabDetailLine("خروجی مورد انتظار", details.expectedOutput.joinToString("؛ "))
+            if (details.troubleshooting.isNotEmpty()) LabDetailLine("عیب‌یابی", details.troubleshooting.joinToString("؛ "))
+            if (details.questions.isNotEmpty()) LabDetailLine("سؤالات کنترل", details.questions.joinToString("؛ "))
+            val metaLine = listOfNotNull(
+                details.difficulty.takeIf(String::isNotBlank),
+                details.estimatedMinutes?.let { "$it دقیقه" }
+            ).joinToString(" · ")
+            if (metaLine.isNotBlank()) Text(metaLine, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (!details.hasStructuredDetails) Text("جزئیات سناریو در متن کامل مطلب قرار دارد.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = onSpeak, modifier = Modifier.weight(1f)) { Text("خواندن خلاصه") }
+                Button(onClick = onOpen, modifier = Modifier.weight(1f)) { Text("شروع سناریو") }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LabDetailLine(label: String, value: String) {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+        Text(value, style = MaterialTheme.typography.bodySmall)
+    }
+}
+
 
 @Composable
 fun PlannerScreen(userDb: UserDatabase, speech: PersianSpeech) {
