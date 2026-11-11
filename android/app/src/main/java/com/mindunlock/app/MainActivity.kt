@@ -425,10 +425,21 @@ fun PersianVoiceInputButton(compact: Boolean = false, onText: (String) -> Unit) 
     }
 }
 
-private object OfflinePersianSpeech {
+internal object OfflinePersianSpeech {
     private const val SAMPLE_RATE = 16000
     private const val MODEL_URL = "https://huggingface.co/Reza2kn/Shenava-Rizeh-v1.0-sherpa-onnx/resolve/main/model.onnx?download=true"
     private const val TOKENS_URL = "https://huggingface.co/Reza2kn/Shenava-Rizeh-v1.0-sherpa-onnx/resolve/main/tokens.txt?download=true"
+
+    fun isInstalled(context: Context): Boolean {
+        val dir = File(context.filesDir, "offline-asr/shenava-rizeh-v1")
+        return File(dir, "model.onnx").let { it.exists() && it.length() > 1_000_000L } &&
+            File(dir, "tokens.txt").exists()
+    }
+
+    fun deleteModel(context: Context): Boolean {
+        val dir = File(context.filesDir, "offline-asr/shenava-rizeh-v1")
+        return !dir.exists() || dir.deleteRecursively()
+    }
 
     suspend fun transcribe(
         context: Context,
