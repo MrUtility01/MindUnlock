@@ -87,6 +87,17 @@ data class StudyTaskEntity(
     val createdAt: Long = System.currentTimeMillis()
 )
 
+@Entity(tableName = "mind_dump", indices = [Index("createdAt"), Index("status")])
+data class MindDumpEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val content: String,
+    val category: String = "thought",
+    val status: String = "inbox",
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis(),
+    val linkedTaskId: Long? = null
+)
+
 @Entity(tableName = "media_cache")
 data class MediaCacheEntity(
     @PrimaryKey val relativePath: String,
