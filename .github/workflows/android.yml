@@ -2239,7 +2239,7 @@ jobs:
                       }
                       val reportFile = File(folder, "last-crash.txt")
                       val previous = if (reportFile.isFile) reportFile.readText(Charsets.UTF_8) else ""
-                      reportFile.writeText((previous + "\n\n" + entry).takeLast(120_000), Charsets.UTF_8)
+                      reportFile.writeText((previous + "\\n\\n" + entry).takeLast(120_000), Charsets.UTF_8)
                   } catch (_: Throwable) { }
               }
 
