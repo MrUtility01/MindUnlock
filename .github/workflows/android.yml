@@ -652,7 +652,7 @@ jobs:
               p = matches[0]
               source = p.read_text(encoding="utf-8")
               source = source.replace("Icons.Default.FlashOn", "Icons.Default.Bookmark")
-              source = source.replace("import androidx.compose.material.icons.filled.FlashOn\\n", "")
+              source = source.replace("import androidx.compose.material.icons.filled.FlashOn\n", "")
               p.write_text(source, encoding="utf-8")
           print("Unavailable FlashOn icon replaced with an already available Material icon.")
           PY
@@ -1211,10 +1211,10 @@ jobs:
                   Text("شناسهٔ بسته: " + context.packageName, style = MaterialTheme.typography.bodySmall)
                   OutlinedButton(onClick = {
                       val report = "MindUnlock " + appVersion +
-                          "\\nAndroid " + android.os.Build.VERSION.RELEASE +
+                          "\nAndroid " + android.os.Build.VERSION.RELEASE +
                           " (API " + android.os.Build.VERSION.SDK_INT + ")" +
-                          "\\nPackage: " + context.packageName +
-                          "\\nSpeech status: " + speech.status.value
+                          "\nPackage: " + context.packageName +
+                          "\nSpeech status: " + speech.status.value
                       val clipboard = context.getSystemService("clipboard") as? android.content.ClipboardManager
                       clipboard?.setPrimaryClip(android.content.ClipData.newPlainText("MindUnlock diagnostics", report))
                       settingsMessage = if (clipboard != null) "اطلاعات فنی در کلیپ‌بورد کپی شد." else "دسترسی به کلیپ‌بورد ممکن نشد."
@@ -2239,7 +2239,7 @@ jobs:
                       }
                       val reportFile = File(folder, "last-crash.txt")
                       val previous = if (reportFile.isFile) reportFile.readText(Charsets.UTF_8) else ""
-                      reportFile.writeText((previous + "\\n\\n" + entry).takeLast(120_000), Charsets.UTF_8)
+                      reportFile.writeText((previous + "\n\n" + entry).takeLast(120_000), Charsets.UTF_8)
                   } catch (_: Throwable) { }
               }
 
@@ -2809,11 +2809,11 @@ jobs:
               raise SystemExit("JVM test report contains failures or errors.")
           with open(__import__("os").environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
               summary.write(
-                  "\\n### JVM test report\\n"
-                  f"- Tests: {totals['tests']}\\n"
-                  f"- Failures: {totals['failures']}\\n"
-                  f"- Errors: {totals['errors']}\\n"
-                  f"- Skipped: {totals['skipped']}\\n"
+                  "\n### JVM test report\n"
+                  f"- Tests: {totals['tests']}\n"
+                  f"- Failures: {totals['failures']}\n"
+                  f"- Errors: {totals['errors']}\n"
+                  f"- Skipped: {totals['skipped']}\n"
               )
           PY
 
