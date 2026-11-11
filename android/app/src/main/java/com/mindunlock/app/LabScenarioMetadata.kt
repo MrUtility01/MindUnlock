@@ -48,7 +48,7 @@ object LabScenarioParser {
                             else -> null
                         }
                     }
-                    value.isJsonPrimitive -> value.asString.split("\\n").map(String::trim).filter(String::isNotBlank)
+                    value.isJsonPrimitive -> value.asString.split("\n").map(String::trim).filter(String::isNotBlank)
                     else -> emptyList()
                 }
                 if (result.isNotEmpty()) return result
