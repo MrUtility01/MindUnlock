@@ -44,7 +44,7 @@ class UserDatabaseMindDumpMigrationTest {
             context,
             UserDatabase::class.java,
             databaseName
-        ).addMigrations(UserDatabase.MIGRATION_1_2, UserDatabase.MIGRATION_2_3).allowMainThreadQueries().build()
+        ).addMigrations(UserDatabase.MIGRATION_1_2, UserDatabase.MIGRATION_2_3, UserDatabase.MIGRATION_3_4).allowMainThreadQueries().build()
 
         try {
             val notes = migrated.noteDao().observeAll().first()
@@ -70,7 +70,27 @@ class UserDatabaseMindDumpMigrationTest {
             assertEquals(1L, journalId)
             assertEquals("یادداشت روزانه", journal.title)
             assertEquals("ثبت یک روز جدید", journal.body)
+
             assertEquals("calm", journal.mood)
+
+            val laterId = migrated.laterTopicDao().insert(
+                LaterTopicEntity(
+                    title = "بررسی VLANها",
+                    details = "بعد از تکمیل فصل مسیریابی بررسی شود.",
+                    priority = 1,
+                    status = "parked",
+                    sourceMindDumpId = 42L
+                )
+            )
+            val later = migrated.laterTopicDao().observeAll().first().single()
+            assertEquals(1L, laterId)
+            assertEquals("بررسی VLANها", later.title)
+            assertEquals("بعد از تکمیل فصل مسیریابی بررسی شود.", later.details)
+            assertEquals(1, later.priority)
+            assertEquals(42L, later.sourceMindDumpId)
+            migrated.laterTopicDao().updateStatus(later.id, "active")
+            assertEquals("active", migrated.laterTopicDao().observeAll().first().single().status)
+
         } finally {
             migrated.close()
         }
