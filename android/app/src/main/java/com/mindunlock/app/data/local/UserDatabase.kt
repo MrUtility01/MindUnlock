@@ -6,6 +6,8 @@ import androidx.room.Database
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import kotlinx.coroutines.flow.Flow
@@ -39,16 +41,39 @@ interface StudyTaskDao {
     @Query("DELETE FROM study_tasks WHERE id = :id") suspend fun delete(id: Long)
 }
 
-@Database(entities = [ProgressEntity::class, NoteEntity::class, BookmarkEntity::class, StudyTaskEntity::class], version = 1, exportSchema = false)
+@Dao
+interface MindDumpDao {
+    @Query("SELECT * FROM mind_dump ORDER BY updatedAt DESC")
+    fun observeAll(): Flow<List<MindDumpEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(item: MindDumpEntity): Long
+
+    @Query("UPDATE mind_dump SET status = :status, updatedAt = :updatedAt, linkedTaskId = :linkedTaskId WHERE id = :id")
+    suspend fun updateStatus(id: Long, status: String, updatedAt: Long, linkedTaskId: Long?)
+
+    @Query("DELETE FROM mind_dump WHERE id = :id")
+    suspend fun delete(id: Long)
+}
+
+@Database(entities = [ProgressEntity::class, NoteEntity::class, BookmarkEntity::class, StudyTaskEntity::class, MindDumpEntity::class], version = 2, exportSchema = false)
 abstract class UserDatabase : RoomDatabase() {
     abstract fun progressDao(): ProgressDao
     abstract fun noteDao(): NoteDao
     abstract fun bookmarkDao(): BookmarkDao
     abstract fun studyTaskDao(): StudyTaskDao
+    abstract fun mindDumpDao(): MindDumpDao
     companion object {
+        val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS mind_dump (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, content TEXT NOT NULL, category TEXT NOT NULL, status TEXT NOT NULL, createdAt INTEGER NOT NULL, updatedAt INTEGER NOT NULL, linkedTaskId INTEGER)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_mind_dump_createdAt ON mind_dump(createdAt)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_mind_dump_status ON mind_dump(status)")
+            }
+        }
         @Volatile private var instance: UserDatabase? = null
         fun getInstance(context: Context): UserDatabase = instance ?: synchronized(this) {
-            instance ?: Room.databaseBuilder(context.applicationContext, UserDatabase::class.java, "mindunlock-user.db").build().also { instance = it }
+            instance ?: Room.databaseBuilder(context.applicationContext, UserDatabase::class.java, "mindunlock-user.db").addMigrations(MIGRATION_1_2).build().also { instance = it }
         }
     }
 }
