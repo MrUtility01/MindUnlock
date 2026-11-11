@@ -214,6 +214,7 @@ private fun MindUnlockRoot(
         "labs" -> "آزمایشگاه و پروژه‌ها"
         "planner" -> "برنامه‌ریز و یادآورها"
         "progress" -> "گزارش پیشرفت"
+        "backup" -> "پشتیبان‌گیری و بازیابی"
         "bookmarks" -> "نشانک‌ها"
         "settings" -> "تنظیمات"
         "profile" -> "پروفایل یادگیری"
@@ -227,7 +228,7 @@ private fun MindUnlockRoot(
             "reader" -> previousScreen
             "chapter" -> "subject"
             "subject" -> "courses"
-            "sync", "settings", "profile", "learning", "more", "quiz", "exam", "review", "labs", "planner", "progress", "bookmarks", "inbox", "journal", "later" -> "home"
+            "sync", "settings", "profile", "learning", "more", "quiz", "exam", "review", "labs", "planner", "progress", "bookmarks", "inbox", "journal", "later", "backup" -> "home"
             else -> "home"
         }
     }
@@ -286,6 +287,7 @@ private fun MindUnlockRoot(
                 "labs" -> LabsScreen(repository.database, userDatabase, speech, onOpenItem = { uid -> selectedItem = uid; previousScreen = "labs"; screen = "reader" })
                 "planner" -> PlannerScreen(userDatabase, speech)
                 "progress" -> ProgressScreen(repository.database, userDatabase, speech)
+                "backup" -> BackupRestoreScreen(userDatabase)
                 "bookmarks" -> BookmarksScreen(repository.database, userDatabase, speech, onOpenItem = { uid -> selectedItem = uid; previousScreen = "bookmarks"; screen = "reader" })
                 "settings" -> SettingsScreen(speech, preferences, initialTheme, onThemeChange, onFontScaleChange, onLockApp, { screen = "sync" })
                 "profile" -> LearningProfileScreen(preferences)
@@ -329,6 +331,9 @@ private fun MoreScreen(onNavigate: (String) -> Unit) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ActionTile("پروفایل یادگیری", "profile", onNavigate, Modifier.weight(1f))
             ActionTile("موتور یادگیری", "learning", onNavigate, Modifier.weight(1f))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ActionTile("پشتیبان‌گیری و بازیابی", "backup", onNavigate, Modifier.weight(1f))
         }
     }
 }
