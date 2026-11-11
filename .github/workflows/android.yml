@@ -3445,7 +3445,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: android-v0.6.4-${{ github.run_number }}
-          name: MindUnlock Android 0.6.3 (#${{ github.run_number }})
+          name: MindUnlock Android 0.6.4 (#${{ github.run_number }})
           body: |
             Android Native 0.6.3 adds local learning analytics: verified-content completion, quiz accuracy, weak-topic insights, review queue counts, seven-day item-update activity, per-chapter analysis and planner task status. Journal and Mind Dump text remain excluded. It retains persistent lab checklists, structured scenarios, spaced-repetition review, the Learning Engine, Learning Profile, offline Persian speech features, and local-first personal modules.
             HTTP sync is intended for trusted local networks only.
