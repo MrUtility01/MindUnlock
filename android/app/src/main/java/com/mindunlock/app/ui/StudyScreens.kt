@@ -746,8 +746,19 @@ fun QuizScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeech, exa
                     if (isCorrect) score++
                     scoredCount++
                     scope.launch {
+                        val timestamp = System.currentTimeMillis()
                         val old = userDb.progressDao().get(item.uid) ?: ProgressEntity(item.uid, item.chapterId)
-                        userDb.progressDao().upsert(old.copy(attempts = old.attempts + 1, correct = old.correct + if (isCorrect) 1 else 0, wrong = old.wrong + if (isCorrect) 0 else 1, lastResult = if (isCorrect) "correct" else "wrong", updatedAt = System.currentTimeMillis()))
+                        val schedule = ReviewScheduler.schedule(if (isCorrect) 4 else 0, old.intervalDays, timestamp)
+                        userDb.progressDao().upsert(old.copy(
+                            attempts = old.attempts + 1,
+                            correct = old.correct + if (isCorrect) 1 else 0,
+                            wrong = old.wrong + if (isCorrect) 0 else 1,
+                            quality = if (isCorrect) 4 else 0,
+                            intervalDays = schedule.intervalDays,
+                            dueAt = schedule.dueAt,
+                            lastResult = if (isCorrect) "correct" else "wrong",
+                            updatedAt = timestamp
+                        ))
                     }
                 }
                 if (examMode) {
