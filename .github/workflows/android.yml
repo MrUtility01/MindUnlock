@@ -2526,6 +2526,72 @@ jobs:
           path: effective-android-source-manifest.txt
           if-no-files-found: error
 
+      - name: Compare effective source with tracked Android tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib
+          import os
+
+          def collect(root):
+              result = {}
+              for path in sorted(root.rglob("*")):
+                  if not path.is_file():
+                      continue
+                  rel = path.relative_to(root)
+                  if any(part in {".gradle", "build", ".git"} for part in rel.parts):
+                      continue
+                  result[rel.as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()
+              return result
+
+          tracked = collect(Path("android"))
+          effective = collect(Path("android-build"))
+          same = sorted(p for p in tracked.keys() & effective.keys() if tracked[p] == effective[p])
+          different = sorted(p for p in tracked.keys() & effective.keys() if tracked[p] != effective[p])
+          only_tracked = sorted(tracked.keys() - effective.keys())
+          only_effective = sorted(effective.keys() - tracked.keys())
+
+          lines = [
+              "MindUnlock Android source comparison",
+              "repository=MrUtility01/MindUnlock",
+              f"commit={os.environ.get('GITHUB_SHA', '')}",
+              "comparison=tracked android/ vs effective android-build/",
+              "excluded=.gradle/, build/, .git/",
+              f"tracked_files={len(tracked)}",
+              f"effective_files={len(effective)}",
+              f"identical={len(same)}",
+              f"different_content={len(different)}",
+              f"only_in_tracked_android={len(only_tracked)}",
+              f"only_in_effective_build={len(only_effective)}",
+              "",
+              "[DIFFERENT CONTENT]",
+              *different,
+              "",
+              "[ONLY IN TRACKED android/]",
+              *only_tracked,
+              "",
+              "[ONLY IN EFFECTIVE android-build/]",
+              *only_effective,
+          ]
+          Path("android-source-comparison.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
+          print("\n".join(lines))
+          PY
+          {
+            echo "### Android source comparison"
+            echo
+            echo 'See the source-comparison artifact for the full file list.'
+            grep -E '^(tracked_files|effective_files|identical|different_content|only_in_tracked_android|only_in_effective_build)=' android-source-comparison.txt
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload Android source comparison
+        uses: actions/upload-artifact@v4
+        with:
+          name: MindUnlock-source-comparison-\${{ github.run_number }}
+          path: android-source-comparison.txt
+          if-no-files-found: error
+
       - name: Run JVM unit tests
         working-directory: android-build
         run: ./gradlew testDebugUnitTest --stacktrace
