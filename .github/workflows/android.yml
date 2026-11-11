@@ -2631,7 +2631,7 @@ jobs:
       - name: Upload effective Android source snapshot
         uses: actions/upload-artifact@v4
         with:
-          name: MindUnlock-effective-source-snapshot-\${{ github.run_number }}
+          name: MindUnlock-effective-source-snapshot-${{ github.run_number }}
           path: effective-android-source-snapshot.zip
           if-no-files-found: error
           retention-days: 30
