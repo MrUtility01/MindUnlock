@@ -13,6 +13,14 @@ import com.mindunlock.app.data.local.NoteEntity
 import com.mindunlock.app.data.local.ProgressEntity
 import com.mindunlock.app.data.local.StudyTaskEntity
 import java.security.MessageDigest
+import java.security.SecureRandom
+import java.util.Base64
+import javax.crypto.AEADBadTagException
+import javax.crypto.Cipher
+import javax.crypto.SecretKeyFactory
+import javax.crypto.spec.GCMParameterSpec
+import javax.crypto.spec.PBEKeySpec
+import javax.crypto.spec.SecretKeySpec
 
 data class UserDataBackupPayload(
     val progress: List<ProgressEntity> = emptyList(),
@@ -56,6 +64,82 @@ object UserDataBackupCodec {
             addProperty("sha256", sha256(payloadJson.toString()))
         }
         return gson.toJson(root)
+    }
+
+    private const val ENCRYPTED_FORMAT = "mindunlock-encrypted-backup-v1"
+    private const val PBKDF2_ITERATIONS = 210_000
+    private const val KEY_BITS = 256
+    private const val GCM_TAG_BITS = 128
+
+    fun encrypt(plainJson: String, password: CharArray): String {
+        require(password.size >= 8) { "گذرواژه پشتیبان باید حداقل ۸ نویسه باشد." }
+        val salt = ByteArray(16).also { SecureRandom().nextBytes(it) }
+        val iv = ByteArray(12).also { SecureRandom().nextBytes(it) }
+        val key = deriveKey(password, salt)
+        return try {
+            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+            cipher.init(Cipher.ENCRYPT_MODE, SecretKeySpec(key, "AES"), GCMParameterSpec(GCM_TAG_BITS, iv))
+            val encrypted = cipher.doFinal(plainJson.toByteArray(Charsets.UTF_8))
+            gson.toJson(JsonObject().apply {
+                addProperty("format", ENCRYPTED_FORMAT)
+                addProperty("kdf", "PBKDF2WithHmacSHA256")
+                addProperty("iterations", PBKDF2_ITERATIONS)
+                addProperty("cipher", "AES-256-GCM")
+                addProperty("salt", Base64.getEncoder().encodeToString(salt))
+                addProperty("iv", Base64.getEncoder().encodeToString(iv))
+                addProperty("ciphertext", Base64.getEncoder().encodeToString(encrypted))
+            })
+        } finally {
+            key.fill(0)
+            password.fill(Char.MIN_VALUE)
+        }
+    }
+
+    fun decryptIfEncrypted(input: String, password: CharArray): String {
+        val root = runCatching { JsonParser.parseString(input).asJsonObject }
+            .getOrElse { password.fill(Char.MIN_VALUE); return input }
+        if (root.get("format")?.takeIf { it.isJsonPrimitive }?.asString != ENCRYPTED_FORMAT) {
+            password.fill(Char.MIN_VALUE)
+            return input
+        }
+        require(password.size >= 8) { "برای بازکردن این پشتیبان، گذرواژه حداقل ۸ نویسه‌ای را وارد کن." }
+        val iterations = root.get("iterations")?.asInt ?: 0
+        require(iterations in 100_000..500_000) { "پارامتر مشتق‌سازی کلید در فایل معتبر نیست." }
+        val salt = decodeBase64(root, "salt", 16)
+        val iv = decodeBase64(root, "iv", 12)
+        val ciphertext = decodeBase64(root, "ciphertext", 25 * 1024 * 1024)
+        require(iv.size == 12 && salt.size == 16 && ciphertext.size >= 16) { "ساختار داده رمزگذاری‌شده ناقص است." }
+        val key = deriveKey(password, salt, iterations)
+        return try {
+            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+            cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(key, "AES"), GCMParameterSpec(GCM_TAG_BITS, iv))
+            String(cipher.doFinal(ciphertext), Charsets.UTF_8)
+        } catch (_: AEADBadTagException) {
+            throw IllegalArgumentException("گذرواژه اشتباه است یا فایل رمزگذاری‌شده دستکاری شده است.")
+        } catch (error: Exception) {
+            throw IllegalArgumentException("بازکردن پشتیبان رمزگذاری‌شده ناموفق بود: " + (error.message ?: "خطای رمزنگاری"))
+        } finally {
+            key.fill(0)
+            password.fill(Char.MIN_VALUE)
+        }
+    }
+
+    private fun decodeBase64(root: JsonObject, field: String, maxBytes: Int): ByteArray {
+        val encoded = root.get(field)?.takeIf { it.isJsonPrimitive }?.asString
+            ?: throw IllegalArgumentException("فیلد رمزگذاری «" + field + "» وجود ندارد.")
+        require(encoded.length <= maxBytes * 2) { "فیلد رمزگذاری بیش از حد بزرگ است." }
+        return runCatching { Base64.getDecoder().decode(encoded) }
+            .getOrElse { throw IllegalArgumentException("فیلد رمزگذاری «" + field + "» خراب است.") }
+            .also { require(it.size <= maxBytes) { "داده رمزگذاری‌شده بیش از حد بزرگ است." } }
+    }
+
+    private fun deriveKey(password: CharArray, salt: ByteArray, iterations: Int = PBKDF2_ITERATIONS): ByteArray {
+        val spec = PBEKeySpec(password, salt, iterations, KEY_BITS)
+        return try {
+            SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(spec).encoded
+        } finally {
+            spec.clearPassword()
+        }
     }
 
     fun decode(json: String): UserDataBackupDocument {
