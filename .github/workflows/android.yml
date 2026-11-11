@@ -2783,6 +2783,40 @@ jobs:
         working-directory: android-build
         run: ./gradlew testDebugUnitTest --stacktrace
 
+      - name: Verify JVM test report is non-empty
+        working-directory: android-build
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+
+          reports = sorted(Path("app/build/test-results/testDebugUnitTest").glob("TEST-*.xml"))
+          if not reports:
+              raise SystemExit("No JVM JUnit XML reports were generated; refusing a false-green test run.")
+
+          totals = {"tests": 0, "failures": 0, "errors": 0, "skipped": 0}
+          for report in reports:
+              root = ET.parse(report).getroot()
+              for key in totals:
+                  totals[key] += int(root.attrib.get(key, 0))
+
+          print("JVM test report totals:", totals)
+          if totals["tests"] < 1:
+              raise SystemExit("Zero tests were executed.")
+          if totals["failures"] or totals["errors"]:
+              raise SystemExit("JVM test report contains failures or errors.")
+          with open(__import__("os").environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+              summary.write(
+                  "\\n### JVM test report\\n"
+                  f"- Tests: {totals['tests']}\\n"
+                  f"- Failures: {totals['failures']}\\n"
+                  f"- Errors: {totals['errors']}\\n"
+                  f"- Skipped: {totals['skipped']}\\n"
+              )
+          PY
+
       - name: Build Debug APK
         working-directory: android-build
         run: ./gradlew assembleDebug --stacktrace
