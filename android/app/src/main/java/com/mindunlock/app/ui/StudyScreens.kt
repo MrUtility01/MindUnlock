@@ -580,58 +580,109 @@ fun ReaderScreen(db: AppDatabase, userDb: UserDatabase, itemUid: String, speech:
 
 @Composable
 fun FlashcardsScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeech, preferences: android.content.SharedPreferences, reviewOnly: Boolean = false) {
-    val all by db.contentItemDao().observeByTypes(listOf("flashcard")).collectAsState(initial = emptyList())
+    val all by db.contentItemDao().observeByTypes(listOf("flashcard", "question", "quiz", "exercise", "practice")).collectAsState(initial = emptyList())
     val progress by userDb.progressDao().observeAll().collectAsState(initial = emptyList())
-    val cards = all.filter { it.sourceStatus == "verified" }
+    val flashcards = all.filter { it.type == "flashcard" && it.sourceStatus == "verified" }
+    val reviewCandidates = all.filter { item ->
+        if (item.sourceStatus != "verified") return@filter false
+        if (item.type == "flashcard") return@filter true
+        val meta = runCatching { JsonParser.parseString(item.metadataJson ?: "{}").asJsonObject }.getOrNull()
+        val options = readStringArray(item.optionsJson ?: meta?.get("options")?.toString())
+        val correct = meta?.get("correct_index")?.let { runCatching { it.asInt }.getOrNull() }
+        item.type in setOf("question", "quiz", "exercise", "practice") &&
+            options.isNotEmpty() && correct != null && correct in options.indices
+    }
     val now = System.currentTimeMillis()
-    val deck = if (reviewOnly) cards.filter { card -> progress.firstOrNull { it.itemUid == card.uid }?.dueAt?.let { it <= now } ?: true } else cards
+    val dueCandidates = reviewCandidates.filter { item ->
+        progress.firstOrNull { it.itemUid == item.uid }?.dueAt?.let { it <= now } ?: true
+    }
+    val weakCount = reviewCandidates.count { item ->
+        val record = progress.firstOrNull { it.itemUid == item.uid }
+        record != null && (record.wrong > record.correct || record.quality < 3)
+    }
+    val deck = if (reviewOnly) dueCandidates else flashcards
     var index by rememberSaveable(reviewOnly) { mutableIntStateOf(0) }
     var flipped by rememberSaveable(reviewOnly) { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val current = deck.getOrNull(index)
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Text(if (reviewOnly) "مرور سررسیدشده" else "دستهٔ فلش‌کارت‌ها", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        Text(if (reviewOnly) "مرور هوشمند روزانه" else "دستهٔ فلش‌کارت‌ها", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            MetricCard("کارت‌ها", cards.size.toString(), Modifier.weight(1f))
-            MetricCard("امروز", cards.count { card -> progress.firstOrNull { it.itemUid == card.uid }?.dueAt?.let { it <= now } ?: true }.toString(), Modifier.weight(1f))
+            MetricCard(if (reviewOnly) "موارد سررسیدشده" else "فلش‌کارت‌ها", if (reviewOnly) dueCandidates.size.toString() else flashcards.size.toString(), Modifier.weight(1f))
+            MetricCard("نیازمند تقویت", weakCount.toString(), Modifier.weight(1f))
+        }
+        if (reviewOnly) {
+            Text("پرسش‌های دارای کلید پاسخ و فلش‌کارت‌ها در یک صف مرور قرار می‌گیرند. پاسخ اشتباه پس از ۱۰ دقیقه دوباره سررسید می‌شود.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         if (current == null) {
-            EmptyMessage(if (reviewOnly && cards.isNotEmpty()) "مرور امروز تمام شد. کارت‌های بعدی طبق برنامه در روزهای آینده نمایش داده می‌شوند." else "هنوز فلش‌کارتی دریافت نشده است.")
+            EmptyMessage(
+                if (reviewOnly && reviewCandidates.isNotEmpty()) "مرورهای سررسیدشده تمام شدند. موارد بعدی طبق فاصله‌گذاری در زمان مقرر نمایش داده می‌شوند."
+                else if (reviewOnly) "هنوز فلش‌کارت یا پرسش چهارگزینه‌ای معتبر برای مرور وجود ندارد."
+                else "هنوز فلش‌کارتی دریافت نشده است."
+            )
         } else {
             Text("${index + 1} از ${deck.size}", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium)
             LinearProgressIndicator(progress = { (index + 1f) / deck.size.coerceAtLeast(1) }, modifier = Modifier.fillMaxWidth())
             val meta = runCatching { JsonParser.parseString(current.metadataJson ?: "{}").asJsonObject }.getOrNull()
-            val back = meta?.get("back")?.let { runCatching { it.asString }.getOrNull() }.orEmpty().ifBlank { current.summary ?: current.content.orEmpty() }
+            val isFlashcard = current.type == "flashcard"
+            val options = readStringArray(current.optionsJson ?: meta?.get("options")?.toString())
+            val correctIndex = meta?.get("correct_index")?.let { runCatching { it.asInt }.getOrNull() }
+            val explanation = meta?.get("explanation")?.let { runCatching { it.asString }.getOrNull() }.orEmpty()
+            val back = if (isFlashcard) {
+                meta?.get("back")?.let { runCatching { it.asString }.getOrNull() }.orEmpty()
+                    .ifBlank { current.summary ?: current.content.orEmpty() }
+            } else {
+                val answerText = correctIndex?.let { options.getOrNull(it) }.orEmpty()
+                buildString {
+                    append("پاسخ صحیح: ")
+                    append(answerText)
+                    if (explanation.isNotBlank()) {
+                        append("\n\nتوضیح: ")
+                        append(explanation)
+                    }
+                }
+            }
             Card(onClick = { flipped = !flipped }, modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
                 Column(Modifier.fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(18.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(if (flipped) "پاسخ" else "پرسش", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium)
-                    Text(cleanHtml(if (flipped) back else current.title ?: current.summary ?: ""), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
-                    Text(if (flipped) "برای بازگشت به روی کارت لمس کن" else "برای دیدن پاسخ لمس کن", style = MaterialTheme.typography.bodySmall)
+                    Text(if (flipped) "پاسخ" else "یادآوری فعال · پرسش", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium)
+                    Text(cleanHtml(if (flipped) back else current.title ?: current.summary ?: current.content.orEmpty()), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                    Text(if (flipped) "برای بازگشت به روی کارت لمس کن" else "ابتدا پاسخ را در ذهن بازیابی کن؛ سپس کارت را برگردان.", style = MaterialTheme.typography.bodySmall)
                 }
             }
             val old = progress.firstOrNull { it.itemUid == current.uid }
-            Text("مرورهای قبلی: ${old?.attempts ?: 0} · فاصلهٔ فعلی: ${old?.intervalDays ?: 0} روز", style = MaterialTheme.typography.labelSmall)
+            Text("تلاش‌ها: ${old?.attempts ?: 0} · درست: ${old?.correct ?: 0} · اشتباه: ${old?.wrong ?: 0} · فاصله: ${old?.intervalDays ?: 0} روز", style = MaterialTheme.typography.labelSmall)
             OutlinedButton(onClick = { speech.speak(cleanHtml(current.title.orEmpty() + ". " + current.content.orEmpty()), preferences.getFloat("speech_rate", 1f), preferences.getString("speech_voice", "gyro")) }, enabled = speech.ready.value) { Icon(Icons.Default.PlayArrow, null); Text("شنیدن کارت") }
             if (flipped) {
-                Text("کیفیت یادآوری را انتخاب کن", fontWeight = FontWeight.SemiBold)
+                Text("کیفیت یادآوری را صادقانه ارزیابی کن", fontWeight = FontWeight.SemiBold)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     listOf("دوباره" to 0, "سخت" to 3, "خوب" to 4, "آسان" to 5).forEach { (label, quality) ->
                         FilledTonalButton(onClick = {
                             scope.launch {
-                                val prev = userDb.progressDao().get(current.uid) ?: ProgressEntity(current.uid, current.chapterId)
-                                val nextInterval = when {
-                                    quality < 3 -> 1
-                                    prev.intervalDays == 0 -> 1
-                                    prev.intervalDays == 1 -> 3
-                                    else -> (prev.intervalDays * if (quality == 5) 3.0 else 2.2).roundToInt().coerceAtMost(180)
-                                }
-                                userDb.progressDao().upsert(prev.copy(attempts = prev.attempts + 1, quality = quality, intervalDays = nextInterval, dueAt = System.currentTimeMillis() + nextInterval * 86_400_000L, lastResult = "reviewed", updatedAt = System.currentTimeMillis()))
+                                val timestamp = System.currentTimeMillis()
+                                val previous = userDb.progressDao().get(current.uid) ?: ProgressEntity(current.uid, current.chapterId)
+                                val schedule = ReviewScheduler.schedule(quality, previous.intervalDays, timestamp)
+                                userDb.progressDao().upsert(previous.copy(
+                                    attempts = previous.attempts + 1,
+                                    correct = previous.correct + if (quality >= 3) 1 else 0,
+                                    wrong = previous.wrong + if (quality < 3) 1 else 0,
+                                    quality = quality,
+                                    intervalDays = schedule.intervalDays,
+                                    dueAt = schedule.dueAt,
+                                    lastResult = when (quality) {
+                                        0 -> "review_again"
+                                        3 -> "review_hard"
+                                        4 -> "review_good"
+                                        else -> "review_easy"
+                                    },
+                                    updatedAt = timestamp
+                                ))
                                 if (!reviewOnly) index = (index + 1).coerceAtMost(deck.size)
                                 flipped = false
                             }
                         }, modifier = Modifier.weight(1f)) { Text(label) }
                     }
                 }
+                Text("دوباره: ۱۰ دقیقه · سخت: فاصله کوتاه · خوب: فاصله استاندارد · آسان: فاصله طولانی‌تر", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             if (!reviewOnly) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 OutlinedButton(onClick = { index = (index - 1).coerceAtLeast(0); flipped = false }, enabled = index > 0) { Text("قبلی") }
