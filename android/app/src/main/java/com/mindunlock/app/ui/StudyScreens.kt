@@ -589,7 +589,7 @@ fun FlashcardsScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeec
         val meta = runCatching { JsonParser.parseString(item.metadataJson ?: "{}").asJsonObject }.getOrNull()
         val options = readStringArray(item.optionsJson ?: meta?.get("options")?.toString())
         val correct = meta?.get("correct_index")?.let { runCatching { it.asInt }.getOrNull() }
-        item.type in setOf("question", "quiz", "exercise", "practice") &&
+        item.type?.let { it in setOf("question", "quiz", "exercise", "practice") } == true &&
             options.isNotEmpty() && correct != null && correct in options.indices
     }
     val now = System.currentTimeMillis()
