@@ -2588,7 +2588,7 @@ jobs:
       - name: Upload Android source comparison
         uses: actions/upload-artifact@v4
         with:
-          name: MindUnlock-source-comparison-\${{ github.run_number }}
+          name: MindUnlock-source-comparison-${{ github.run_number }}
           path: android-source-comparison.txt
           if-no-files-found: error
 
