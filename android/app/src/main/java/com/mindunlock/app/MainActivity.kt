@@ -26,9 +26,6 @@ import java.util.concurrent.atomic.AtomicBoolean
 import androidx.compose.foundation.layout.fillMaxWidth
 
 import android.os.Bundle
-import android.app.Activity
-import android.content.Intent
-import android.speech.RecognizerIntent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.filled.Mic
@@ -203,17 +200,6 @@ private fun MindUnlockRoot(
     var selectedChapter by rememberSaveable { mutableStateOf("") }
     var selectedItem by rememberSaveable { mutableStateOf("") }
     val scope = rememberCoroutineScope()
-    val voiceCaptureLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
-            val spokenText = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()?.trim().orEmpty()
-            if (spokenText.isNotBlank()) {
-                scope.launch {
-                    userDatabase.mindDumpDao().insert(MindDumpEntity(content = spokenText, category = "thought"))
-                    screen = "inbox"
-                }
-            }
-        }
-    }
     val title = when (screen) {
         "subject" -> "موضوع‌ها"
         "chapter" -> "فصل‌ها"
@@ -259,14 +245,12 @@ private fun MindUnlockRoot(
                 actions = {
                     IconButton(onClick = { speech.speak("صفحه $title") }) { Icon(Icons.Default.VolumeUp, contentDescription = "خواندن عنوان صفحه") }
                     IconButton(onClick = { speech.stop() }) { Icon(Icons.Default.Stop, contentDescription = "توقف صدا") }
-                    IconButton(onClick = {
-                        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "fa-IR")
-                            putExtra(RecognizerIntent.EXTRA_PROMPT, "صحبت کن؛ متن در صندوق ورودی ذخیره می‌شود")
+                    PersianVoiceInputButton(compact = true) { spokenText ->
+                        scope.launch {
+                            userDatabase.mindDumpDao().insert(MindDumpEntity(content = spokenText, category = "thought"))
+                            screen = "inbox"
                         }
-                        runCatching { voiceCaptureLauncher.launch(intent) }
-                    }) { Icon(Icons.Default.Mic, contentDescription = "ثبت صوتی در صندوق ورودی") }
+                    }
                     if (screen == "home") IconButton(onClick = { screen = "sync" }) { Icon(Icons.Default.CloudDownload, contentDescription = "اتصال به ویندوز") }
                     IconButton(onClick = onLockApp) { Icon(Icons.Default.Lock, contentDescription = "قفل برنامه") }
                     IconButton(onClick = { screen = "settings" }) { Icon(Icons.Default.Settings, contentDescription = "تنظیمات") }
@@ -345,7 +329,7 @@ private fun MoreScreen(onNavigate: (String) -> Unit) {
 
 
 @Composable
-fun PersianVoiceInputButton(onText: (String) -> Unit) {
+fun PersianVoiceInputButton(compact: Boolean = false, onText: (String) -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val stopSignal = remember { AtomicBoolean(false) }
@@ -389,39 +373,46 @@ fun PersianVoiceInputButton(onText: (String) -> Unit) {
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Button(
-                onClick = {
-                    if (recording) {
-                        stopSignal.set(true)
-                        status = "در حال پردازش گفتار ضبط‌شده..."
-                    } else if (!busy) {
-                        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-                            stopSignal.set(false)
-                            recording = true
-                            busy = true
-                            job = scope.launch {
-                                try {
-                                    val transcript = OfflinePersianSpeech.transcribe(context, stopSignal) { message -> status = message }
-                                    if (transcript.isNotBlank()) {
-                                        onText(transcript)
-                                        status = "متن فارسی به فیلد اضافه شد."
-                                    } else status = "گفتاری تشخیص داده نشد؛ دوباره امتحان کن."
-                                } catch (error: Exception) {
-                                    status = "خطای تشخیص آفلاین: ${error.message ?: "نامشخص"}"
-                                } finally {
-                                    recording = false
-                                    busy = false
+            val handleVoiceClick: () -> Unit = {
+                if (recording) {
+                    stopSignal.set(true)
+                    status = "در حال پردازش گفتار ضبط‌شده..."
+                } else if (!busy) {
+                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                        stopSignal.set(false)
+                        recording = true
+                        busy = true
+                        job = scope.launch {
+                            try {
+                                val transcript = OfflinePersianSpeech.transcribe(context, stopSignal) { message ->
+                                    android.os.Handler(android.os.Looper.getMainLooper()).post { status = message }
                                 }
+                                if (transcript.isNotBlank()) {
+                                    onText(transcript)
+                                    status = "متن فارسی به فیلد اضافه شد."
+                                } else status = "گفتاری تشخیص داده نشد؛ دوباره امتحان کن."
+                            } catch (error: Exception) {
+                                status = "خطای تشخیص آفلاین: ${error.message ?: "نامشخص"}"
+                            } finally {
+                                recording = false
+                                busy = false
                             }
-                        } else permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                    }
-                },
-                enabled = !busy || recording
-            ) {
-                if (busy && !recording) CircularProgressIndicator(modifier = Modifier.width(18.dp), strokeWidth = 2.dp)
-                else Icon(Icons.Default.Mic, contentDescription = null)
-                Spacer(Modifier.width(6.dp))
-                Text(when { recording -> "پایان ضبط"; busy -> "آماده‌سازی مدل"; else -> "گفتار آفلاین" })
+                        }
+                    } else permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                }
+            }
+            if (compact) {
+                IconButton(onClick = handleVoiceClick, enabled = !busy || recording) {
+                    if (busy && !recording) CircularProgressIndicator(modifier = Modifier.width(18.dp), strokeWidth = 2.dp)
+                    else Icon(if (recording) Icons.Default.Stop else Icons.Default.Mic, contentDescription = "تشخیص گفتار فارسی آفلاین")
+                }
+            } else {
+                Button(onClick = handleVoiceClick, enabled = !busy || recording) {
+                    if (busy && !recording) CircularProgressIndicator(modifier = Modifier.width(18.dp), strokeWidth = 2.dp)
+                    else Icon(if (recording) Icons.Default.Stop else Icons.Default.Mic, contentDescription = null)
+                    Spacer(Modifier.width(6.dp))
+                    Text(when { recording -> "پایان ضبط"; busy -> "آماده‌سازی مدل"; else -> "گفتار آفلاین" })
+                }
             }
             if (recording) {
                 OutlinedButton(onClick = { stopSignal.set(true); status = "در حال پردازش..." }) {
@@ -430,7 +421,7 @@ fun PersianVoiceInputButton(onText: (String) -> Unit) {
                 }
             }
         }
-        Text(status, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (!compact) Text(status, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
