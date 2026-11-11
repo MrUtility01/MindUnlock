@@ -2974,6 +2974,7 @@ jobs:
             app/src/main/java/com/mindunlock/app/LearningPathPolicy.kt \
             app/src/main/java/com/mindunlock/app/ReviewScheduler.kt \
             app/src/main/java/com/mindunlock/app/LabScenarioMetadata.kt \
+            app/src/main/java/com/mindunlock/app/LearningAnalytics.kt \
             app/src/main/AndroidManifest.xml \
             app/src/main/java/com/mindunlock/app/data/local/Entities.kt \
             app/src/main/java/com/mindunlock/app/data/local/UserDatabase.kt \
@@ -2981,7 +2982,8 @@ jobs:
             app/src/test/java/com/mindunlock/app/data/local/UserDatabaseMindDumpMigrationTest.kt \
             app/src/test/java/com/mindunlock/app/LearningPathPolicyTest.kt \
             app/src/test/java/com/mindunlock/app/ReviewSchedulerTest.kt \
-            app/src/test/java/com/mindunlock/app/LabScenarioParserTest.kt
+            app/src/test/java/com/mindunlock/app/LabScenarioParserTest.kt \
+            app/src/test/java/com/mindunlock/app/LearningAnalyticsTest.kt
           do
             test -f "android/$relative"
             mkdir -p "android-build/$(dirname "$relative")"
