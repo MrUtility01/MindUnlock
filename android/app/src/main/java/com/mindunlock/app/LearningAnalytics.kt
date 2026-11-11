@@ -4,6 +4,7 @@ import com.mindunlock.app.data.local.ChapterEntity
 import com.mindunlock.app.data.local.ContentItemEntity
 import com.mindunlock.app.data.local.ProgressEntity
 import com.mindunlock.app.data.local.StudyTaskEntity
+import com.mindunlock.app.data.local.LearningSessionEntity
 import com.google.gson.JsonParser
 import java.time.Instant
 import java.time.LocalDate
@@ -25,7 +26,9 @@ data class ChapterLearningStats(
 data class RecentLearningDay(
     val date: LocalDate,
     val label: String,
-    val updatedItems: Int
+    val updatedItems: Int,
+    val sessionMinutes: Long,
+    val sessions: Int
 )
 
 data class LearningAnalyticsSnapshot(
@@ -40,6 +43,9 @@ data class LearningAnalyticsSnapshot(
     val openTasks: Int,
     val overdueTasks: Int,
     val completedTasks: Int,
+    val totalStudyMinutes: Long,
+    val completedSessions: Int,
+    val averageSessionMinutes: Long,
     val chapters: List<ChapterLearningStats>,
     val recentActivity: List<RecentLearningDay>
 )
@@ -52,6 +58,7 @@ object LearningAnalytics {
         items: List<ContentItemEntity>,
         progress: List<ProgressEntity>,
         tasks: List<StudyTaskEntity>,
+        sessions: List<LearningSessionEntity>,
         now: Long,
         zone: ZoneId = ZoneId.systemDefault()
     ): LearningAnalyticsSnapshot {
@@ -91,12 +98,23 @@ object LearningAnalytics {
         }.sortedWith(compareBy<ChapterLearningStats> { !it.needsPractice }.thenBy { it.accuracyPercent }.thenBy { it.title })
 
         val today = Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
+        val completedSessions = sessions.filter { it.endedAt != null }
+        val totalStudyMinutes = completedSessions.sumOf { it.durationSeconds.coerceAtLeast(0L) } / 60L
         val recent = (6 downTo 0).map { offset ->
             val date = today.minusDays(offset.toLong())
             val count = records.count { record ->
                 Instant.ofEpochMilli(record.updatedAt).atZone(zone).toLocalDate() == date
             }
-            RecentLearningDay(date, persianWeekday(date.dayOfWeek.value), count)
+            val daySessions = completedSessions.filter { session ->
+                Instant.ofEpochMilli(session.startedAt).atZone(zone).toLocalDate() == date
+            }
+            RecentLearningDay(
+                date = date,
+                label = persianWeekday(date.dayOfWeek.value),
+                updatedItems = count,
+                sessionMinutes = daySessions.sumOf { it.durationSeconds.coerceAtLeast(0L) } / 60L,
+                sessions = daySessions.size
+            )
         }
         val open = tasks.filterNot { it.completed }
         return LearningAnalyticsSnapshot(
@@ -111,6 +129,9 @@ object LearningAnalytics {
             openTasks = open.size,
             overdueTasks = open.count { it.dueAt != null && it.dueAt < now },
             completedTasks = tasks.count { it.completed },
+            totalStudyMinutes = totalStudyMinutes,
+            completedSessions = completedSessions.size,
+            averageSessionMinutes = if (completedSessions.isEmpty()) 0L else totalStudyMinutes / completedSessions.size,
             chapters = chapterStats,
             recentActivity = recent
         )
