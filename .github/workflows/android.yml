@@ -3012,6 +3012,7 @@ jobs:
               val journalEntries by userDb.journalEntryDao().observeAll().collectAsState(initial = emptyList())
               var quickCapture by rememberSaveable { mutableStateOf("") }
               var captureMessage by remember { mutableStateOf("") }
+              val scope = rememberCoroutineScope()
               val completed = progress.count { it.completed }
               val pendingTasks = tasks.count { !it.completed }
               val inboxCount = inboxEntries.count { it.status == "inbox" }
