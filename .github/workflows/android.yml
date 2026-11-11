@@ -2527,9 +2527,10 @@ jobs:
           mkdir -p "$TEST_DIR"
           cat > "$TEST_DIR/LegacyDatabaseMigratorTest.kt" <<'EOF'
           package com.mindunlock.app.data.local
-
+          
           import android.database.sqlite.SQLiteDatabase
           import androidx.room.Room
+          import androidx.sqlite.db.SupportSQLiteDatabase
           import kotlinx.coroutines.runBlocking
           import org.junit.After
           import org.junit.Assert.assertEquals
@@ -2540,14 +2541,14 @@ jobs:
           import org.robolectric.RobolectricTestRunner
           import org.robolectric.RuntimeEnvironment
           import org.robolectric.annotation.Config
-
+          
           @RunWith(RobolectricTestRunner::class)
           @Config(sdk = [35])
           class LegacyDatabaseMigratorTest {
               private val context = RuntimeEnvironment.getApplication()
               private lateinit var content: AppDatabase
               private lateinit var user: UserDatabase
-
+          
               @Before
               fun setUp() {
                   context.deleteDatabase("mindunlock.db")
@@ -2558,52 +2559,169 @@ jobs:
                   user = Room.inMemoryDatabaseBuilder(context, UserDatabase::class.java)
                       .allowMainThreadQueries().build()
               }
-
+          
               @After
               fun tearDown() {
                   content.close()
                   user.close()
                   context.deleteDatabase("mindunlock.db")
               }
-
+          
               @Test
-              fun copiesLegacyChapterAndMarksMigrationComplete() = runBlocking {
+              fun migratesAllEightTablesPreservesValuesAndSkipsRepeatRun() = runBlocking {
                   val legacyFile = context.getDatabasePath("mindunlock.db")
                   legacyFile.parentFile?.mkdirs()
                   val source = SQLiteDatabase.openOrCreateDatabase(legacyFile, null)
                   try {
-                      source.execSQL(
-                          """CREATE TABLE chapters (
-                              id TEXT NOT NULL PRIMARY KEY,
-                              title TEXT NOT NULL,
-                              orderIndex INTEGER NOT NULL,
-                              groupName TEXT,
-                              description TEXT,
-                              itemCount INTEGER NOT NULL,
-                              contentHash TEXT,
-                              rawJson TEXT,
-                              syncedAt INTEGER NOT NULL
-                          )"""
-                      )
-                      source.execSQL(
-                          """INSERT INTO chapters
-                              (id, title, orderIndex, groupName, description, itemCount, contentHash, rawJson, syncedAt)
-                              VALUES ('chapter-test', 'فصل آزمایشی', 7, 'مبانی', 'شرح آزمایشی', 3, 'hash-1', '{}', 123456789)"""
-                      )
+                      source.execSQL("""CREATE TABLE chapters (
+                          id TEXT NOT NULL PRIMARY KEY, title TEXT NOT NULL, orderIndex INTEGER NOT NULL,
+                          groupName TEXT, description TEXT, itemCount INTEGER NOT NULL, contentHash TEXT,
+                          rawJson TEXT, syncedAt INTEGER NOT NULL
+                      )""")
+                      source.execSQL("""INSERT INTO chapters VALUES
+                          ('chapter-test', 'فصل آزمایشی', 7, 'مبانی', 'شرح فصل', 1, 'chapter-hash', '{}', 101)""")
+          
+                      source.execSQL("""CREATE TABLE content_items (
+                          uid TEXT NOT NULL PRIMARY KEY, chapterId TEXT NOT NULL, type TEXT, title TEXT,
+                          summary TEXT, content TEXT, orderIndex INTEGER NOT NULL, optionsJson TEXT,
+                          answer TEXT, explanation TEXT, metadataJson TEXT,
+                          sourceStatus TEXT NOT NULL DEFAULT 'verified', rawJson TEXT
+                      )""")
+                      source.execSQL("""INSERT INTO content_items VALUES
+                          ('item-test', 'chapter-test', 'lesson', 'عنوان محتوا', 'خلاصه', 'متن کامل',
+                          2, '[]', 'پاسخ', 'توضیح', '{}', 'verified', '{"origin":"legacy"}')""")
+          
+                      source.execSQL("""CREATE TABLE server_config (
+                          id INTEGER NOT NULL PRIMARY KEY, host TEXT NOT NULL, port INTEGER NOT NULL,
+                          lastConnectedAt INTEGER
+                      )""")
+                      source.execSQL("INSERT INTO server_config VALUES (1, '192.168.1.20', 8080, 20261111)")
+          
+                      source.execSQL("""CREATE TABLE media_cache (
+                          relativePath TEXT NOT NULL PRIMARY KEY, localPath TEXT NOT NULL,
+                          sha256 TEXT NOT NULL, size INTEGER NOT NULL, downloadedAt INTEGER NOT NULL
+                      )""")
+                      source.execSQL("""INSERT INTO media_cache VALUES
+                          ('images/one.webp', '/cache/one.webp', 'media-sha256', 4096, 20261110)""")
+          
+                      source.execSQL("""CREATE TABLE progress (
+                          itemUid TEXT NOT NULL PRIMARY KEY, chapterId TEXT NOT NULL,
+                          completed INTEGER NOT NULL, completedAt INTEGER, attempts INTEGER NOT NULL,
+                          correct INTEGER NOT NULL, wrong INTEGER NOT NULL, lastResult TEXT,
+                          quality INTEGER NOT NULL, intervalDays INTEGER NOT NULL, dueAt INTEGER,
+                          updatedAt INTEGER NOT NULL
+                      )""")
+                      source.execSQL("""INSERT INTO progress VALUES
+                          ('item-test', 'chapter-test', 1, 20261101, 5, 4, 1, 'correct',
+                          4, 7, 20261118, 20261111)""")
+          
+                      source.execSQL("""CREATE TABLE notes (
+                          id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, itemUid TEXT, chapterId TEXT,
+                          title TEXT NOT NULL, body TEXT NOT NULL, updatedAt INTEGER NOT NULL
+                      )""")
+                      source.execSQL("""INSERT INTO notes (id, itemUid, chapterId, title, body, updatedAt)
+                          VALUES (21, 'item-test', 'chapter-test', 'یادداشت آزمایشی', 'بدنه یادداشت', 20261109)""")
+          
+                      source.execSQL("""CREATE TABLE bookmarks (
+                          itemUid TEXT NOT NULL PRIMARY KEY, chapterId TEXT NOT NULL, createdAt INTEGER NOT NULL
+                      )""")
+                      source.execSQL("INSERT INTO bookmarks VALUES ('item-test', 'chapter-test', 20261108)")
+          
+                      source.execSQL("""CREATE TABLE study_tasks (
+                          id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, title TEXT NOT NULL,
+                          details TEXT NOT NULL, taskType TEXT NOT NULL, dueAt INTEGER, remindAt INTEGER,
+                          completed INTEGER NOT NULL, createdAt INTEGER NOT NULL
+                      )""")
+                      source.execSQL("""INSERT INTO study_tasks
+                          (id, title, details, taskType, dueAt, remindAt, completed, createdAt)
+                          VALUES (31, 'مرور فصل', 'جزئیات کار', 'review', 20261120, 20261119, 0, 20261107)""")
                   } finally {
                       source.close()
                   }
-
+          
                   LegacyDatabaseMigrator.migrate(context, content, user)
-
-                  val copied = content.chapterDao().get("chapter-test")
-                  assertEquals("فصل آزمایشی", copied?.title)
-                  assertEquals(7, copied?.orderIndex)
-                  assertEquals("hash-1", copied?.contentHash)
+          
+                  val contentDb = content.openHelper.readableDatabase
+                  val userDb = user.openHelper.readableDatabase
+                  assertRowCount(contentDb, "chapters", 1)
+                  assertRowCount(contentDb, "content_items", 1)
+                  assertRowCount(contentDb, "server_config", 1)
+                  assertRowCount(contentDb, "media_cache", 1)
+                  assertRowCount(userDb, "progress", 1)
+                  assertRowCount(userDb, "notes", 1)
+                  assertRowCount(userDb, "bookmarks", 1)
+                  assertRowCount(userDb, "study_tasks", 1)
+          
+                  assertQuery(contentDb, "SELECT title, orderIndex, contentHash FROM chapters WHERE id='chapter-test'") {
+                      assertEquals("فصل آزمایشی", getString(0))
+                      assertEquals(7, getInt(1))
+                      assertEquals("chapter-hash", getString(2))
+                  }
+                  assertQuery(contentDb, "SELECT content, sourceStatus, rawJson FROM content_items WHERE uid='item-test'") {
+                      assertEquals("متن کامل", getString(0))
+                      assertEquals("verified", getString(1))
+                      assertEquals("""{"origin":"legacy"}""", getString(2))
+                  }
+                  assertQuery(contentDb, "SELECT host, port FROM server_config WHERE id=1") {
+                      assertEquals("192.168.1.20", getString(0))
+                      assertEquals(8080, getInt(1))
+                  }
+                  assertQuery(contentDb, "SELECT sha256, size FROM media_cache WHERE relativePath='images/one.webp'") {
+                      assertEquals("media-sha256", getString(0))
+                      assertEquals(4096L, getLong(1))
+                  }
+                  assertQuery(userDb, "SELECT completed, attempts, correct, wrong, dueAt FROM progress WHERE itemUid='item-test'") {
+                      assertEquals(1, getInt(0))
+                      assertEquals(5, getInt(1))
+                      assertEquals(4, getInt(2))
+                      assertEquals(1, getInt(3))
+                      assertEquals(20261118L, getLong(4))
+                  }
+                  assertQuery(userDb, "SELECT id, title, body FROM notes WHERE id=21") {
+                      assertEquals(21L, getLong(0))
+                      assertEquals("یادداشت آزمایشی", getString(1))
+                      assertEquals("بدنه یادداشت", getString(2))
+                  }
+                  assertQuery(userDb, "SELECT chapterId, createdAt FROM bookmarks WHERE itemUid='item-test'") {
+                      assertEquals("chapter-test", getString(0))
+                      assertEquals(20261108L, getLong(1))
+                  }
+                  assertQuery(userDb, "SELECT title, details, taskType, completed FROM study_tasks WHERE id=31") {
+                      assertEquals("مرور فصل", getString(0))
+                      assertEquals("جزئیات کار", getString(1))
+                      assertEquals("review", getString(2))
+                      assertEquals(0, getInt(3))
+                  }
+          
                   assertTrue(
                       context.getSharedPreferences("mindunlock_db_migration", 0)
                           .getBoolean("split_v1_complete", false)
                   )
+          
+                  // A second invocation must honor the completion marker and leave target rows unchanged.
+                  LegacyDatabaseMigrator.migrate(context, content, user)
+                  assertRowCount(contentDb, "chapters", 1)
+                  assertRowCount(contentDb, "content_items", 1)
+                  assertRowCount(userDb, "progress", 1)
+                  assertRowCount(userDb, "notes", 1)
+              }
+          
+              private fun assertRowCount(db: SupportSQLiteDatabase, table: String, expected: Int) {
+                  db.query("SELECT COUNT(*) FROM `$table`").use { cursor ->
+                      assertTrue("COUNT query returned no row for $table", cursor.moveToFirst())
+                      assertEquals("Unexpected row count for $table", expected, cursor.getInt(0))
+                  }
+              }
+          
+              private inline fun assertQuery(
+                  db: SupportSQLiteDatabase,
+                  sql: String,
+                  assertions: android.database.Cursor.() -> Unit
+              ) {
+                  db.query(sql).use { cursor ->
+                      assertTrue("Query returned no row: $sql", cursor.moveToFirst())
+                      cursor.assertions()
+                  }
               }
           }
           EOF
