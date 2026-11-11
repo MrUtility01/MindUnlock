@@ -2475,10 +2475,10 @@ jobs:
           source = p.read_text(encoding="utf-8")
           if "versionCode = 6" not in source or 'versionName = "0.5.1"' not in source:
               raise SystemExit("Expected v0.5.1 package version markers not found")
-          source = source.replace("versionCode = 6", "versionCode = 10", 1)
-          source = source.replace('versionName = "0.5.1"', 'versionName = "0.5.5"', 1)
+          source = source.replace("versionCode = 6", "versionCode = 11", 1)
+          source = source.replace('versionName = "0.5.1"', 'versionName = "0.5.6"', 1)
           p.write_text(source, encoding="utf-8")
-          print("Package version bumped to 0.5.5 (versionCode 10).")
+          print("Package version bumped to 0.5.6 (versionCode 11).")
           PY
 
       - name: Fix Room projections to include required sourceStatus column
@@ -3107,6 +3107,10 @@ jobs:
                       ActionTile("دریافت محتوا و اتصال", "sync", onNavigate, Modifier.weight(1f))
                       ActionTile("مدیریت یادگیری", "courses", onNavigate, Modifier.weight(1f))
                   }
+                  Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                      ActionTile("موضوعات برای بعد", "later", onNavigate, Modifier.weight(1f))
+                      ActionTile("تخلیه ذهن", "inbox", onNavigate, Modifier.weight(1f))
+                  }
                   Text("ادامه از آخرین فصل", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                   if (last != null) {
                       Card(onClick = { onContinue(last.id) }, modifier = Modifier.fillMaxWidth()) {
@@ -3402,7 +3406,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: MindUnlock-Android-v0.5.5-debug
+          name: MindUnlock-Android-v0.5.6-debug
           path: android-build/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
@@ -3410,10 +3414,10 @@ jobs:
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' && success()
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: android-v0.5.5-${{ github.run_number }}
-          name: MindUnlock Android 0.5.5 (#${{ github.run_number }})
+          tag_name: android-v0.5.6-${{ github.run_number }}
+          name: MindUnlock Android 0.5.6 (#${{ github.run_number }})
           body: |
-            Android Native 0.5.5 adds a unified dashboard with quick capture and global Persian voice capture/read-aloud controls, including read-aloud for Journal and Mind Dump.
+            Android Native 0.5.6 adds the Later / Curiosity module with Room migration 3 to 4, Mind Dump conversion, search, priority, revisit date, status tracking, and Persian read-aloud. It retains the unified dashboard and Persian voice controls.
             HTTP sync is intended for trusted local networks only.
           files: android-build/app/build/outputs/apk/debug/app-debug.apk
           prerelease: true
