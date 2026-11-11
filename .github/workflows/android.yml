@@ -2967,6 +2967,7 @@ jobs:
             app/src/main/java/com/mindunlock/app/MainActivity.kt \
             app/src/main/java/com/mindunlock/app/MindDumpScreen.kt \
             app/src/main/java/com/mindunlock/app/JournalScreen.kt \
+            app/src/main/AndroidManifest.xml \
             app/src/main/java/com/mindunlock/app/data/local/Entities.kt \
             app/src/main/java/com/mindunlock/app/data/local/UserDatabase.kt \
             app/build.gradle.kts \
@@ -3052,7 +3053,7 @@ jobs:
                               onClick = {
                                   val value = quickCapture.trim()
                                   if (value.isNotEmpty()) {
-                                      kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                                      scope.launch {
                                           userDb.mindDumpDao().insert(MindDumpEntity(content = value))
                                       }
                                       quickCapture = ""
