@@ -348,7 +348,7 @@ fun PersianVoiceInputButton(compact: Boolean = false, onText: (String) -> Unit) 
             job = scope.launch {
                 try {
                     val transcript = OfflinePersianSpeech.transcribe(context, stopSignal) { message ->
-                        status = message
+                        android.os.Handler(android.os.Looper.getMainLooper()).post { status = message }
                     }
                     if (transcript.isNotBlank()) {
                         onText(transcript)
@@ -369,7 +369,7 @@ fun PersianVoiceInputButton(compact: Boolean = false, onText: (String) -> Unit) 
     }
 
     androidx.compose.foundation.layout.Column(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = if (compact) Modifier else Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
