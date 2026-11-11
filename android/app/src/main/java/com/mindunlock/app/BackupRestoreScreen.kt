@@ -79,9 +79,17 @@ fun BackupRestoreScreen(userDb: UserDatabase) {
                 try {
                     val json = withContext(Dispatchers.IO) {
                         context.contentResolver.openInputStream(uri)?.use { input ->
-                            val bytes = input.readNBytes(25 * 1024 * 1024 + 1)
-                            require(bytes.size <= 25 * 1024 * 1024) { "حداکثر حجم فایل پشتیبان ۲۵ مگابایت است." }
-                            String(bytes, Charsets.UTF_8)
+                            val output = java.io.ByteArrayOutputStream()
+                            val buffer = ByteArray(8192)
+                            var totalBytes = 0
+                            while (true) {
+                                val count = input.read(buffer)
+                                if (count < 0) break
+                                totalBytes += count
+                                require(totalBytes <= 25 * 1024 * 1024) { "حداکثر حجم فایل پشتیبان ۲۵ مگابایت است." }
+                                output.write(buffer, 0, count)
+                            }
+                            String(output.toByteArray(), Charsets.UTF_8)
                         } ?: throw IllegalStateException("فایل قابل خواندن نیست.")
                     }
                     val decoded = UserDataBackupCodec.decode(json)
