@@ -24,7 +24,7 @@ class UserDataBackupCodecTest {
         assertEquals(1, restored.schemaVersion)
         assertEquals("0.6.5", restored.appVersion)
         assertEquals(5, restored.payload.totalRecords)
-        assertEquals(1, restored.payload.progress.single().correct)
+        assertEquals(3, restored.payload.progress.single().correct)
         assertEquals("مرور DNS", restored.payload.tasks.single().title)
         assertEquals("یادداشت خصوصی", restored.payload.journalEntries.single().body)
         assertEquals(true, restored.payload.labStepProgress.single().completed)
