@@ -58,10 +58,10 @@ fun BackupRestoreScreen(userDb: UserDatabase) {
                             true
                         } ?: false
                     }
-                    status = if (written) "پشتیبان با موفقیت ذخیره شد. حجم فایل: \${json.toByteArray(Charsets.UTF_8).size / 1024} کیلوبایت."
+                    status = if (written) "پشتیبان با موفقیت ذخیره شد. حجم فایل: ${json.toByteArray(Charsets.UTF_8).size / 1024} کیلوبایت."
                     else "امکان نوشتن فایل در محل انتخاب‌شده وجود نداشت."
                 } catch (error: Exception) {
-                    status = "ساخت پشتیبان ناموفق بود: \${error.message ?: "خطای نامشخص"}"
+                    status = "ساخت پشتیبان ناموفق بود: ${error.message ?: "خطای نامشخص"}"
                 } finally {
                     busy = false
                 }
@@ -89,7 +89,7 @@ fun BackupRestoreScreen(userDb: UserDatabase) {
                     pending = decoded
                     status = "فایل معتبر است. پیش از بازیابی، اطلاعات فعلی به‌صورت خودکار در پوشه خصوصی برنامه پشتیبان‌گیری می‌شود."
                 } catch (error: Exception) {
-                    status = "فایل پشتیبان رد شد: \${error.message ?: "خطای نامشخص"}"
+                    status = "فایل پشتیبان رد شد: ${error.message ?: "خطای نامشخص"}"
                 } finally {
                     busy = false
                 }
@@ -125,7 +125,7 @@ fun BackupRestoreScreen(userDb: UserDatabase) {
             }
         }
         Button(
-            onClick = { exportLauncher.launch("MindUnlock-backup-\${System.currentTimeMillis()}.json") },
+            onClick = { exportLauncher.launch("MindUnlock-backup-${System.currentTimeMillis()}.json") },
             enabled = !busy,
             modifier = Modifier.fillMaxWidth()
         ) { Text(if (busy) "لطفاً صبر کن..." else "ساخت و ذخیره فایل پشتیبان") }
@@ -146,12 +146,12 @@ fun BackupRestoreScreen(userDb: UserDatabase) {
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("این عملیات داده‌های فعلی را با محتوای فایل جایگزین می‌کند.")
-                    Text("تاریخ پشتیبان: \${DateFormat.getDateTimeInstance().format(Date(document.exportedAt))}")
-                    Text("نسخه برنامه هنگام ساخت: \${document.appVersion.ifBlank { "نامشخص" }}")
-                    Text("مجموع رکوردها: \${payload.totalRecords}")
-                    Text("پیشرفت: \${payload.progress.size} · یادداشت: \${payload.notes.size} · نشانک: \${payload.bookmarks.size}")
-                    Text("کارها: \${payload.tasks.size} · صندوق ورودی: \${payload.mindDump.size} · دفتر روزانه: \${payload.journalEntries.size}")
-                    Text("موضوعات بعدی: \${payload.laterTopics.size} · مراحل آزمایشگاه: \${payload.labStepProgress.size} · جلسه‌ها: \${payload.learningSessions.size}")
+                    Text("تاریخ پشتیبان: ${DateFormat.getDateTimeInstance().format(Date(document.exportedAt))}")
+                    Text("نسخه برنامه هنگام ساخت: ${document.appVersion.ifBlank { "نامشخص" }}")
+                    Text("مجموع رکوردها: ${payload.totalRecords}")
+                    Text("پیشرفت: ${payload.progress.size} · یادداشت: ${payload.notes.size} · نشانک: ${payload.bookmarks.size}")
+                    Text("کارها: ${payload.tasks.size} · صندوق ورودی: ${payload.mindDump.size} · دفتر روزانه: ${payload.journalEntries.size}")
+                    Text("موضوعات بعدی: ${payload.laterTopics.size} · مراحل آزمایشگاه: ${payload.labStepProgress.size} · جلسه‌ها: ${payload.learningSessions.size}")
                     Text("پیش از جایگزینی، یک نسخه اضطراری از اطلاعات فعلی در فضای خصوصی برنامه ذخیره می‌شود.")
                 }
             },
@@ -165,7 +165,7 @@ fun BackupRestoreScreen(userDb: UserDatabase) {
                                 status = "بازیابی با موفقیت انجام شد. اطلاعات قبلی نیز در نسخه اضطراری داخلی نگهداری شده است."
                                 pending = null
                             } catch (error: Exception) {
-                                status = "بازیابی انجام نشد و تراکنش لغو شد: \${error.message ?: "خطای نامشخص"}"
+                                status = "بازیابی انجام نشد و تراکنش لغو شد: ${error.message ?: "خطای نامشخص"}"
                             } finally {
                                 busy = false
                             }
