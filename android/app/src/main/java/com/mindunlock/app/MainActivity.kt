@@ -1,4 +1,28 @@
 package com.mindunlock.app
+
+import android.Manifest
+import android.content.Context
+import android.content.pm.PackageManager
+import android.media.AudioFormat
+import android.media.AudioRecord
+import android.media.MediaRecorder
+import androidx.core.content.ContextCompat
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
+import com.k2fsa.sherpa.onnx.FeatureConfig
+import com.k2fsa.sherpa.onnx.OfflineModelConfig
+import com.k2fsa.sherpa.onnx.OfflineNemoEncDecCtcModelConfig
+import com.k2fsa.sherpa.onnx.OfflineRecognizer
+import com.k2fsa.sherpa.onnx.OfflineRecognizerConfig
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.isActive
+import java.io.File
+import java.net.HttpURLConnection
+import java.net.URL
+import java.util.concurrent.atomic.AtomicBoolean
 import androidx.compose.foundation.layout.fillMaxWidth
 
 import android.os.Bundle
@@ -322,21 +346,207 @@ private fun MoreScreen(onNavigate: (String) -> Unit) {
 
 @Composable
 fun PersianVoiceInputButton(onText: (String) -> Unit) {
-    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
-            val recognized = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()?.trim().orEmpty()
-            if (recognized.isNotBlank()) onText(recognized)
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val stopSignal = remember { AtomicBoolean(false) }
+    var recording by remember { mutableStateOf(false) }
+    var busy by remember { mutableStateOf(false) }
+    var status by remember { mutableStateOf("تشخیص گفتار فارسی کاملاً محلی است؛ دریافت اولیه مدل حدود ۱۱۷ مگابایت است.") }
+    var job by remember { mutableStateOf<Job?>(null) }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            stopSignal.set(false)
+            recording = true
+            busy = true
+            job = scope.launch {
+                try {
+                    val transcript = OfflinePersianSpeech.transcribe(context, stopSignal) { message ->
+                        status = message
+                    }
+                    if (transcript.isNotBlank()) {
+                        onText(transcript)
+                        status = "متن فارسی به فیلد اضافه شد."
+                    } else {
+                        status = "گفتاری تشخیص داده نشد؛ دوباره امتحان کن."
+                    }
+                } catch (error: Exception) {
+                    status = "خطای تشخیص آفلاین: ${error.message ?: "نامشخص"}"
+                } finally {
+                    recording = false
+                    busy = false
+                }
+            }
+        } else {
+            status = "برای تبدیل گفتار به متن، اجازه میکروفون لازم است."
         }
     }
-    Button(onClick = {
-        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "fa-IR")
-            putExtra(RecognizerIntent.EXTRA_PROMPT, "متن را به فارسی بیان کن")
+
+    androidx.compose.foundation.layout.Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Button(
+                onClick = {
+                    if (recording) {
+                        stopSignal.set(true)
+                        status = "در حال پردازش گفتار ضبط‌شده..."
+                    } else if (!busy) {
+                        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                            stopSignal.set(false)
+                            recording = true
+                            busy = true
+                            job = scope.launch {
+                                try {
+                                    val transcript = OfflinePersianSpeech.transcribe(context, stopSignal) { message -> status = message }
+                                    if (transcript.isNotBlank()) {
+                                        onText(transcript)
+                                        status = "متن فارسی به فیلد اضافه شد."
+                                    } else status = "گفتاری تشخیص داده نشد؛ دوباره امتحان کن."
+                                } catch (error: Exception) {
+                                    status = "خطای تشخیص آفلاین: ${error.message ?: "نامشخص"}"
+                                } finally {
+                                    recording = false
+                                    busy = false
+                                }
+                            }
+                        } else permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                    }
+                },
+                enabled = !busy || recording
+            ) {
+                if (busy && !recording) CircularProgressIndicator(modifier = Modifier.width(18.dp), strokeWidth = 2.dp)
+                else Icon(Icons.Default.Mic, contentDescription = null)
+                Spacer(Modifier.width(6.dp))
+                Text(when { recording -> "پایان ضبط"; busy -> "آماده‌سازی مدل"; else -> "گفتار آفلاین" })
+            }
+            if (recording) {
+                OutlinedButton(onClick = { stopSignal.set(true); status = "در حال پردازش..." }) {
+                    Icon(Icons.Default.Stop, contentDescription = null)
+                    Text("توقف")
+                }
+            }
         }
-        runCatching { launcher.launch(intent) }
-    }) {
-        Icon(Icons.Default.Mic, contentDescription = null)
-        Text("ورود با صدا")
+        Text(status, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+private object OfflinePersianSpeech {
+    private const val SAMPLE_RATE = 16000
+    private const val MODEL_URL = "https://huggingface.co/Reza2kn/Shenava-Rizeh-v1.0-sherpa-onnx/resolve/main/model.onnx?download=true"
+    private const val TOKENS_URL = "https://huggingface.co/Reza2kn/Shenava-Rizeh-v1.0-sherpa-onnx/resolve/main/tokens.txt?download=true"
+
+    suspend fun transcribe(
+        context: Context,
+        stopSignal: AtomicBoolean,
+        onStatus: (String) -> Unit
+    ): String = withContext(Dispatchers.IO) {
+        val modelDir = File(context.filesDir, "offline-asr/shenava-rizeh-v1")
+        val modelFile = File(modelDir, "model.onnx")
+        val tokensFile = File(modelDir, "tokens.txt")
+        modelDir.mkdirs()
+
+        if (!modelFile.exists() || modelFile.length() < 1_000_000L || !tokensFile.exists()) {
+            withContext(Dispatchers.Main) { onStatus("دریافت یک‌باره مدل فارسی؛ پس از آن تشخیص بدون اینترنت انجام می‌شود.") }
+            download(MODEL_URL, modelFile) { percent ->
+                onStatus("دریافت مدل فارسی: $percent٪")
+            }
+            download(TOKENS_URL, tokensFile) { }
+        }
+
+        withContext(Dispatchers.Main) { onStatus("مدل آماده است؛ اکنون صحبت کن و برای پایان دوباره دکمه را بزن.") }
+        val minBuffer = AudioRecord.getMinBufferSize(
+            SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT
+        )
+        require(minBuffer > 0) { "ضبط صدا روی این دستگاه پشتیبانی نمی‌شود." }
+        val recorder = AudioRecord(
+            MediaRecorder.AudioSource.MIC,
+            SAMPLE_RATE,
+            AudioFormat.CHANNEL_IN_MONO,
+            AudioFormat.ENCODING_PCM_16BIT,
+            maxOf(minBuffer * 2, 8192)
+        )
+        require(recorder.state == AudioRecord.STATE_INITIALIZED) { "میکروفون قابل راه‌اندازی نیست." }
+        val pcm = ArrayList<Short>(SAMPLE_RATE * 12)
+        val chunk = ShortArray(2048)
+        try {
+            recorder.startRecording()
+            val startedAt = System.currentTimeMillis()
+            while (!stopSignal.get() && System.currentTimeMillis() - startedAt < 45_000L) {
+                val count = recorder.read(chunk, 0, chunk.size)
+                if (count > 0) for (i in 0 until count) pcm.add(chunk[i])
+            }
+        } finally {
+            runCatching { recorder.stop() }
+            recorder.release()
+        }
+        require(pcm.size > SAMPLE_RATE / 3) { "صدای ضبط‌شده خیلی کوتاه است." }
+        withContext(Dispatchers.Main) { onStatus("پردازش محلی گفتار فارسی روی گوشی...") }
+        val samples = FloatArray(pcm.size) { pcm[it].toFloat() / 32768.0f }
+        val config = OfflineRecognizerConfig(
+            featConfig = FeatureConfig(sampleRate = SAMPLE_RATE, featureDim = 80),
+            modelConfig = OfflineModelConfig(
+                nemo = OfflineNemoEncDecCtcModelConfig(model = modelFile.absolutePath),
+                tokens = tokensFile.absolutePath,
+                numThreads = 4,
+                provider = "cpu"
+            )
+        )
+        val recognizer = OfflineRecognizer(config = config)
+        try {
+            val stream = recognizer.createStream()
+            try {
+                stream.acceptWaveform(samples, SAMPLE_RATE)
+                recognizer.decode(stream)
+                recognizer.getResult(stream).text.trim()
+            } finally {
+                stream.release()
+            }
+        } finally {
+            recognizer.release()
+        }
+    }
+
+    private fun download(url: String, target: File, onProgress: (Int) -> Unit) {
+        val partial = File(target.parentFile, target.name + ".part")
+        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
+            connectTimeout = 20_000
+            readTimeout = 120_000
+            instanceFollowRedirects = true
+            setRequestProperty("User-Agent", "MindUnlock-Android")
+        }
+        try {
+            connection.connect()
+            if (connection.responseCode !in 200..299) error("دریافت مدل ناموفق بود: HTTP ${connection.responseCode}")
+            val total = connection.contentLengthLong
+            connection.inputStream.use { input ->
+                partial.outputStream().buffered().use { output ->
+                    val buffer = ByteArray(64 * 1024)
+                    var copied = 0L
+                    var lastPercent = -1
+                    while (true) {
+                        val read = input.read(buffer)
+                        if (read < 0) break
+                        output.write(buffer, 0, read)
+                        copied += read
+                        if (total > 0) {
+                            val percent = ((copied * 100) / total).toInt()
+                            if (percent != lastPercent) {
+                                lastPercent = percent
+                                onProgress(percent)
+                            }
+                        }
+                    }
+                }
+            }
+            if (partial.length() < 1024L) error("فایل مدل ناقص دریافت شد.")
+            if (target.exists()) target.delete()
+            if (!partial.renameTo(target)) error("ذخیره فایل مدل انجام نشد.")
+        } finally {
+            connection.disconnect()
+        }
     }
 }
