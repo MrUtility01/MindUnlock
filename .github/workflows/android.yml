@@ -2534,6 +2534,7 @@ jobs:
           import kotlinx.coroutines.runBlocking
           import org.junit.After
           import org.junit.Assert.assertEquals
+          import org.junit.Assert.assertFalse
           import org.junit.Assert.assertNull
           import org.junit.Assert.assertTrue
           import org.junit.Before
@@ -2788,6 +2789,69 @@ jobs:
               assertRowCount(userDb, "notes", 0)
               assertRowCount(userDb, "bookmarks", 0)
               assertRowCount(userDb, "study_tasks", 0)
+              assertTrue(
+                  context.getSharedPreferences("mindunlock_db_migration", 0)
+                      .getBoolean("split_v1_complete", false)
+              )
+          }
+
+          @Test
+          fun rollsBackBothTargetsAfterMidMigrationFailureAndAllowsRetry() {
+              val legacyFile = context.getDatabasePath("mindunlock.db")
+              legacyFile.parentFile?.mkdirs()
+              val source = SQLiteDatabase.openOrCreateDatabase(legacyFile, null)
+              try {
+                  source.execSQL("""CREATE TABLE chapters (
+                      id TEXT NOT NULL PRIMARY KEY, title TEXT NOT NULL, orderIndex INTEGER NOT NULL,
+                      groupName TEXT, description TEXT, itemCount INTEGER NOT NULL, contentHash TEXT,
+                      rawJson TEXT, syncedAt INTEGER NOT NULL
+                  )""")
+                  source.execSQL("""INSERT INTO chapters
+                      (id, title, orderIndex, itemCount, syncedAt)
+                      VALUES ('rollback-chapter', 'فصل برای آزمون بازگشت', 1, 0, 10)""")
+                  // Legacy schema permits NULL here; the destination Room schema does not.
+                  source.execSQL("""CREATE TABLE progress (
+                      itemUid TEXT, chapterId TEXT NOT NULL, completed INTEGER NOT NULL,
+                      completedAt INTEGER, attempts INTEGER NOT NULL, correct INTEGER NOT NULL,
+                      wrong INTEGER NOT NULL, lastResult TEXT, quality INTEGER NOT NULL,
+                      intervalDays INTEGER NOT NULL, dueAt INTEGER, updatedAt INTEGER NOT NULL
+                  )""")
+                  source.execSQL("""INSERT INTO progress VALUES
+                      (NULL, 'rollback-chapter', 0, NULL, 0, 0, 0, NULL, 0, 0, NULL, 10)""")
+              } finally {
+                  source.close()
+              }
+
+              val failed = runCatching { LegacyDatabaseMigrator.migrate(context, content, user) }
+              assertTrue("Migration should fail on the destination NOT NULL constraint", failed.isFailure)
+
+              // The exception occurs after the content table copy; neither destination may retain partial rows.
+              val contentDb = content.openHelper.readableDatabase
+              val userDb = user.openHelper.readableDatabase
+              assertRowCount(contentDb, "chapters", 0)
+              assertRowCount(userDb, "progress", 0)
+              assertFalse(
+                  "Completion marker must not be set after a failed migration",
+                  context.getSharedPreferences("mindunlock_db_migration", 0)
+                      .getBoolean("split_v1_complete", false)
+              )
+
+              // Repair only the legacy test fixture and retry the same migration.
+              val repair = SQLiteDatabase.openDatabase(legacyFile.absolutePath, null, SQLiteDatabase.OPEN_READWRITE)
+              try {
+                  repair.execSQL("UPDATE progress SET itemUid='retry-item' WHERE itemUid IS NULL")
+              } finally {
+                  repair.close()
+              }
+
+              LegacyDatabaseMigrator.migrate(context, content, user)
+
+              assertRowCount(contentDb, "chapters", 1)
+              assertRowCount(userDb, "progress", 1)
+              assertQuery(userDb, "SELECT itemUid, chapterId FROM progress WHERE itemUid='retry-item'") {
+                  assertEquals("retry-item", getString(0))
+                  assertEquals("rollback-chapter", getString(1))
+              }
               assertTrue(
                   context.getSharedPreferences("mindunlock_db_migration", 0)
                       .getBoolean("split_v1_complete", false)
