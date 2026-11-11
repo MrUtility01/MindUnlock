@@ -18,7 +18,6 @@ import com.k2fsa.sherpa.onnx.OfflineNemoEncDecCtcModelConfig
 import com.k2fsa.sherpa.onnx.OfflineRecognizer
 import com.k2fsa.sherpa.onnx.OfflineRecognizerConfig
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.isActive
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
@@ -84,7 +83,6 @@ import com.mindunlock.app.data.local.LegacyDatabaseMigrator
 import kotlinx.coroutines.Dispatchers
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
-import androidx.compose.material3.CircularProgressIndicator
 import kotlinx.coroutines.withContext
 import com.mindunlock.app.ui.theme.MindUnlockTheme
 
