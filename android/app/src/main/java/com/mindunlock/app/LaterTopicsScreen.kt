@@ -98,7 +98,7 @@ fun LaterTopicsScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
                     LaterTopicCard(
                         topic = topic,
                         onSpeak = { speech.speak(topic.title + ". " + topic.details) },
-                        onStatus = { status -> scope.launch { userDatabase.laterTopicDao().updateStatus(topic.id, status) } },
+                        onStatus = { status -> scope.launch { userDatabase.laterTopicDao().updateStatus(topic.id, status, System.currentTimeMillis()) } },
                         onDelete = { scope.launch { userDatabase.laterTopicDao().delete(topic.id) } }
                     )
                 }
