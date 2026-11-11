@@ -20,6 +20,18 @@ interface ProgressDao {
 }
 
 @Dao
+interface LabStepProgressDao {
+    @Query("SELECT * FROM lab_step_progress WHERE itemUid = :uid ORDER BY stepIndex ASC")
+    fun observeByItem(uid: String): Flow<List<LabStepProgressEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(step: LabStepProgressEntity)
+
+    @Query("DELETE FROM lab_step_progress WHERE itemUid = :uid AND stepIndex = :stepIndex")
+    suspend fun delete(uid: String, stepIndex: Int)
+}
+
+@Dao
 interface NoteDao {
     @Query("SELECT * FROM notes ORDER BY updatedAt DESC") fun observeAll(): Flow<List<NoteEntity>>
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsert(note: NoteEntity)
@@ -84,7 +96,7 @@ interface LaterTopicDao {
     suspend fun delete(id: Long)
 }
 
-@Database(entities = [ProgressEntity::class, NoteEntity::class, BookmarkEntity::class, StudyTaskEntity::class, MindDumpEntity::class, JournalEntryEntity::class, LaterTopicEntity::class], version = 4, exportSchema = false)
+@Database(entities = [ProgressEntity::class, NoteEntity::class, BookmarkEntity::class, StudyTaskEntity::class, MindDumpEntity::class, JournalEntryEntity::class, LaterTopicEntity::class, LabStepProgressEntity::class], version = 5, exportSchema = false)
 abstract class UserDatabase : RoomDatabase() {
     abstract fun progressDao(): ProgressDao
     abstract fun noteDao(): NoteDao
@@ -93,6 +105,7 @@ abstract class UserDatabase : RoomDatabase() {
     abstract fun mindDumpDao(): MindDumpDao
     abstract fun journalEntryDao(): JournalEntryDao
     abstract fun laterTopicDao(): LaterTopicDao
+    abstract fun labStepProgressDao(): LabStepProgressDao
     companion object {
         val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
@@ -114,9 +127,15 @@ abstract class UserDatabase : RoomDatabase() {
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_later_topics_revisitAt ON later_topics(revisitAt)")
             }
         }
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS lab_step_progress (itemUid TEXT NOT NULL, stepIndex INTEGER NOT NULL, completed INTEGER NOT NULL, updatedAt INTEGER NOT NULL, PRIMARY KEY(itemUid, stepIndex))")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_lab_step_progress_itemUid ON lab_step_progress(itemUid)")
+            }
+        }
         @Volatile private var instance: UserDatabase? = null
         fun getInstance(context: Context): UserDatabase = instance ?: synchronized(this) {
-            instance ?: Room.databaseBuilder(context.applicationContext, UserDatabase::class.java, "mindunlock-user.db").addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4).build().also { instance = it }
+            instance ?: Room.databaseBuilder(context.applicationContext, UserDatabase::class.java, "mindunlock-user.db").addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5).build().also { instance = it }
         }
     }
 }
