@@ -3148,6 +3148,20 @@ jobs:
               'Text(cleanHtml(item.summary), maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)',
               'Text(cleanHtml(item.summary), maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)\n                            OutlinedButton(onClick = { speech.speak(item.title.orEmpty() + ". " + cleanHtml(item.summary.orEmpty())) }) { Text("خواندن") }'
           )
+          required = [
+              "val scope = rememberCoroutineScope()",
+              "fun NotesScreen(userDb: UserDatabase, speech: PersianSpeech)",
+              "fun PlannerScreen(userDb: UserDatabase, speech: PersianSpeech)",
+              "fun ProgressScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeech)",
+              "fun QuizScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeech, examMode: Boolean = false)",
+              "fun LabsScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeech, onOpenItem: (String) -> Unit)",
+              "fun BookmarksScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeech, onOpenItem: (String) -> Unit)",
+              "خواندن سؤال و گزینه‌ها",
+              "خواندن راهنمای آزمایشگاه"
+          ]
+          missing = [token for token in required if token not in source]
+          if missing:
+              raise SystemExit("Dashboard/voice integration incomplete: " + ", ".join(missing))
           path.write_text(source, encoding="utf-8")
           print("Dashboard expanded and Persian read-aloud wired into notes, tasks, reports, quizzes, labs and bookmarks.")
           PY
