@@ -20,6 +20,21 @@ interface ProgressDao {
 }
 
 @Dao
+interface LearningSessionDao {
+    @Query("SELECT * FROM learning_sessions ORDER BY startedAt DESC")
+    fun observeAll(): Flow<List<LearningSessionEntity>>
+
+    @Query("SELECT * FROM learning_sessions WHERE endedAt IS NULL ORDER BY startedAt DESC LIMIT 1")
+    fun observeActive(): Flow<LearningSessionEntity?>
+
+    @Insert
+    suspend fun insert(session: LearningSessionEntity): Long
+
+    @Query("UPDATE learning_sessions SET endedAt = :endedAt, durationSeconds = :durationSeconds WHERE id = :id AND endedAt IS NULL")
+    suspend fun finish(id: Long, endedAt: Long, durationSeconds: Long)
+}
+
+@Dao
 interface LabStepProgressDao {
     @Query("SELECT * FROM lab_step_progress WHERE itemUid = :uid ORDER BY stepIndex ASC")
     fun observeByItem(uid: String): Flow<List<LabStepProgressEntity>>
@@ -96,7 +111,7 @@ interface LaterTopicDao {
     suspend fun delete(id: Long)
 }
 
-@Database(entities = [ProgressEntity::class, NoteEntity::class, BookmarkEntity::class, StudyTaskEntity::class, MindDumpEntity::class, JournalEntryEntity::class, LaterTopicEntity::class, LabStepProgressEntity::class], version = 5, exportSchema = false)
+@Database(entities = [ProgressEntity::class, NoteEntity::class, BookmarkEntity::class, StudyTaskEntity::class, MindDumpEntity::class, JournalEntryEntity::class, LaterTopicEntity::class, LabStepProgressEntity::class, LearningSessionEntity::class], version = 6, exportSchema = false)
 abstract class UserDatabase : RoomDatabase() {
     abstract fun progressDao(): ProgressDao
     abstract fun noteDao(): NoteDao
@@ -133,9 +148,16 @@ abstract class UserDatabase : RoomDatabase() {
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_lab_step_progress_itemUid ON lab_step_progress(itemUid)")
             }
         }
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS learning_sessions (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, chapterId TEXT, topicTitle TEXT NOT NULL, source TEXT NOT NULL, startedAt INTEGER NOT NULL, endedAt INTEGER, durationSeconds INTEGER NOT NULL)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_learning_sessions_startedAt ON learning_sessions(startedAt)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_learning_sessions_endedAt ON learning_sessions(endedAt)")
+            }
+        }
         @Volatile private var instance: UserDatabase? = null
         fun getInstance(context: Context): UserDatabase = instance ?: synchronized(this) {
-            instance ?: Room.databaseBuilder(context.applicationContext, UserDatabase::class.java, "mindunlock-user.db").addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5).build().also { instance = it }
+            instance ?: Room.databaseBuilder(context.applicationContext, UserDatabase::class.java, "mindunlock-user.db").addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6).build().also { instance = it }
         }
     }
 }
