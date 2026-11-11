@@ -28,6 +28,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.mindunlock.app.data.local.LaterTopicEntity
 import com.mindunlock.app.data.local.MindDumpEntity
 import com.mindunlock.app.data.local.NoteEntity
 import com.mindunlock.app.data.local.StudyTaskEntity
@@ -107,6 +108,7 @@ fun MindDumpScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
                     MindDumpCard(
                         entry = entry,
                         speech = speech,
+                        onConvertToLater = {\n                            scope.launch {\n                                userDatabase.laterTopicDao().insert(LaterTopicEntity(title = entry.content.lineSequence().first().take(120), details = entry.content, sourceMindDumpId = entry.id))\n                                userDatabase.mindDumpDao().updateStatus(entry.id, "later", System.currentTimeMillis(), entry.linkedTaskId)\n                                message = "به موضوعات برای بعد منتقل شد؛ متن اصلی حفظ شده است."\n                            }\n                        },
                         onConvertToTask = {
                             scope.launch {
                                 val taskId = userDatabase.studyTaskDao().upsert(
@@ -149,6 +151,7 @@ fun MindDumpScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
 private fun MindDumpCard(
     entry: MindDumpEntity,
     speech: PersianSpeech,
+    onConvertToLater: () -> Unit,
     onConvertToTask: () -> Unit,
     onSaveAsNote: () -> Unit,
     onArchive: () -> Unit,
@@ -165,6 +168,7 @@ private fun MindDumpCard(
         "task" -> "منتقل‌شده به برنامه‌ریز"
         "note" -> "ذخیره‌شده در یادداشت‌ها"
         "archived" -> "بایگانی‌شده"
+        "later" -> "ذخیره‌شده در موضوعات برای بعد"
         else -> "در صندوق ورودی"
     }
     Card(Modifier.fillMaxWidth()) {
@@ -188,6 +192,7 @@ private fun MindDumpCard(
             } else if (entry.status == "inbox" || entry.status == "learning" || entry.status == "thought" || entry.status == "idea") {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = onConvertToTask) { Text("تبدیل به کار") }
+                    OutlinedButton(onClick = onConvertToLater) { Text("برای بعد") }
                     OutlinedButton(onClick = onSaveAsNote) { Text("ذخیره یادداشت") }
                 }
                 OutlinedButton(onClick = onArchive, modifier = Modifier.fillMaxWidth()) { Text("بایگانی") }
