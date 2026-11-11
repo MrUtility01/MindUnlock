@@ -1176,11 +1176,12 @@ fun ProgressScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeech)
     val chapters by db.chapterDao().observeAll().collectAsState(initial = emptyList())
     val progress by userDb.progressDao().observeAll().collectAsState(initial = emptyList())
     val tasks by userDb.studyTaskDao().observeAll().collectAsState(initial = emptyList())
-    val snapshot = remember(chapters, items, progress, tasks) {
-        LearningAnalytics.build(chapters, items, progress, tasks, System.currentTimeMillis())
+    val sessions by userDb.learningSessionDao().observeAll().collectAsState(initial = emptyList())
+    val snapshot = remember(chapters, items, progress, tasks, sessions) {
+        LearningAnalytics.build(chapters, items, progress, tasks, sessions, System.currentTimeMillis())
     }
     val completion = if (snapshot.totalItems == 0) 0f else snapshot.completedItems.toFloat() / snapshot.totalItems
-    val maxActivity = snapshot.recentActivity.maxOfOrNull { it.updatedItems }?.coerceAtLeast(1) ?: 1
+    val maxActivity = snapshot.recentActivity.maxOfOrNull { it.sessionMinutes }?.coerceAtLeast(1L) ?: 1L
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text("گزارش پیشرفت و تحلیل یادگیری", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
@@ -1208,6 +1209,13 @@ fun ProgressScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeech)
             MetricCard("مرورهای سررسیدشده", snapshot.scheduledReviewsDue.toString(), Modifier.weight(1f))
             MetricCard("موارد نیازمند تقویت", snapshot.weakItems.toString(), Modifier.weight(1f))
         }
+        Text("زمان ثبت‌شدهٔ یادگیری", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            MetricCard("زمان کل", "${snapshot.totalStudyMinutes} دقیقه", Modifier.weight(1f))
+            MetricCard("جلسه‌های پایان‌یافته", snapshot.completedSessions.toString(), Modifier.weight(1f))
+        }
+        MetricCard("میانگین هر جلسه", "${snapshot.averageSessionMinutes} دقیقه", Modifier.fillMaxWidth())
+        Text("زمان‌ها با شروع و پایان دستی جلسه در موتور یادگیری محاسبه می‌شوند؛ زمان بیکاری یا توقف دستگاه به‌صورت خودکار تشخیص داده نمی‌شود.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text("فعالیت هفت روز اخیر", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -1215,13 +1223,13 @@ fun ProgressScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeech)
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text(day.label, modifier = Modifier.size(width = 66.dp, height = 24.dp), style = MaterialTheme.typography.labelSmall)
                         LinearProgressIndicator(
-                            progress = { day.updatedItems.toFloat() / maxActivity },
+                            progress = { day.sessionMinutes.toFloat() / maxActivity.toFloat() },
                             modifier = Modifier.weight(1f)
                         )
-                        Text(day.updatedItems.toString(), modifier = Modifier.size(width = 24.dp, height = 24.dp), style = MaterialTheme.typography.labelSmall)
+                        Text("${day.sessionMinutes} د", modifier = Modifier.size(width = 38.dp, height = 24.dp), style = MaterialTheme.typography.labelSmall)
                     }
                 }
-                Text("این نمودار تعداد آیتم‌هایی را نشان می‌دهد که آخرین وضعیتشان در هر روز به‌روزرسانی شده؛ زمان واقعی مطالعه را اندازه‌گیری نمی‌کند.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("نمودار بر اساس مدت جلسه‌هایی است که در همان روز شروع و به‌صورت دستی پایان داده شده‌اند. تعداد آیتم‌های آموزشی به‌روزشده در همان روز: ${snapshot.recentActivity.sumOf { it.updatedItems }} مورد.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         Text("وضعیت برنامه‌ریزی", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
