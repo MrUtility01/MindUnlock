@@ -3114,8 +3114,38 @@ jobs:
               }
           }'''
           source = source[:start] + dashboard + source[next_screen:]
+          source = source.replace("fun NotesScreen(userDb: UserDatabase)", "fun NotesScreen(userDb: UserDatabase, speech: PersianSpeech)")
+          source = source.replace(
+              'Text(note.body, maxLines = 4, overflow = TextOverflow.Ellipsis)',
+              'Text(note.body, maxLines = 4, overflow = TextOverflow.Ellipsis)\n                        OutlinedButton(onClick = { speech.speak(note.title + ". " + note.body) }, modifier = Modifier.fillMaxWidth()) { Text("خواندن یادداشت") }'
+          )
+          source = source.replace("fun PlannerScreen(userDb: UserDatabase)", "fun PlannerScreen(userDb: UserDatabase, speech: PersianSpeech)")
+          source = source.replace(
+              'if (task.details.isNotBlank()) Text(task.details, style = MaterialTheme.typography.bodySmall)',
+              'if (task.details.isNotBlank()) Text(task.details, style = MaterialTheme.typography.bodySmall)\n                        OutlinedButton(onClick = { speech.speak(task.title + ". " + task.details) }) { Text("خواندن کار") }'
+          )
+          source = source.replace("fun ProgressScreen(db: AppDatabase, userDb: UserDatabase)", "fun ProgressScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeech)")
+          source = source.replace(
+              'Text("این آمار فقط روی همین گوشی ذخیره می‌شود و با ویندوز ادغام نشده است.", style = MaterialTheme.typography.bodySmall)',
+              'Text("این آمار فقط روی همین گوشی ذخیره می‌شود و با ویندوز ادغام نشده است.", style = MaterialTheme.typography.bodySmall)\n        OutlinedButton(onClick = { speech.speak("گزارش پیشرفت. " + completed + " از " + total + " مطلب تکمیل شده. " + tasks.count { !it.completed } + " کار باز.") }, modifier = Modifier.fillMaxWidth()) { Text("خواندن گزارش") }'
+          )
+          source = source.replace("fun QuizScreen(db: AppDatabase, userDb: UserDatabase, examMode: Boolean = false)", "fun QuizScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeech, examMode: Boolean = false)")
+          source = source.replace(
+              'val options = readStringArray(item.optionsJson ?: meta?.get("options")?.toString())',
+              'val options = readStringArray(item.optionsJson ?: meta?.get("options")?.toString())\n            OutlinedButton(onClick = { speech.speak(item.title.orEmpty() + ". " + cleanHtml(item.content.orEmpty()) + ". " + options.joinToString(". ")) }, modifier = Modifier.fillMaxWidth()) { Text("خواندن سؤال و گزینه‌ها") }'
+          )
+          source = source.replace("fun LabsScreen(db: AppDatabase, userDb: UserDatabase, onOpenItem: (String) -> Unit)", "fun LabsScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeech, onOpenItem: (String) -> Unit)")
+          source = source.replace(
+              'items(visible, key = { it.uid }) { item -> ContentItemCard(item) { onOpenItem(item.uid) } }',
+              'items(visible, key = { it.uid }) { item ->\n                Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {\n                    ContentItemCard(item) { onOpenItem(item.uid) }\n                    OutlinedButton(onClick = { speech.speak(item.title.orEmpty() + ". " + cleanHtml(item.summary.orEmpty()) + ". " + cleanHtml(item.content.orEmpty())) }, modifier = Modifier.fillMaxWidth()) { Text("خواندن راهنمای آزمایشگاه") }\n                }\n            }'
+          )
+          source = source.replace("fun BookmarksScreen(db: AppDatabase, userDb: UserDatabase, onOpenItem: (String) -> Unit)", "fun BookmarksScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeech, onOpenItem: (String) -> Unit)")
+          source = source.replace(
+              'Text(cleanHtml(item.summary), maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)',
+              'Text(cleanHtml(item.summary), maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)\n                            OutlinedButton(onClick = { speech.speak(item.title.orEmpty() + ". " + cleanHtml(item.summary.orEmpty())) }) { Text("خواندن") }'
+          )
           path.write_text(source, encoding="utf-8")
-          print("Dashboard expanded with module navigation, live counters and quick capture.")
+          print("Dashboard expanded and Persian read-aloud wired into notes, tasks, reports, quizzes, labs and bookmarks.")
           PY
 
       - name: Generate effective Android source manifest
