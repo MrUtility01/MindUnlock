@@ -100,3 +100,25 @@ Implementation consequence:
 2. Use JDK 17 or later for Windows packaging.
 3. Run Windows-specific packaging and installation tests on a Windows x64 runner; a Linux build is not sufficient evidence.
 4. Keep Android's Kotlin 2.0.21 configuration unchanged while evaluating the isolated desktop branch.
+
+
+## PoC toolchain pin — 2026-11-11
+
+For the isolated first Windows PoC, the following candidate toolchain is pinned:
+
+| Component | Version | Reason |
+|---|---:|---|
+| Kotlin JVM plugin | 2.4.21 | Current stable Kotlin version shown in the official compatibility guide |
+| Kotlin Compose compiler plugin | 2.4.21 | Must match the Kotlin plugin version |
+| Compose Multiplatform Gradle plugin | 1.12.2 | Current documented stable Compose Multiplatform release; supports Windows 10 x64 |
+| Gradle | 8.14.3 | Within the official Gradle compatibility range for Kotlin 2.4.20–2.4.21 |
+| JDK | 17 | Supported for desktop runtime and required for native packaging |
+
+The Windows workflow uses `windows-latest`, runs the unit tests, and attempts to package an MSI. These pins are an isolated proof-of-concept baseline; they do not authorize an Android toolchain upgrade.
+
+Official references:
+- https://kotlinlang.org/docs/multiplatform/compose-compatibility-and-versioning.html
+- https://kotlinlang.org/docs/multiplatform/multiplatform-compatibility-guide.html
+- https://kotlinlang.org/docs/multiplatform/compose-native-distribution.html
+
+**Validation status:** configuration committed; Windows CI execution and MSI packaging must pass before this candidate is accepted. The initial UI does not yet prove RTL correctness, DPI behavior, keyboard navigation, Jalali dates, persistence, or installer lifecycle.
