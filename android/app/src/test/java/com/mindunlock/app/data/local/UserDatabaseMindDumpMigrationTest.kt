@@ -44,7 +44,7 @@ class UserDatabaseMindDumpMigrationTest {
             context,
             UserDatabase::class.java,
             databaseName
-        ).addMigrations(UserDatabase.MIGRATION_1_2, UserDatabase.MIGRATION_2_3, UserDatabase.MIGRATION_3_4).allowMainThreadQueries().build()
+        ).addMigrations(UserDatabase.MIGRATION_1_2, UserDatabase.MIGRATION_2_3, UserDatabase.MIGRATION_3_4, UserDatabase.MIGRATION_4_5).allowMainThreadQueries().build()
 
         try {
             val notes = migrated.noteDao().observeAll().first()
@@ -90,6 +90,14 @@ class UserDatabaseMindDumpMigrationTest {
             assertEquals(42L, later.sourceMindDumpId)
             migrated.laterTopicDao().updateStatus(later.id, "active", System.currentTimeMillis())
             assertEquals("active", migrated.laterTopicDao().observeAll().first().single().status)
+
+            migrated.labStepProgressDao().upsert(
+                LabStepProgressEntity(itemUid = "lab-vlan-01", stepIndex = 0, completed = true, updatedAt = 2000)
+            )
+            val labSteps = migrated.labStepProgressDao().observeByItem("lab-vlan-01").first()
+            assertEquals(1, labSteps.size)
+            assertEquals(0, labSteps.single().stepIndex)
+            assertEquals(true, labSteps.single().completed)
 
         } finally {
             migrated.close()
