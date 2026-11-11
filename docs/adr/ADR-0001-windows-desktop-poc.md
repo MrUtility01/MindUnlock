@@ -83,3 +83,20 @@ This ADR can be accepted only after evidence is attached for:
 - CI unit/integration tests with actual executed test cases.
 
 If one or more critical criteria fail, reassess JavaFX or a native Windows client before committing to a long-term architecture.
+
+
+## Official compatibility research update — 2026-11-11
+
+Official Kotlin documentation currently states that Compose Multiplatform 1.8.0 and later require Kotlin 2.1.0 or newer, and that the Compose Compiler Gradle plugin must use the same version as the Kotlin Multiplatform plugin. The tracked Android build currently uses Kotlin 2.0.21, so that version must **not** be copied blindly into a new desktop project using a current Compose Multiplatform release.
+
+Official documentation also identifies JDK 11 as the desktop runtime minimum and JDK 17 or later for packaging native distributions. The current native distribution documentation lists Windows installer formats and notes that native packaging is performed on the corresponding operating system; Windows MSI/EXE packaging therefore needs a Windows runner.
+
+Sources:
+- https://kotlinlang.org/docs/multiplatform/compose-compatibility-and-versioning.html
+- https://kotlinlang.org/docs/multiplatform/compose-native-distribution.html
+
+Implementation consequence:
+1. Select a stable Kotlin/Compose Multiplatform pair from the official compatibility table at implementation time.
+2. Use JDK 17 or later for Windows packaging.
+3. Run Windows-specific packaging and installation tests on a Windows x64 runner; a Linux build is not sufficient evidence.
+4. Keep Android's Kotlin 2.0.21 configuration unchanged while evaluating the isolated desktop branch.
