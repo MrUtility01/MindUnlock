@@ -2990,6 +2990,8 @@ jobs:
           source = path.read_text(encoding="utf-8")
           if "import com.mindunlock.app.data.local.MindDumpEntity" not in source:
               source = source.replace("import com.mindunlock.app.data.local.UserDatabase", "import com.mindunlock.app.data.local.UserDatabase\nimport com.mindunlock.app.data.local.MindDumpEntity")
+          if "import com.mindunlock.app.PersianSpeech" not in source:
+              source = source.replace("import com.mindunlock.app.data.local.UserDatabase", "import com.mindunlock.app.PersianSpeech\nimport com.mindunlock.app.data.local.UserDatabase")
           start = source.index("@Composable\nfun DashboardScreen(")
           next_screen = source.find("\n@Composable", start + 20)
           if next_screen < 0:
