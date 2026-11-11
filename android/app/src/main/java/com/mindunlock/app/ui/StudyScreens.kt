@@ -108,6 +108,7 @@ import com.mindunlock.app.PersianSpeech
 import com.mindunlock.app.StudyReminderReceiver
 import com.mindunlock.app.data.local.AppDatabase
 import com.mindunlock.app.data.local.UserDatabase
+import com.mindunlock.app.data.local.MindDumpEntity
 import com.mindunlock.app.data.local.BookmarkEntity
 import com.mindunlock.app.data.local.ContentItemEntity
 import com.mindunlock.app.data.local.ContentItemListEntry
@@ -162,41 +163,101 @@ fun DashboardScreen(
     val itemCount by db.contentItemDao().observeItemCount().collectAsState(initial = 0)
     val flashcardCount by db.contentItemDao().observeFlashcardCount().collectAsState(initial = 0)
     val progress by userDb.progressDao().observeAll().collectAsState(initial = emptyList())
+    val tasks by userDb.studyTaskDao().observeAll().collectAsState(initial = emptyList())
+    val inboxEntries by userDb.mindDumpDao().observeAll().collectAsState(initial = emptyList())
+    val journalEntries by userDb.journalEntryDao().observeAll().collectAsState(initial = emptyList())
+    var quickCapture by rememberSaveable { mutableStateOf("") }
+    var captureMessage by remember { mutableStateOf("") }
     val completed = progress.count { it.completed }
+    val pendingTasks = tasks.count { !it.completed }
+    val inboxCount = inboxEntries.count { it.status == "inbox" }
     val last = chapters.firstOrNull()
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
             Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text("MindUnlock", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                Text("ادامه بده؛ یادگیری پیوسته نتیجه می‌دهد", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("مرکز کنترل یادگیری و مدیریت ذهن", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.primaryContainer) {
                 Icon(Icons.Default.Bookmark, contentDescription = null, modifier = Modifier.padding(12.dp), tint = MaterialTheme.colorScheme.primary)
             }
         }
+        Text("نمای کلی امروز", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             MetricCard("فصل‌ها", chapters.size.toString(), Modifier.weight(1f))
             MetricCard("مطالب", itemCount.toString(), Modifier.weight(1f))
             MetricCard("تکمیل‌شده", completed.toString(), Modifier.weight(1f))
         }
-        Text("شروع یادگیری", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-        Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-            ActionTile("موضوع‌ها و فصل‌ها", "courses", onNavigate, Modifier.weight(1f))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            MetricCard("کارهای باز", pendingTasks.toString(), Modifier.weight(1f))
+            MetricCard("ورودی ذهن", inboxCount.toString(), Modifier.weight(1f))
+            MetricCard("نوشته‌ها", journalEntries.size.toString(), Modifier.weight(1f))
+        }
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("ثبت سریع فکر یا سؤال", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                OutlinedTextField(
+                    value = quickCapture,
+                    onValueChange = { quickCapture = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("هر چیزی که می‌خواهی ثبت کنی…") },
+                    minLines = 2,
+                    maxLines = 4
+                )
+                Button(
+                    onClick = {
+                        val value = quickCapture.trim()
+                        if (value.isNotEmpty()) {
+                            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                                userDb.mindDumpDao().insert(MindDumpEntity(content = value))
+                            }
+                            quickCapture = ""
+                            captureMessage = "در صندوق ورودی ذخیره شد."
+                        }
+                    },
+                    enabled = quickCapture.isNotBlank(),
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("ذخیره در صندوق ورودی") }
+                if (captureMessage.isNotBlank()) Text(captureMessage, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
+            }
+        }
+        Text("تمام بخش‌های برنامه", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ActionTile("صندوق ورودی ذهن", "inbox", onNavigate, Modifier.weight(1f))
+            ActionTile("دفتر روزانه", "journal", onNavigate, Modifier.weight(1f))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ActionTile("وظایف و برنامه روزانه", "planner", onNavigate, Modifier.weight(1f))
+            ActionTile("آرشیو دانش و یادداشت‌ها", "notes", onNavigate, Modifier.weight(1f))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ActionTile("مسیرهای آموزشی", "courses", onNavigate, Modifier.weight(1f))
             ActionTile("فلش‌کارت‌ها", "flashcards", onNavigate, Modifier.weight(1f))
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-            ActionTile("مرور امروز", "review", onNavigate, Modifier.weight(1f))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ActionTile("مرور فاصله‌دار", "review", onNavigate, Modifier.weight(1f))
             ActionTile("تمرین", "quiz", onNavigate, Modifier.weight(1f))
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ActionTile("آزمون", "exam", onNavigate, Modifier.weight(1f))
-            ActionTile("آزمایشگاه", "labs", onNavigate, Modifier.weight(1f))
+            ActionTile("آزمایشگاه و پروژه‌ها", "labs", onNavigate, Modifier.weight(1f))
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-            ActionTile("دفتر یادداشت", "notes", onNavigate, Modifier.weight(1f))
-            ActionTile("برنامه‌ریز", "planner", onNavigate, Modifier.weight(1f))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ActionTile("نشانک‌ها", "bookmarks", onNavigate, Modifier.weight(1f))
+            ActionTile("گزارش پیشرفت", "progress", onNavigate, Modifier.weight(1f))
         }
-        Text("ادامهٔ مطالعه", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ActionTile("تنظیمات و صدا", "settings", onNavigate, Modifier.weight(1f))
+            ActionTile("ابزارهای بیشتر", "more", onNavigate, Modifier.weight(1f))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ActionTile("دریافت محتوا و اتصال", "sync", onNavigate, Modifier.weight(1f))
+            ActionTile("مدیریت یادگیری", "courses", onNavigate, Modifier.weight(1f))
+        }
+        Text("ادامه از آخرین فصل", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         if (last != null) {
             Card(onClick = { onContinue(last.id) }, modifier = Modifier.fillMaxWidth()) {
                 Row(Modifier.fillMaxWidth().padding(15.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
@@ -208,9 +269,9 @@ fun DashboardScreen(
                 }
             }
         } else EmptyMessage("هنوز محتوایی دریافت نشده است.")
+        Text("تعداد فلش‌کارت‌ها: $flashcardCount", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
-
 @Composable
 private fun MetricCard(label: String, value: String, modifier: Modifier = Modifier) {
     Card(modifier = modifier) {
