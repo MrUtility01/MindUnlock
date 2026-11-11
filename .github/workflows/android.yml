@@ -2500,6 +2500,32 @@ jobs:
           print(f"Added sourceStatus to {count} Room projections.")
           PY
 
+      - name: Generate effective Android source manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -d android-build
+          {
+            echo "repository=MrUtility01/MindUnlock"
+            echo "commit=${GITHUB_SHA}"
+            echo "workflow_run=${GITHUB_RUN_ID}"
+            echo "source_archive=MindUnlock-Android-v0.3.1-source.zip"
+            echo "source_archive_sha256=$(sha256sum MindUnlock-Android-v0.3.1-source.zip | awk '{print $1}')"
+            echo
+            find android-build -type f -print0 | sort -z | while IFS= read -r -d '' file; do
+              sha256sum "$file"
+            done
+          } > effective-android-source-manifest.txt
+          echo "Effective source files: $(find android-build -type f | wc -l)" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "Generated SHA-256 manifest for the fully patched Android source." | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload effective Android source manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: MindUnlock-effective-source-manifest-${{ github.run_number }}
+          path: effective-android-source-manifest.txt
+          if-no-files-found: error
+
       - name: Run JVM unit tests
         working-directory: android-build
         run: ./gradlew testDebugUnitTest --stacktrace
