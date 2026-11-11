@@ -542,3 +542,10 @@ Workflow باید فقط سورس version-controlled را build و test کند؛
 **قاعده معماری:** داده‌های خصوصی MindUnlock مانند Inbox، Journal، Learning Profile، Learning Session و Feedback باید از محتوای آموزشی جدا بمانند. هر دیتابیس schema version، Migration test و مسیر backup/restore مستقل و قابل آزمون دارد. وجود backup/restore کامل فعلاً اثبات نشده و Manifest مؤثر نیز `allowBackup=false` دارد.
 
 این بخش فقط مستندسازی ممیزی است؛ هیچ کد اجرایی، فایل دیتابیس یا APK در این commit تغییر نمی‌کند.
+
+
+## 27. Source reconstruction map and tracked-source divergence
+
+The effective APK build uses a 38-step GitHub Actions workflow that extracts `MindUnlock-Android-v0.3.1-source.zip` into a temporary directory and applies many inline and compressed source transformations before Gradle runs. The checked-in `android/` tree is not the same source tree: the archive contains baseline Kotlin files such as `AppLock.kt`, `PersianSpeech.kt`, `StudyReminderReceiver.kt`, and `ui/StudyScreens.kt` that are absent from the tracked Android tree. The archive SHA-1 is `bb35cab525b86b2ed5136360985c96451c4daf16`; the workflow file is 154,656 characters and has 38 named steps.
+
+**Architecture rule:** do not replace the checked-in Android tree with the ZIP baseline and do not remove CI patches until a disposable CI reconstruction reproduces the effective source and generates a per-file SHA-256 manifest. The detailed workflow inventory and current divergence are recorded in `docs/IMPLEMENTATION_AUDIT_AND_NEXT_STEPS.md`, section 10. Source stabilization is still pending; this finding does not mean the app source has been unified.
