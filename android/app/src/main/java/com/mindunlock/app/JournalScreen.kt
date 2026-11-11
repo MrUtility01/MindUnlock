@@ -9,6 +9,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
+import androidx.compose.material3.IconButton
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Card
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
@@ -34,7 +37,7 @@ import java.util.Date
 import java.util.Locale
 
 @Composable
-fun JournalScreen(userDatabase: UserDatabase) {
+fun JournalScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
     val scope = rememberCoroutineScope()
     val entries by userDatabase.journalEntryDao().observeAll().collectAsState(initial = emptyList())
     var title by rememberSaveable { mutableStateOf("") }
@@ -52,6 +55,11 @@ fun JournalScreen(userDatabase: UserDatabase) {
         Text("فضایی خصوصی برای ثبت اتفاق‌ها، فکرها و تجربه‌های روزانه؛ اطلاعات فقط در پایگاه داده محلی برنامه ذخیره می‌شود.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         OutlinedTextField(title, { title = it }, Modifier.fillMaxWidth(), label = { Text("عنوان (اختیاری)") }, singleLine = true)
         OutlinedTextField(body, { body = it }, Modifier.fillMaxWidth(), label = { Text("امروز چه گذشت؟") }, minLines = 4, maxLines = 8)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            IconButton(onClick = { speech.speak(body.ifBlank { title }) }, enabled = body.isNotBlank() || title.isNotBlank()) {
+                androidx.compose.material3.Icon(Icons.Default.VolumeUp, contentDescription = "خواندن پیش‌نویس")
+            }
+        }
         Text("حال‌وهوای امروز (اختیاری)", style = MaterialTheme.typography.labelLarge)
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             listOf("" to "بدون ثبت", "calm" to "آرام", "good" to "خوب", "tired" to "خسته", "stressed" to "پرفشار").forEach { (value, label) ->
@@ -86,6 +94,7 @@ fun JournalScreen(userDatabase: UserDatabase) {
                             Text(entry.title.ifBlank { "بدون عنوان" }, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                             Text(SimpleDateFormat("yyyy/MM/dd · HH:mm", Locale.getDefault()).format(Date(entry.createdAt)), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Text(entry.body, style = MaterialTheme.typography.bodyMedium)
+                            OutlinedButton(onClick = { speech.speak((entry.title + ". " + entry.body).trim()) }, modifier = Modifier.fillMaxWidth()) { Text("خواندن نوشته با صدا") }
                             if (entry.mood != null) Text("حال‌وهوا: " + when(entry.mood) { "calm" -> "آرام"; "good" -> "خوب"; "tired" -> "خسته"; "stressed" -> "پرفشار"; else -> entry.mood }, style = MaterialTheme.typography.labelSmall)
                             if (entry.tags.isNotBlank()) Text("برچسب‌ها: ${entry.tags}", style = MaterialTheme.typography.labelSmall)
                             OutlinedButton(onClick = { scope.launch { userDatabase.journalEntryDao().delete(entry.id); message = "نوشته حذف شد." } }, modifier = Modifier.fillMaxWidth()) { Text("حذف نوشته") }
