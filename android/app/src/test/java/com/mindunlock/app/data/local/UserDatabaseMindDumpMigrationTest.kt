@@ -44,7 +44,7 @@ class UserDatabaseMindDumpMigrationTest {
             context,
             UserDatabase::class.java,
             databaseName
-        ).addMigrations(UserDatabase.MIGRATION_1_2).allowMainThreadQueries().build()
+        ).addMigrations(UserDatabase.MIGRATION_1_2, UserDatabase.MIGRATION_2_3).allowMainThreadQueries().build()
 
         try {
             val notes = migrated.noteDao().observeAll().first()
@@ -62,6 +62,15 @@ class UserDatabaseMindDumpMigrationTest {
             assertEquals(1L, newId)
             assertEquals("ایده جدید پس از ارتقا", newItem.content)
             assertEquals("inbox", newItem.status)
+
+            val journalId = migrated.journalEntryDao().insert(
+                JournalEntryEntity(title = "یادداشت روزانه", body = "ثبت یک روز جدید", mood = "calm", tags = "روزانه,شخصی")
+            )
+            val journal = migrated.journalEntryDao().observeAll().first().single()
+            assertEquals(1L, journalId)
+            assertEquals("یادداشت روزانه", journal.title)
+            assertEquals("ثبت یک روز جدید", journal.body)
+            assertEquals("calm", journal.mood)
         } finally {
             migrated.close()
         }
