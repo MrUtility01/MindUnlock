@@ -66,6 +66,7 @@ fun MindDumpScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
             minLines = 3,
             maxLines = 6
         )
+        PersianVoiceInputButton { spoken -> draft = listOf(draft, spoken).filter { it.isNotBlank() }.joinToString("\\n") }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
             OutlinedButton(onClick = { speech.speak(draft) }, enabled = draft.isNotBlank()) { Text("خواندن متن") }
         }
