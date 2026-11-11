@@ -978,7 +978,7 @@ private fun LabScenarioCard(
             if (metaLine.isNotBlank()) Text(metaLine, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (!details.hasStructuredDetails) Text("جزئیات سناریو در متن کامل مطلب قرار دارد.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = onSpeak, modifier = Modifier.weight(1f)) { Text("خواندن خلاصه") }
+                OutlinedButton(onClick = onSpeak, modifier = Modifier.weight(1f)) { Text("خواندن راهنمای آزمایشگاه") }
                 Button(onClick = onOpen, modifier = Modifier.weight(1f)) { Text("شروع سناریو") }
             }
         }
