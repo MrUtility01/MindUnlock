@@ -13,6 +13,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -39,7 +41,9 @@ fun BackupRestoreScreen(userDb: UserDatabase) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var busy by remember { mutableStateOf(false) }
-    var status by remember { mutableStateOf("پشتیبان شامل داده‌های شخصی و پیشرفت آموزشی محلی است؛ فایل JSON رمزگذاری‌شده نیست.") }
+    var status by remember { mutableStateOf("پشتیبان‌گیری رمزگذاری‌شده با گذرواژه توصیه می‌شود.") }
+    var backupPassword by remember { mutableStateOf("") }
+    var encryptBackups by remember { mutableStateOf(true) }
     var pending by remember { mutableStateOf<UserDataBackupDocument?>(null) }
 
     val exportLauncher = rememberLauncherForActivityResult(
@@ -50,7 +54,9 @@ fun BackupRestoreScreen(userDb: UserDatabase) {
                 busy = true
                 status = "در حال آماده‌سازی پشتیبان..."
                 try {
-                    val json = UserDataBackupManager.export(context, userDb)
+                    require(!encryptBackups || backupPassword.length >= 8) { "برای پشتیبان رمزگذاری‌شده، گذرواژه حداقل ۸ نویسه‌ای وارد کن." }
+                    val plainJson = UserDataBackupManager.export(context, userDb)
+                    val json = if (encryptBackups) UserDataBackupCodec.encrypt(plainJson, backupPassword.toCharArray()) else plainJson
                     val written = withContext(Dispatchers.IO) {
                         context.contentResolver.openOutputStream(uri, "w")?.use { output ->
                             output.write(json.toByteArray(Charsets.UTF_8))
@@ -92,7 +98,8 @@ fun BackupRestoreScreen(userDb: UserDatabase) {
                             String(output.toByteArray(), Charsets.UTF_8)
                         } ?: throw IllegalStateException("فایل قابل خواندن نیست.")
                     }
-                    val decoded = UserDataBackupCodec.decode(json)
+                    val plainJson = UserDataBackupCodec.decryptIfEncrypted(json, backupPassword.toCharArray())
+                    val decoded = UserDataBackupCodec.decode(plainJson)
                     require(decoded.payload.totalRecords > 0) { "فایل معتبر است اما هیچ رکورد شخصی ندارد؛ برای جلوگیری از پاک‌شدن ناخواسته، بازیابی خالی مجاز نیست." }
                     pending = decoded
                     status = "فایل معتبر است. پیش از بازیابی، اطلاعات فعلی به‌صورت خودکار در پوشه خصوصی برنامه پشتیبان‌گیری می‌شود."
@@ -121,6 +128,7 @@ fun BackupRestoreScreen(userDb: UserDatabase) {
                 Text("• موضوعات برای بعد")
                 Text("• وضعیت چک‌لیست آزمایشگاه‌ها")
                 Text("• تاریخچه جلسه‌های یادگیری")
+                Text("• در حالت رمزگذاری، فایل با AES-256-GCM و گذرواژه‌ای که تعیین می‌کنی محافظت می‌شود.")
             }
         }
         Card(Modifier.fillMaxWidth()) {
@@ -143,7 +151,29 @@ fun BackupRestoreScreen(userDb: UserDatabase) {
             modifier = Modifier.fillMaxWidth()
         ) { Text("انتخاب فایل و بررسی پشتیبان") }
         Text(status, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text("امنیت فایل: ساختار نسخه‌دار و SHA-256 برای تشخیص تغییر یا خرابی داده‌ها بررسی می‌شود. SHA-256 رمزگذاری نیست؛ فایل را در محل امن نگه‌دار و برای اشتراک‌گذاری عمومی ارسال نکن.", style = MaterialTheme.typography.bodySmall)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Checkbox(checked = encryptBackups, onCheckedChange = { encryptBackups = it })
+            Column(Modifier.weight(1f)) {
+                Text("رمزگذاری فایل پشتیبان", fontWeight = FontWeight.SemiBold)
+                Text("پیشنهاد می‌شود روشن بماند.", style = MaterialTheme.typography.bodySmall)
+            }
+        }
+        OutlinedTextField(
+            value = backupPassword,
+            onValueChange = { backupPassword = it },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("گذرواژه پشتیبان") },
+            supportingText = { Text("حداقل ۸ نویسه؛ برای بازیابی همین گذرواژه را لازم داری.") },
+            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+            singleLine = true
+        )
+        Text(
+            if (encryptBackups) "رمزگذاری فعال: AES-256-GCM با مشتق‌سازی کلید PBKDF2-HMAC-SHA256. گذرواژه در فایل ذخیره نمی‌شود؛ فراموش‌کردن آن یعنی بازیابی فایل ممکن نیست."
+            else "هشدار: رمزگذاری خاموش است؛ فایل شامل اطلاعات شخصی به‌صورت متن JSON خواهد بود.",
+            style = MaterialTheme.typography.bodySmall,
+            color = if (encryptBackups) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error
+        )
+        Text("ساختار نسخه‌دار و SHA-256 برای تشخیص خرابی داده‌ها نیز بررسی می‌شود. SHA-256 جایگزین رمزگذاری یا احراز اصالت رمزنگاری‌شده نیست.", style = MaterialTheme.typography.bodySmall)
     }
 
     pending?.let { document ->
