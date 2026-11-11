@@ -2,6 +2,17 @@ package com.mindunlock.app
 import androidx.compose.foundation.layout.fillMaxWidth
 
 import android.os.Bundle
+import android.app.Activity
+import android.content.Intent
+import android.speech.RecognizerIntent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.filled.Stop
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+import com.mindunlock.app.data.local.MindDumpEntity
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -167,6 +178,18 @@ private fun MindUnlockRoot(
     var selectedSubject by rememberSaveable { mutableStateOf("") }
     var selectedChapter by rememberSaveable { mutableStateOf("") }
     var selectedItem by rememberSaveable { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
+    val voiceCaptureLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val spokenText = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()?.trim().orEmpty()
+            if (spokenText.isNotBlank()) {
+                scope.launch {
+                    userDatabase.mindDumpDao().insert(MindDumpEntity(content = spokenText, category = "thought"))
+                    screen = "inbox"
+                }
+            }
+        }
+    }
     val title = when (screen) {
         "subject" -> "موضوع‌ها"
         "chapter" -> "فصل‌ها"
@@ -209,6 +232,16 @@ private fun MindUnlockRoot(
                     }
                 },
                 actions = {
+                    IconButton(onClick = { speech.speak("صفحه $title") }) { Icon(Icons.Default.VolumeUp, contentDescription = "خواندن عنوان صفحه") }
+                    IconButton(onClick = { speech.stop() }) { Icon(Icons.Default.Stop, contentDescription = "توقف صدا") }
+                    IconButton(onClick = {
+                        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "fa-IR")
+                            putExtra(RecognizerIntent.EXTRA_PROMPT, "صحبت کن؛ متن در صندوق ورودی ذخیره می‌شود")
+                        }
+                        runCatching { voiceCaptureLauncher.launch(intent) }
+                    }) { Icon(Icons.Default.Mic, contentDescription = "ثبت صوتی در صندوق ورودی") }
                     if (screen == "home") IconButton(onClick = { screen = "sync" }) { Icon(Icons.Default.CloudDownload, contentDescription = "اتصال به ویندوز") }
                     IconButton(onClick = onLockApp) { Icon(Icons.Default.Lock, contentDescription = "قفل برنامه") }
                     IconButton(onClick = { screen = "settings" }) { Icon(Icons.Default.Settings, contentDescription = "تنظیمات") }
@@ -236,8 +269,8 @@ private fun MindUnlockRoot(
                 "flashcards" -> FlashcardsScreen(repository.database, userDatabase, speech, preferences, reviewOnly = false)
                 "review" -> FlashcardsScreen(repository.database, userDatabase, speech, preferences, reviewOnly = true)
                 "notes" -> NotesScreen(userDatabase)
-                "inbox" -> MindDumpScreen(userDatabase)
-                "journal" -> JournalScreen(userDatabase)
+                "inbox" -> MindDumpScreen(userDatabase, speech)
+                "journal" -> JournalScreen(userDatabase, speech)
                 "quiz" -> QuizScreen(repository.database, userDatabase, examMode = false)
                 "exam" -> QuizScreen(repository.database, userDatabase, examMode = true)
                 "labs" -> LabsScreen(repository.database, userDatabase, onOpenItem = { uid -> selectedItem = uid; previousScreen = "labs"; screen = "reader" })
