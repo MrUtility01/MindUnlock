@@ -54,6 +54,45 @@ class UserDataBackupCodecTest {
     }
 
     @Test
+    fun encryptedBackupRoundTripsAndDoesNotExposePayloadText() {
+        val plain = UserDataBackupCodec.encode(
+            UserDataBackupPayload(mindDump = listOf(MindDumpEntity(content = "private-note-xyz"))),
+            1_800_000_000_000L,
+            "test"
+        )
+        val encrypted = UserDataBackupCodec.encrypt(plain, "correct horse battery".toCharArray())
+        assertEquals(false, encrypted.contains("private-note-xyz"))
+        val decrypted = UserDataBackupCodec.decryptIfEncrypted(encrypted, "correct horse battery".toCharArray())
+        assertEquals("private-note-xyz", UserDataBackupCodec.decode(decrypted).payload.mindDump.single().content)
+    }
+
+    @Test
+    fun encryptedBackupRejectsWrongPasswordAndTamperedCiphertext() {
+        val plain = UserDataBackupCodec.encode(
+            UserDataBackupPayload(mindDump = listOf(MindDumpEntity(content = "private-note"))),
+            1_800_000_000_000L,
+            "test"
+        )
+        val encrypted = UserDataBackupCodec.encrypt(plain, "correct horse battery".toCharArray())
+        assertThrows(IllegalArgumentException::class.java) {
+            UserDataBackupCodec.decryptIfEncrypted(encrypted, "incorrect password".toCharArray())
+        }
+        val root = com.google.gson.JsonParser.parseString(encrypted).asJsonObject
+        val ciphertext = root.get("ciphertext").asString
+        root.addProperty("ciphertext", ciphertext.dropLast(4) + "AAAA")
+        assertThrows(IllegalArgumentException::class.java) {
+            UserDataBackupCodec.decryptIfEncrypted(root.toString(), "correct horse battery".toCharArray())
+        }
+    }
+
+    @Test
+    fun rejectsTooShortEncryptionPassword() {
+        assertThrows(IllegalArgumentException::class.java) {
+            UserDataBackupCodec.encrypt("{}", "short".toCharArray())
+        }
+    }
+
+    @Test
     fun rejectsDuplicatePrimaryKeys() {
         val payload = UserDataBackupPayload(
             progress = listOf(
