@@ -491,6 +491,10 @@ fun ReaderScreen(db: AppDatabase, userDb: UserDatabase, itemUid: String, speech:
     val correctIndex = metadata?.get("correct_index")?.let { runCatching { it.asInt }.getOrNull() }
     val marked = bookmarks.any { it.itemUid == current.uid }
     val bodyText = listOfNotNull(current.summary, current.content).filter { it.isNotBlank() }.joinToString("\n\n")
+    val labDetails = remember(current.uid, current.metadataJson) {
+        if (current.type in setOf("lab", "exercise", "practice", "project")) LabScenarioParser.parse(current.metadataJson)
+        else LabScenarioMetadata()
+    }
     val imageRefs = extractImageReferences(listOfNotNull(current.content, current.summary, current.metadataJson, current.rawJson).joinToString("\n"))
     val localImages = media.filter { cached ->
         val rel = cached.relativePath.replace('\\', '/')
@@ -502,6 +506,9 @@ fun ReaderScreen(db: AppDatabase, userDb: UserDatabase, itemUid: String, speech:
         Text(current.title ?: "بدون عنوان", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         if (!current.summary.isNullOrBlank()) Text(cleanHtml(current.summary), style = MaterialTheme.typography.titleSmall)
         localImages.distinctBy { it.localPath }.forEach { cached -> SafeLocalCachedImage(cached.localPath) }
+        if (labDetails.hasStructuredDetails) {
+            LabScenarioReaderPanel(item = current, details = labDetails, userDb = userDb, speech = speech, preferences = preferences)
+        }
         if (!current.content.isNullOrBlank()) {
                 Text(
                     cleanHtml(current.content),
@@ -529,8 +536,19 @@ fun ReaderScreen(db: AppDatabase, userDb: UserDatabase, itemUid: String, speech:
                             val correct = selectedOption == correctIndex
                             answerMessage = if (correct) "پاسخ درست است." else "پاسخ صحیح: گزینهٔ ${correctIndex + 1}"
                             scope.launch {
+                                val timestamp = System.currentTimeMillis()
                                 val old = userDb.progressDao().get(current.uid) ?: ProgressEntity(current.uid, current.chapterId)
-                                userDb.progressDao().upsert(old.copy(attempts = old.attempts + 1, correct = old.correct + if (correct) 1 else 0, wrong = old.wrong + if (correct) 0 else 1, lastResult = if (correct) "correct" else "wrong", updatedAt = System.currentTimeMillis()))
+                                val schedule = ReviewScheduler.schedule(if (correct) 4 else 0, old.intervalDays, timestamp)
+                                userDb.progressDao().upsert(old.copy(
+                                    attempts = old.attempts + 1,
+                                    correct = old.correct + if (correct) 1 else 0,
+                                    wrong = old.wrong + if (correct) 0 else 1,
+                                    quality = if (correct) 4 else 0,
+                                    intervalDays = schedule.intervalDays,
+                                    dueAt = schedule.dueAt,
+                                    lastResult = if (correct) "correct" else "wrong",
+                                    updatedAt = timestamp
+                                ))
                             }
                         }
                     }) { Text("بررسی پاسخ") }
@@ -575,6 +593,98 @@ fun ReaderScreen(db: AppDatabase, userDb: UserDatabase, itemUid: String, speech:
                 if (noteText.isNotBlank()) scope.launch { userDb.noteDao().upsert(NoteEntity(itemUid = current.uid, chapterId = current.chapterId, title = current.title ?: "یادداشت", body = noteText.trim())) }
                 noteText = ""; noteDialog = false
             }) { Text("ذخیره") } }, dismissButton = { TextButton(onClick = { noteDialog = false }) { Text("انصراف") } })
+    }
+}
+
+@Composable
+private fun LabScenarioReaderPanel(
+    item: ContentItemEntity,
+    details: LabScenarioMetadata,
+    userDb: UserDatabase,
+    speech: PersianSpeech,
+    preferences: android.content.SharedPreferences
+) {
+    val scope = rememberCoroutineScope()
+    val steps = remember(item.uid, details.commands) {
+        mutableStateListOf<Boolean>().apply { repeat(details.commands.size) { add(false) } }
+    }
+    val progress by userDb.progressDao().observeAll().collectAsState(initial = emptyList())
+    val saved = progress.firstOrNull { it.itemUid == item.uid }
+    val finishedSteps = steps.count { it }
+    val allStepsDone = steps.isEmpty() || finishedSteps == steps.size
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        HorizontalDivider()
+        Text("راهنمای اجرای آزمایشگاه", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        if (details.goal.isNotBlank()) LabDetailLine("هدف آزمایش", details.goal)
+        if (details.topology.isNotBlank()) LabDetailLine("توپولوژی", details.topology)
+        if (details.prerequisites.isNotEmpty()) LabDetailLine("پیش‌نیازها", details.prerequisites.joinToString("، "))
+        if (details.equipment.isNotEmpty()) LabDetailLine("تجهیزات موردنیاز", details.equipment.joinToString("، "))
+        if (details.services.isNotEmpty()) LabDetailLine("سرویس‌ها و فناوری‌ها", details.services.joinToString("، "))
+        if (details.commands.isNotEmpty()) {
+            Text("چک‌لیست مراحل اجرا · ${finishedSteps} از ${details.commands.size}", fontWeight = FontWeight.SemiBold)
+            LinearProgressIndicator(
+                progress = { finishedSteps.toFloat() / details.commands.size.coerceAtLeast(1) },
+                modifier = Modifier.fillMaxWidth()
+            )
+            details.commands.forEachIndexed { index, command ->
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = steps[index], onCheckedChange = { steps[index] = it })
+                    Text("${index + 1}. $command", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+        }
+        if (details.expectedOutput.isNotEmpty()) {
+            Text("معیار پذیرش / خروجی مورد انتظار", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
+            details.expectedOutput.forEach { Text("• $it", style = MaterialTheme.typography.bodyMedium) }
+        }
+        if (details.troubleshooting.isNotEmpty()) {
+            Text("چک‌لیست عیب‌یابی", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
+            details.troubleshooting.forEachIndexed { index, issue -> Text("${index + 1}. $issue", style = MaterialTheme.typography.bodyMedium) }
+        }
+        if (details.questions.isNotEmpty()) {
+            Text("سؤالات کنترل یادگیری", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
+            details.questions.forEachIndexed { index, question -> Text("${index + 1}. $question", style = MaterialTheme.typography.bodyMedium) }
+        }
+        val metadataLine = listOfNotNull(
+            details.difficulty.takeIf(String::isNotBlank),
+            details.estimatedMinutes?.let { "زمان تخمینی: $it دقیقه" }
+        ).joinToString(" · ")
+        if (metadataLine.isNotBlank()) Text(metadataLine, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(
+                onClick = {
+                    val script = buildString {
+                        append(details.goal)
+                        details.commands.forEachIndexed { index, value -> append(". مرحله ${index + 1}: $value") }
+                        details.expectedOutput.forEach { append(". خروجی مورد انتظار: $it") }
+                    }
+                    speech.speak(script, preferences.getFloat("speech_rate", 1f), preferences.getString("speech_voice", null))
+                },
+                enabled = speech.ready.value,
+                modifier = Modifier.weight(1f)
+            ) { Text("خواندن مراحل") }
+            Button(
+                onClick = {
+                    scope.launch {
+                        val timestamp = System.currentTimeMillis()
+                        val old = userDb.progressDao().get(item.uid) ?: ProgressEntity(item.uid, item.chapterId)
+                        userDb.progressDao().upsert(old.copy(
+                            completed = true,
+                            completedAt = timestamp,
+                            lastResult = "lab_completed",
+                            updatedAt = timestamp
+                        ))
+                    }
+                },
+                enabled = allStepsDone && saved?.completed != true,
+                modifier = Modifier.weight(1f)
+            ) { Text(if (saved?.completed == true) "آزمایش ثبت شده" else "ثبت تکمیل آزمایش") }
+        }
+        if (saved?.completed == true) {
+            Text("این آزمایش به‌عنوان تکمیل‌شده در پیشرفت محلی ثبت شده است.", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
+        } else if (!allStepsDone) {
+            Text("برای ثبت تکمیل، همه مراحل بالا را علامت بزن. نتیجهٔ واقعی تجهیزات باید جداگانه بررسی شود.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
     }
 }
 
