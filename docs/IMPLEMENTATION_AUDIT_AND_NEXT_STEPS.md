@@ -296,3 +296,75 @@ The comparison is path-and-hash evidence only. It does not establish that each d
 ### 11.2 Build #121 and correction
 
 Build #121 reached and completed the comparison step, but the artifact upload failed because its configured name contained a literal backslash before the run-number expression. This stopped later tests and APK packaging in that run. The workflow expression was corrected in commit 90f92ee4375a19979eb5fb3f4b811130d4175f6c; Build #122 is the verification run. No Android app source or database code was changed by either workflow-only commit.
+
+
+## 12. آرشیو واقعی سورس مؤثر و ممیزی اولیه آن — Build #126
+
+### 12.1 دریافت و اعتبارسنجی آرشیو
+
+در Build #126، پس از پایان تمام Patchهای CI، از پوشه `android-build/` یک Snapshot ساخته و به‌عنوان Artifact بارگذاری شد.
+
+- Build: https://github.com/MrUtility01/MindUnlock/actions/runs/43011962285
+- Commit: `c5b9124f206081dfbf34d127a2e78ef8bfaaae79`
+- Artifact: `MindUnlock-effective-source-snapshot-126`
+- Artifact ID: `13851346127`
+- ZIP داخلی: 31 فایل، حدود 178,556 بایت
+- JVM unit-test task: موفق
+- assembleDebug: موفق
+- بررسی ساختار APK و شناسه بسته: موفق
+- بارگذاری APK و انتشار Release: موفق
+
+توجه: Artifact دانلودشدهٔ GitHub خود یک ZIP بیرونی است که ZIP Snapshot را درون خود دارد. آرشیو داخلی با موفقیت استخراج و فهرست 31 فایل آن بررسی شد. این آرشیو شامل فایل‌های منبع مؤثر پس از Patchهاست؛ به‌تنهایی اثبات نمی‌کند که همه قابلیت‌ها روی دستگاه واقعی درست کار می‌کنند.
+
+### 12.2 دسته‌بندی اولیه فایل‌ها
+
+**کدهای برنامه که باید به منبع اصلی منتقل و بازبینی شوند:**
+- `AppLock.kt`
+- `CrashDiagnostics.kt`
+- `PersianSpeech.kt`
+- `StudyReminderReceiver.kt`
+- `LegacyDatabaseMigrator.kt`
+- `UserDatabase.kt`
+- `ui/StudyScreens.kt`
+- نسخه مؤثر `MainActivity.kt`، `AppDatabase.kt`، `Entities.kt`، `SyncRepository.kt` و `Theme.kt`
+
+**فایل‌های تولیدشده یا ابزار ساخت که نباید با منطق برنامه یکی گرفته شوند:**
+- آیکن‌های mipmap تولیدشده
+- `gradle-wrapper.jar`، `gradlew` و `gradlew.bat` (باید با نسخه Wrapper و سیاست نگهداری مخزن تطبیق داده شوند)
+- `.gitignore` و فایل‌های Gradle (باید جداگانه با تنظیمات CI تطبیق داده شوند)
+
+این دسته‌بندی اولیه است؛ پیش از انتقال، منشأ هر فایل و Patch تولیدکننده باید ثبت شود.
+
+### 12.3 یافته‌های مهم در کد مؤثر
+
+**بحرانی برای بررسی پیش از هر انتشار دارای داده واقعی — مهاجرت دیتابیس:**
+- `LegacyDatabaseMigrator.copyTable` تعداد ردیف‌های مبدأ و مقصد را مقایسه نمی‌کند.
+- مقدار بازگشتی `target.insert(...)` بررسی نمی‌شود؛ در نتیجه درج ناموفق می‌تواند بدون ثبت خطای صریح از حلقه عبور کند.
+- پس از پایان تراکنش‌ها، نشانگر `split_v1_complete` ثبت می‌شود؛ بنابراین باید اثبات شود تمام جدول‌ها و ردیف‌ها واقعاً منتقل شده‌اند، نه صرفاً اینکه حلقه اجرا شده است.
+- تراکنش دو دیتابیس مستقل است و اتمیک مشترک نیست. مسیر توقف برنامه بین پایان تراکنش اول و دوم باید با اجرای مجدد امن و آزمون‌شده پوشش داده شود.
+- فایل قدیمی فعلاً حذف نمی‌شود؛ این رفتار باید تا زمان تأیید شمارش و صحت داده حفظ شود.
+
+**ناسازگاری مهاجرت Room:**
+- `AppDatabase` نسخه 1 دارد اما یک `MIGRATION_1_2` تعریف شده است.
+- بدنه این Migration علاوه بر `content_items`، جدول‌های `progress`، `notes`، `bookmarks` و `study_tasks` را دست‌کاری می‌کند؛ این جدول‌ها اکنون در `UserDatabase` قرار دارند.
+- Builder فعلی `AppDatabase` این Migration را ثبت نمی‌کند. فعلاً نباید آن را فعال یا نسخه دیتابیس را تغییر داد؛ ابتدا تاریخچه نسخه‌های منتشرشده و Schema واقعی باید بررسی شود.
+
+**امنیت همگام‌سازی:**
+- Manifest مقدار `usesCleartextTraffic=true` دارد و `SyncRepository.baseUrl` آدرس `http://` می‌سازد.
+- بنابراین نام کاربری و رمز عبور نشست به‌صورت HTTP بدون رمزنگاری انتقال می‌یابند. مستندات فعلی استفاده را به شبکه محلی مورد اعتماد محدود می‌کنند، اما این محدودیت جایگزین TLS نیست.
+- پیش از استفاده خارج از شبکه کاملاً مورد اعتماد، باید طراحی TLS و مدیریت گواهی انجام شود. تا آن زمان سرویس نباید روی اینترنت عمومی در معرض دسترسی قرار گیرد.
+
+**محدودیت پشتیبان‌گیری و آزمون:**
+- Manifest دارای `allowBackup=false` است؛ این موضوع به‌تنهایی اثبات نمی‌کند که برنامه راهکار مستقل Backup/Restore دارد.
+- Snapshot هیچ مسیر `src/test` یا `src/androidTest` ندارد. موفقیت Gradle task ثبت شده، اما از این شواهد نمی‌توان پوشش تست معنادار منطق برنامه یا تست روی دستگاه را نتیجه گرفت.
+
+### 12.4 تصمیم و ترتیب اقدام
+
+1. آرشیو Build #126 به‌عنوان مرجع ممیزی نگهداری شود؛ هنوز جایگزین سورس Git نیست.
+2. Patchهای CI به تفکیک فایل و ترتیب اجرا مستند شوند.
+3. منطق مهاجرت دیتابیس با آزمون‌های شمارش ردیف، تطبیق کلیدها، تکرارپذیری، خرابی میان دو تراکنش و گزارش خطا پوشش داده شود.
+4. Schemaهای Room و نسخه‌های تاریخی پیش از هر تغییر دیتابیس تطبیق داده شوند.
+5. امنیت انتقال HTTP و راهکار Backup/Restore پیش از انتشار عمومی تعیین تکلیف شود.
+6. پس از آن، کدهای دائمی به پوشه `android/` منتقل و Workflow از Patchهای کدساز به Build عادی تبدیل شود.
+
+**ممنوعیت فعلی:** کپی یک‌باره Snapshot روی `android/`، فعال‌سازی Migration قدیمی، حذف دیتابیس legacy یا تغییر Schema بدون آزمون و نسخه پشتیبان مجاز نیست.
