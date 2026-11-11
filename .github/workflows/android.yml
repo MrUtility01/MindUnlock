@@ -3,6 +3,8 @@ name: Build Android APK
 on:
   push:
     branches: [ main ]
+  pull_request:
+    branches: [ main ]
   workflow_dispatch:
 
 permissions:
@@ -2807,7 +2809,7 @@ jobs:
           if-no-files-found: error
 
       - name: Publish GitHub Release with APK
-        if: success()
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && success()
         uses: softprops/action-gh-release@v2
         with:
           tag_name: android-v0.5.2-${{ github.run_number }}
