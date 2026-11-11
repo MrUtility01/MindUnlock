@@ -2475,10 +2475,10 @@ jobs:
           source = p.read_text(encoding="utf-8")
           if "versionCode = 6" not in source or 'versionName = "0.5.1"' not in source:
               raise SystemExit("Expected v0.5.1 package version markers not found")
-          source = source.replace("versionCode = 6", "versionCode = 11", 1)
-          source = source.replace('versionName = "0.5.1"', 'versionName = "0.5.6"', 1)
+          source = source.replace("versionCode = 6", "versionCode = 12", 1)
+          source = source.replace('versionName = "0.5.1"', 'versionName = "0.5.7"', 1)
           p.write_text(source, encoding="utf-8")
-          print("Package version bumped to 0.5.6 (versionCode 11).")
+          print("Package version bumped to 0.5.7 (versionCode 12).")
           PY
 
       - name: Fix Room projections to include required sourceStatus column
@@ -3425,7 +3425,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: MindUnlock-Android-v0.5.6-debug
+          name: MindUnlock-Android-v0.5.7-debug
           path: android-build/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
@@ -3433,10 +3433,10 @@ jobs:
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' && success()
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: android-v0.5.6-${{ github.run_number }}
-          name: MindUnlock Android 0.5.6 (#${{ github.run_number }})
+          tag_name: android-v0.5.7-${{ github.run_number }}
+          name: MindUnlock Android 0.5.7 (#${{ github.run_number }})
           body: |
-            Android Native 0.5.6 adds the Later / Curiosity module with Room migration 3 to 4, Mind Dump conversion, search, priority, revisit date, status tracking, and Persian read-aloud. It retains the unified dashboard and Persian voice controls.
+            Android Native 0.5.7 adds fully local Persian speech-to-text using sherpa-onnx and the Shenava Rizeh model (first-use model download; subsequent transcription runs offline), model storage controls, refreshed color system, rounded cards, and an upgraded dashboard. It retains the Later / Curiosity module, Mind Dump, Journal, Persian Piper TTS, and learning navigation.
             HTTP sync is intended for trusted local networks only.
           files: android-build/app/build/outputs/apk/debug/app-debug.apk
           prerelease: true
