@@ -2478,7 +2478,7 @@ jobs:
           source = source.replace("versionCode = 6", "versionCode = 9", 1)
           source = source.replace('versionName = "0.5.1"', 'versionName = "0.5.4"', 1)
           p.write_text(source, encoding="utf-8")
-          print("Package version bumped to 0.5.3 (versionCode 9).")
+          print("Package version bumped to 0.5.4 (versionCode 9).")
           PY
 
       - name: Fix Room projections to include required sourceStatus column
