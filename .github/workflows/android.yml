@@ -3000,6 +3000,7 @@ jobs:
           fun DashboardScreen(
               db: AppDatabase,
               userDb: UserDatabase,
+              speech: PersianSpeech,
               onNavigate: (String) -> Unit,
               onContinue: (String) -> Unit
           ) {
@@ -3052,6 +3053,10 @@ jobs:
                               minLines = 2,
                               maxLines = 4
                           )
+                          Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                              PersianVoiceInputButton { spoken -> quickCapture = listOf(quickCapture, spoken).filter { it.isNotBlank() }.joinToString("\\n") }
+                              OutlinedButton(onClick = { speech.speak(quickCapture) }, enabled = quickCapture.isNotBlank()) { Text("خواندن متن") }
+                          }
                           Button(
                               onClick = {
                                   val value = quickCapture.trim()
@@ -3149,6 +3154,8 @@ jobs:
               'Text(cleanHtml(item.summary), maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)\n                            OutlinedButton(onClick = { speech.speak(item.title.orEmpty() + ". " + cleanHtml(item.summary.orEmpty())) }) { Text("خواندن") }'
           )
           required = [
+              "speech: PersianSpeech,",
+              "PersianVoiceInputButton { spoken -> quickCapture",
               "val scope = rememberCoroutineScope()",
               "fun NotesScreen(userDb: UserDatabase, speech: PersianSpeech)",
               "fun PlannerScreen(userDb: UserDatabase, speech: PersianSpeech)",
