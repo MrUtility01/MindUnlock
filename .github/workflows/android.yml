@@ -2858,6 +2858,49 @@ jobs:
               )
           }
 
+          @Test
+          fun legacyPrimaryKeyCollisionReplacesExistingDestinationRow() {
+              // Seed the destination with an older row using the same primary key.
+              val targetDb = content.openHelper.writableDatabase
+              targetDb.execSQL("""INSERT INTO chapters
+                  (id, title, orderIndex, groupName, description, itemCount, contentHash, rawJson, syncedAt)
+                  VALUES ('collision-chapter', 'مقدار مقصد', 1, 'قدیمی', 'رکورد قبلی', 0, 'old-hash', NULL, 1)""")
+
+              val legacyFile = context.getDatabasePath("mindunlock.db")
+              legacyFile.parentFile?.mkdirs()
+              val source = SQLiteDatabase.openOrCreateDatabase(legacyFile, null)
+              try {
+                  source.execSQL("""CREATE TABLE chapters (
+                      id TEXT NOT NULL PRIMARY KEY, title TEXT NOT NULL, orderIndex INTEGER NOT NULL,
+                      groupName TEXT, description TEXT, itemCount INTEGER NOT NULL, contentHash TEXT,
+                      rawJson TEXT, syncedAt INTEGER NOT NULL
+                  )""")
+                  source.execSQL("""INSERT INTO chapters
+                      (id, title, orderIndex, groupName, description, itemCount, contentHash, rawJson, syncedAt)
+                      VALUES ('collision-chapter', 'مقدار legacy', 9, 'جدید', 'رکورد مهاجرتی', 2, 'new-hash', '{"source":"legacy"}', 99)""")
+              } finally {
+                  source.close()
+              }
+
+              LegacyDatabaseMigrator.migrate(context, content, user)
+
+              assertRowCount(content.openHelper.readableDatabase, "chapters", 1)
+              assertQuery(content.openHelper.readableDatabase,
+                  "SELECT title, orderIndex, groupName, description, contentHash, rawJson, syncedAt FROM chapters WHERE id='collision-chapter'") {
+                  assertEquals("مقدار legacy", getString(0))
+                  assertEquals(9, getInt(1))
+                  assertEquals("جدید", getString(2))
+                  assertEquals("رکورد مهاجرتی", getString(3))
+                  assertEquals("new-hash", getString(4))
+                  assertEquals("""{"source":"legacy"}""", getString(5))
+                  assertEquals(99L, getLong(6))
+              }
+              assertTrue(
+                  context.getSharedPreferences("mindunlock_db_migration", 0)
+                      .getBoolean("split_v1_complete", false)
+              )
+          }
+
           private fun assertRowCount(db: SupportSQLiteDatabase, table: String, expected: Int) {
                   db.query("SELECT COUNT(*) FROM `$table`").use { cursor ->
                       assertTrue("COUNT query returned no row for $table", cursor.moveToFirst())
