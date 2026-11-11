@@ -2970,11 +2970,13 @@ jobs:
             app/src/main/java/com/mindunlock/app/JournalScreen.kt \
             app/src/main/java/com/mindunlock/app/LearningProfileScreen.kt \
             app/src/main/java/com/mindunlock/app/LearningEngineScreen.kt \
+            app/src/main/java/com/mindunlock/app/LearningPathPolicy.kt \
             app/src/main/AndroidManifest.xml \
             app/src/main/java/com/mindunlock/app/data/local/Entities.kt \
             app/src/main/java/com/mindunlock/app/data/local/UserDatabase.kt \
             app/build.gradle.kts \
             app/src/test/java/com/mindunlock/app/data/local/UserDatabaseMindDumpMigrationTest.kt
+            app/src/test/java/com/mindunlock/app/LearningPathPolicyTest.kt
           do
             test -f "android/$relative"
             mkdir -p "android-build/$(dirname "$relative")"
