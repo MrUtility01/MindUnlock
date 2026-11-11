@@ -88,7 +88,7 @@ class UserDatabaseMindDumpMigrationTest {
             assertEquals("بعد از تکمیل فصل مسیریابی بررسی شود.", later.details)
             assertEquals(1, later.priority)
             assertEquals(42L, later.sourceMindDumpId)
-            migrated.laterTopicDao().updateStatus(later.id, "active")
+            migrated.laterTopicDao().updateStatus(later.id, "active", System.currentTimeMillis())
             assertEquals("active", migrated.laterTopicDao().observeAll().first().single().status)
 
         } finally {
