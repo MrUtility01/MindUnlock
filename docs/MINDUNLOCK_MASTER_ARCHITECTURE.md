@@ -531,3 +531,14 @@ Workflow باید فقط سورس version-controlled را build و test کند؛
 4. تفکیک Content Data و User Data باید در کد اجرایی روشن شود.
 
 **تا تکمیل این موارد، تغییر ساختار دیتابیس یا افزودن مدل‌های شخصی به سورس نامطمئن ممنوع است.** این محدودیت برای محافظت از داده‌های نسخه نصب‌شده است، نه توقف توسعه محصول.
+
+
+## 26. ممیزی تکمیلی Room و مرزبندی داده‌ها
+
+لاگ Build #110 نشان داد سورس مؤثر APK دو دیتابیس مستقل دارد: `mindunlock-content.db` برای محتوای آموزشی و `mindunlock-user.db` برای داده‌های کاربر. هر دو در schema چاپ‌شده نسخه 1 دارند. جزئیات Entityها، DAOها، مسیر انتقال دیتابیس قدیمی و ناسازگاری Migration_1_2 در [گزارش ممیزی فنی](IMPLEMENTATION_AUDIT_AND_NEXT_STEPS.md) بخش 8 ثبت شده است.
+
+نکته مهم: Migration_1_2 در AppDatabase تعریف شده، اما در Builder مشاهده‌شده ثبت نشده و بدنه آن هم جدول‌هایی را تغییر می‌دهد که اکنون به UserDatabase تعلق دارند. تا روشن‌شدن تاریخچه نسخه‌های منتشرشده، این Migration نباید فعال شود.
+
+**قاعده معماری:** داده‌های خصوصی MindUnlock مانند Inbox، Journal، Learning Profile، Learning Session و Feedback باید از محتوای آموزشی جدا بمانند. هر دیتابیس schema version، Migration test و مسیر backup/restore مستقل و قابل آزمون دارد. وجود backup/restore کامل فعلاً اثبات نشده و Manifest مؤثر نیز `allowBackup=false` دارد.
+
+این بخش فقط مستندسازی ممیزی است؛ هیچ کد اجرایی، فایل دیتابیس یا APK در این commit تغییر نمی‌کند.
