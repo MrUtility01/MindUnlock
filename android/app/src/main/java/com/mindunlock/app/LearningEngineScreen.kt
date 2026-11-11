@@ -49,6 +49,8 @@ fun LearningEngineScreen(
         mutableStateOf(preferences.getInt("learning_session_minutes", 30).toFloat())
     }
     val completedItems = progress.count { it.completed }
+    val totalContentItems = chapters.sumOf { it.itemCount }.takeIf { it > 0 } ?: progress.size
+    val overallProgress = if (totalContentItems == 0) 0f else (completedItems.toFloat() / totalContentItems).coerceIn(0f, 1f)
     val selected = chapters.firstOrNull { it.id == selectedId }
     val nextChapter = LearningPathPolicy.nextIncompleteChapter(chapters, progress)
     val visibleChapters = chapters.filter {
@@ -65,9 +67,9 @@ fun LearningEngineScreen(
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("موتور یادگیری", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                     Text("مسیر یادگیری را از فصل‌های دریافت‌شده انتخاب کن؛ محتوای دانلودشده بدون اینترنت قابل مطالعه است.")
-                    Text("پیشرفت ثبت‌شده: $completedItems مورد تکمیل‌شده از ${progress.size} مورد")
+                    Text("پیشرفت ثبت‌شده: $completedItems مورد تکمیل‌شده از $totalContentItems مورد")
                     LinearProgressIndicator(
-                        progress = { if (progress.isEmpty()) 0f else completedItems.toFloat() / progress.size },
+                        progress = { overallProgress },
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
@@ -142,7 +144,8 @@ fun LearningEngineScreen(
             items(visibleChapters, key = { it.id }) { chapter ->
                 val chapterProgress = progress.filter { it.chapterId == chapter.id }
                 val done = chapterProgress.count { it.completed }
-                val ratio = if (chapterProgress.isEmpty()) 0f else done.toFloat() / chapterProgress.size
+                val chapterTotal = chapter.itemCount.takeIf { it > 0 } ?: chapterProgress.size
+                val ratio = if (chapterTotal == 0) 0f else (done.toFloat() / chapterTotal).coerceIn(0f, 1f)
                 Card(
                     Modifier.fillMaxWidth().clickable {
                         selectedId = chapter.id
@@ -154,7 +157,7 @@ fun LearningEngineScreen(
                         Text(chapter.groupName ?: "بدون دسته‌بندی", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         LinearProgressIndicator(progress = { ratio }, modifier = Modifier.fillMaxWidth())
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text(if (chapterProgress.isEmpty()) "شروع‌نشده" else "$done از ${chapterProgress.size} تکمیل", style = MaterialTheme.typography.labelSmall)
+                            Text(if (chapterTotal == 0) "شروع‌نشده" else "$done از $chapterTotal تکمیل", style = MaterialTheme.typography.labelSmall)
                             Text(if (selectedId == chapter.id) "انتخاب‌شده" else "انتخاب فصل", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                         }
                         Button(onClick = {
