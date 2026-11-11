@@ -580,7 +580,7 @@ fun ReaderScreen(db: AppDatabase, userDb: UserDatabase, itemUid: String, speech:
 
 @Composable
 fun FlashcardsScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeech, preferences: android.content.SharedPreferences, reviewOnly: Boolean = false) {
-    val all by db.contentItemDao().observeByTypes(listOf("flashcard", "question", "quiz", "exercise", "practice")).collectAsState(initial = emptyList())
+    val all by db.contentItemDao().observeByTypes(listOf("flashcard", "question", "quiz", "exercise", "practice", "exam")).collectAsState(initial = emptyList())
     val progress by userDb.progressDao().observeAll().collectAsState(initial = emptyList())
     val flashcards = all.filter { it.type == "flashcard" && it.sourceStatus == "verified" }
     val reviewCandidates = all.filter { item ->
@@ -589,7 +589,7 @@ fun FlashcardsScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeec
         val meta = runCatching { JsonParser.parseString(item.metadataJson ?: "{}").asJsonObject }.getOrNull()
         val options = readStringArray(item.optionsJson ?: meta?.get("options")?.toString())
         val correct = meta?.get("correct_index")?.let { runCatching { it.asInt }.getOrNull() }
-        item.type?.let { it in setOf("question", "quiz", "exercise", "practice") } == true &&
+        item.type?.let { it in setOf("question", "quiz", "exercise", "practice", "exam") } == true &&
             options.isNotEmpty() && correct != null && correct in options.indices
     }
     val now = System.currentTimeMillis()
