@@ -316,3 +316,25 @@ private fun MoreScreen(onNavigate: (String) -> Unit) {
         }
     }
 }
+
+
+@Composable
+fun PersianVoiceInputButton(onText: (String) -> Unit) {
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val recognized = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()?.trim().orEmpty()
+            if (recognized.isNotBlank()) onText(recognized)
+        }
+    }
+    Button(onClick = {
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "fa-IR")
+            putExtra(RecognizerIntent.EXTRA_PROMPT, "متن را به فارسی بیان کن")
+        }
+        runCatching { launcher.launch(intent) }
+    }) {
+        Icon(Icons.Default.Mic, contentDescription = null)
+        Text("ورود با صدا")
+    }
+}
