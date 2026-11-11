@@ -1,12 +1,23 @@
 # MindUnlock Windows Desktop — Proof of Concept
 
-**Status:** Planning scaffold only. This directory is not yet a runnable Windows application.
+**Status:** Minimal runnable desktop project added; Windows CI validation is pending.
 
 ## Purpose
 
 Prove the Windows desktop technology path without changing the Android application, its Room schemas, its database files, or its release workflow.
 
 Target platform: Windows 10/11 x64.
+
+## Current implementation
+
+- Independent Gradle project in this directory; it does not inherit or modify Android's Gradle configuration.
+- Kotlin JVM 2.4.21, Compose Multiplatform 1.12.2, Compose compiler plugin 2.4.21.
+- Gradle 8.14.3 and JDK 17 in the Windows CI workflow.
+- Minimal Persian desktop window with an RTL layout-direction provider and navigation labels.
+- One JUnit 5 unit test verifies the initial navigation model.
+- Windows CI runs the tests and attempts to package a per-user MSI installer.
+
+These are pinned candidate versions for the PoC, not a production dependency policy. See `docs/adr/ADR-0001-windows-desktop-poc.md`.
 
 ## Non-goals of this first PoC
 
@@ -15,6 +26,7 @@ Target platform: Windows 10/11 x64.
 - No account, cloud service, or network sync.
 - No migration of Android source into this directory.
 - No claim of feature completeness or production readiness.
+- No SQLite implementation or Jalali calendar implementation yet.
 
 ## PoC acceptance criteria
 
@@ -41,7 +53,7 @@ A deliberately small RTL shell:
 - Quick action: add a test Inbox item
 - Footer/status: offline mode and database path (path can be hidden behind diagnostics)
 
-The sample Inbox item is disposable PoC data, not a production domain model.
+The current screen is only a shell; the storage status is explicitly marked as not yet implemented.
 
 ## Architecture constraints
 
@@ -49,19 +61,24 @@ The sample Inbox item is disposable PoC data, not a production domain model.
 - Do not depend on Android APIs in desktop code.
 - Do not use Android's Room database file from Windows.
 - Do not extract shared modules from Android until source-of-truth and migration risks are resolved.
-- Choose SQLite library and Compose Multiplatform versions only after compatibility validation against the repository's Gradle/JDK baseline.
 - Do not add a plugin version by guesswork; record the chosen version and reason in an ADR.
+- Keep user data outside the installation directory.
+
+## CI
+
+Workflow: `.github/workflows/windows-desktop-poc.yml`
+
+It runs on `windows-latest`, installs JDK 17 and Gradle 8.14.3, executes desktop unit tests, and packages an MSI. A passing workflow is required before describing this PoC as Windows-build-verified.
 
 ## Work sequence
 
-1. Record the technology/version decision in `docs/adr/ADR-0001-windows-desktop-poc.md`.
-2. Add the smallest runnable Compose Desktop application.
-3. Add RTL and Persian font verification.
-4. Add Jalali date tests.
-5. Add local SQLite persistence and lifecycle tests.
-6. Add Windows packaging only after the app runs reliably.
-7. Keep all work on `windows-desktop-poc` until a Windows-capable CI runner verifies it.
+1. Validate the pinned toolchain on Windows CI.
+2. Add RTL-specific rendering and keyboard-navigation tests.
+3. Add Jalali date implementation and boundary tests.
+4. Add local SQLite persistence and lifecycle tests.
+5. Add installer upgrade/uninstall tests while preserving user data.
+6. Expand the shell into the full MindUnlock module set only after the foundations pass.
 
-## Current state
+## Current verification state
 
-Only this planning scaffold exists. No Windows executable, installer, SQLite implementation, or Windows runtime test has been produced yet.
+The project files and workflow have been committed to the isolated `windows-desktop-poc` branch. The Windows workflow result has not yet been verified. No Windows executable, validated installer, SQLite implementation, or Windows runtime test is claimed at this stage.
