@@ -44,7 +44,7 @@ class UserDatabaseMindDumpMigrationTest {
             context,
             UserDatabase::class.java,
             databaseName
-        ).addMigrations(UserDatabase.MIGRATION_1_2, UserDatabase.MIGRATION_2_3, UserDatabase.MIGRATION_3_4, UserDatabase.MIGRATION_4_5).allowMainThreadQueries().build()
+        ).addMigrations(UserDatabase.MIGRATION_1_2, UserDatabase.MIGRATION_2_3, UserDatabase.MIGRATION_3_4, UserDatabase.MIGRATION_4_5, UserDatabase.MIGRATION_5_6).allowMainThreadQueries().build()
 
         try {
             val notes = migrated.noteDao().observeAll().first()
@@ -98,6 +98,22 @@ class UserDatabaseMindDumpMigrationTest {
             assertEquals(1, labSteps.size)
             assertEquals(0, labSteps.single().stepIndex)
             assertEquals(true, labSteps.single().completed)
+
+            val sessionId = migrated.learningSessionDao().insert(
+                LearningSessionEntity(
+                    chapterId = "network-basics",
+                    topicTitle = "مبانی شبکه",
+                    startedAt = 10_000L
+                )
+            )
+            val activeSession = migrated.learningSessionDao().observeActive().first()
+            assertEquals(sessionId, activeSession?.id)
+            assertEquals(null, activeSession?.endedAt)
+            migrated.learningSessionDao().finish(sessionId, 16_000L, 6L)
+            val finishedSession = migrated.learningSessionDao().observeAll().first().single()
+            assertEquals(16_000L, finishedSession.endedAt)
+            assertEquals(6L, finishedSession.durationSeconds)
+            assertEquals(null, migrated.learningSessionDao().observeActive().first())
 
         } finally {
             migrated.close()
