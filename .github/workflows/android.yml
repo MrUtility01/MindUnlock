@@ -2706,7 +2706,47 @@ jobs:
                   assertRowCount(userDb, "notes", 1)
               }
           
-              private fun assertRowCount(db: SupportSQLiteDatabase, table: String, expected: Int) {
+              @Test
+          fun marksMigrationCompleteWhenLegacyDatabaseDoesNotExist() {
+              LegacyDatabaseMigrator.migrate(context, content, user)
+
+              assertTrue(
+                  context.getSharedPreferences("mindunlock_db_migration", 0)
+                      .getBoolean("split_v1_complete", false)
+              )
+              assertRowCount(content.openHelper.readableDatabase, "chapters", 0)
+              assertRowCount(content.openHelper.readableDatabase, "content_items", 0)
+              assertRowCount(content.openHelper.readableDatabase, "server_config", 0)
+              assertRowCount(content.openHelper.readableDatabase, "media_cache", 0)
+              assertRowCount(user.openHelper.readableDatabase, "progress", 0)
+              assertRowCount(user.openHelper.readableDatabase, "notes", 0)
+              assertRowCount(user.openHelper.readableDatabase, "bookmarks", 0)
+              assertRowCount(user.openHelper.readableDatabase, "study_tasks", 0)
+          }
+
+          @Test
+          fun skipsUnknownOrMissingTablesInAnEmptyLegacyDatabase() {
+              val legacyFile = context.getDatabasePath("mindunlock.db")
+              legacyFile.parentFile?.mkdirs()
+              SQLiteDatabase.openOrCreateDatabase(legacyFile, null).close()
+
+              LegacyDatabaseMigrator.migrate(context, content, user)
+
+              assertTrue(
+                  context.getSharedPreferences("mindunlock_db_migration", 0)
+                      .getBoolean("split_v1_complete", false)
+              )
+              assertRowCount(content.openHelper.readableDatabase, "chapters", 0)
+              assertRowCount(content.openHelper.readableDatabase, "content_items", 0)
+              assertRowCount(content.openHelper.readableDatabase, "server_config", 0)
+              assertRowCount(content.openHelper.readableDatabase, "media_cache", 0)
+              assertRowCount(user.openHelper.readableDatabase, "progress", 0)
+              assertRowCount(user.openHelper.readableDatabase, "notes", 0)
+              assertRowCount(user.openHelper.readableDatabase, "bookmarks", 0)
+              assertRowCount(user.openHelper.readableDatabase, "study_tasks", 0)
+          }
+
+          private fun assertRowCount(db: SupportSQLiteDatabase, table: String, expected: Int) {
                   db.query("SELECT COUNT(*) FROM `$table`").use { cursor ->
                       assertTrue("COUNT query returned no row for $table", cursor.moveToFirst())
                       assertEquals("Unexpected row count for $table", expected, cursor.getInt(0))
