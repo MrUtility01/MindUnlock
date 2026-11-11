@@ -50,10 +50,7 @@ fun LearningEngineScreen(
     }
     val completedItems = progress.count { it.completed }
     val selected = chapters.firstOrNull { it.id == selectedId }
-    val nextChapter = chapters.firstOrNull { chapter ->
-        val chapterItems = progress.filter { it.chapterId == chapter.id }
-        chapterItems.isEmpty() || (chapter.itemCount > 0 && chapterItems.count { it.completed } < chapter.itemCount)
-    } ?: chapters.firstOrNull()
+    val nextChapter = LearningPathPolicy.nextIncompleteChapter(chapters, progress)
     val visibleChapters = chapters.filter {
         search.isBlank() || it.title.contains(search, ignoreCase = true) ||
             (it.groupName?.contains(search, ignoreCase = true) == true)
@@ -90,10 +87,8 @@ fun LearningEngineScreen(
                         valueRange = 15f..90f,
                         steps = 14
                     )
-                    val learn = (sessionMinutes / 3f).toInt().coerceAtLeast(5)
-                    val practice = (sessionMinutes / 2f).toInt().coerceAtLeast(5)
-                    val review = (sessionMinutes.toInt() - learn - practice).coerceAtLeast(3)
-                    Text("تقسیم زمان: $learn دقیقه یادگیری · $practice دقیقه تمرین · $review دقیقه مرور")
+                    val sessionPlan = LearningPathPolicy.sessionPlan(sessionMinutes.toInt())
+                    Text("تقسیم زمان: ${sessionPlan.learnMinutes} دقیقه یادگیری · ${sessionPlan.practiceMinutes} دقیقه تمرین · ${sessionPlan.reviewMinutes} دقیقه مرور")
                     Text("این برنامه زمان‌بندی پیشنهادی است؛ با زدن هر مرحله، بخش مربوطه باز می‌شود.", style = MaterialTheme.typography.bodySmall)
                     Button(
                         onClick = {
