@@ -2959,6 +2959,23 @@ jobs:
           EOF
           echo "Added Robolectric migration characterization test." | tee -a "$GITHUB_STEP_SUMMARY"
 
+      - name: Overlay tracked MindUnlock feature source
+        shell: bash
+        run: |
+          set -euo pipefail
+          for relative in \
+            app/src/main/java/com/mindunlock/app/MainActivity.kt \
+            app/src/main/java/com/mindunlock/app/MindDumpScreen.kt \
+            app/src/main/java/com/mindunlock/app/data/local/Entities.kt \
+            app/src/main/java/com/mindunlock/app/data/local/UserDatabase.kt \
+            app/src/test/java/com/mindunlock/app/data/local/UserDatabaseMindDumpMigrationTest.kt
+          do
+            test -f "android/$relative"
+            mkdir -p "android-build/$(dirname "$relative")"
+            cp "android/$relative" "android-build/$relative"
+          done
+          echo "Mind Dump source and its Room migration test are now part of the effective APK build."
+
       - name: Generate effective Android source manifest
         shell: bash
         run: |
