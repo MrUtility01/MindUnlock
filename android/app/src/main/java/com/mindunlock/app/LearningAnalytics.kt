@@ -4,6 +4,7 @@ import com.mindunlock.app.data.local.ChapterEntity
 import com.mindunlock.app.data.local.ContentItemEntity
 import com.mindunlock.app.data.local.ProgressEntity
 import com.mindunlock.app.data.local.StudyTaskEntity
+import com.google.gson.JsonParser
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -64,8 +65,7 @@ object LearningAnalytics {
         val accuracy = if (totalAttempts == 0) 0 else (totalCorrect * 100f / totalAttempts).roundToInt()
         val weak = records.count { it.attempts > 0 && (it.wrong > it.correct || it.quality in 1..2) }
         val due = verified.count { item ->
-            val type = item.type?.lowercase()
-            if (type !in reviewTypes) false
+            if (!isReviewCandidate(item)) false
             else {
                 val record = byItem[item.uid]
                 record == null || (record.dueAt != null && record.dueAt <= now)
@@ -114,6 +114,20 @@ object LearningAnalytics {
             chapters = chapterStats,
             recentActivity = recent
         )
+    }
+
+    private fun isReviewCandidate(item: ContentItemEntity): Boolean {
+        val type = item.type?.lowercase() ?: return false
+        if (type == "flashcard") return true
+        if (type !in reviewTypes) return false
+        val metadata = runCatching { JsonParser.parseString(item.metadataJson ?: "{}").asJsonObject }.getOrNull()
+        val optionsElement = item.optionsJson?.let { runCatching { JsonParser.parseString(it) }.getOrNull() }
+            ?: metadata?.get("options")
+        val options = runCatching {
+            optionsElement?.takeIf { it.isJsonArray }?.asJsonArray?.map { it.asString }.orEmpty()
+        }.getOrDefault(emptyList())
+        val correctIndex = metadata?.get("correct_index")?.let { runCatching { it.asInt }.getOrNull() }
+        return options.isNotEmpty() && correctIndex != null && correctIndex in options.indices
     }
 
     private fun persianWeekday(day: Int): String = when (day) {
