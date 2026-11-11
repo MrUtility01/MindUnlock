@@ -139,3 +139,15 @@ data class LabStepProgressEntity(
     val completed: Boolean = false,
     val updatedAt: Long = System.currentTimeMillis()
 )
+
+
+@Entity(tableName = "learning_sessions", indices = [Index("startedAt"), Index("endedAt")])
+data class LearningSessionEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val chapterId: String? = null,
+    val topicTitle: String = "مطالعه آزاد",
+    val source: String = "learning_engine",
+    val startedAt: Long = System.currentTimeMillis(),
+    val endedAt: Long? = null,
+    val durationSeconds: Long = 0
+)
