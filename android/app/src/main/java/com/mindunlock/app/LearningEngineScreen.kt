@@ -19,10 +19,13 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -30,6 +33,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.mindunlock.app.data.local.AppDatabase
 import com.mindunlock.app.data.local.UserDatabase
+import com.mindunlock.app.data.local.LearningSessionEntity
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @Composable
 fun LearningEngineScreen(
@@ -41,6 +47,18 @@ fun LearningEngineScreen(
 ) {
     val chapters by db.chapterDao().observeAll().collectAsState(initial = emptyList())
     val progress by userDb.progressDao().observeAll().collectAsState(initial = emptyList())
+    val activeSession by userDb.learningSessionDao().observeActive().collectAsState(initial = null)
+    val scope = rememberCoroutineScope()
+    var elapsedSeconds by remember(activeSession?.id, activeSession?.startedAt) {
+        mutableLongStateOf(activeSession?.let { ((System.currentTimeMillis() - it.startedAt).coerceAtLeast(0L) / 1000L) } ?: 0L)
+    }
+    LaunchedEffect(activeSession?.id, activeSession?.startedAt) {
+        val session = activeSession
+        while (session != null) {
+            elapsedSeconds = (System.currentTimeMillis() - session.startedAt).coerceAtLeast(0L) / 1000L
+            delay(1000L)
+        }
+    }
     var search by rememberSaveable { mutableStateOf("") }
     var selectedId by rememberSaveable {
         mutableStateOf(preferences.getString("learning_engine_selected_chapter", null).orEmpty())
@@ -72,6 +90,47 @@ fun LearningEngineScreen(
                         progress = { overallProgress },
                         modifier = Modifier.fillMaxWidth()
                     )
+                }
+            }
+        }
+        item {
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("ثبت زمان واقعی یادگیری", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    if (activeSession == null) {
+                        Text("با شروع دستی جلسه، زمان سپری‌شده ثبت می‌شود. می‌توانی از برنامه خارج شوی و بعداً جلسه را ادامه بدهی.")
+                        Button(
+                            onClick = {
+                                val target = selected ?: nextChapter
+                                scope.launch {
+                                    userDb.learningSessionDao().insert(
+                                        LearningSessionEntity(
+                                            chapterId = target?.id,
+                                            topicTitle = target?.title ?: "مطالعه آزاد",
+                                            source = "learning_engine",
+                                            startedAt = System.currentTimeMillis()
+                                        )
+                                    )
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("شروع جلسه یادگیری") }
+                    } else {
+                        Text("جلسه فعال: ${activeSession?.topicTitle}", fontWeight = FontWeight.SemiBold)
+                        Text(formatSessionDuration(elapsedSeconds), style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.primary)
+                        Text("جلسه تا زمان پایان دستی فعال می‌ماند؛ زمان توقف یا بیکاری دستگاه به‌طور خودکار تشخیص داده نمی‌شود.", style = MaterialTheme.typography.bodySmall)
+                        Button(
+                            onClick = {
+                                val session = activeSession ?: return@Button
+                                scope.launch {
+                                    val endedAt = System.currentTimeMillis()
+                                    val duration = ((endedAt - session.startedAt).coerceAtLeast(0L) / 1000L)
+                                    userDb.learningSessionDao().finish(session.id, endedAt, duration)
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("پایان جلسه و ثبت زمان") }
+                    }
                 }
             }
         }
@@ -180,4 +239,11 @@ fun LearningEngineScreen(
             )
         }
     }
+}
+
+private fun formatSessionDuration(totalSeconds: Long): String {
+    val hours = totalSeconds / 3600
+    val minutes = (totalSeconds % 3600) / 60
+    val seconds = totalSeconds % 60
+    return "%02d:%02d:%02d".format(hours, minutes, seconds)
 }
