@@ -2638,10 +2638,15 @@ jobs:
 
       - name: Publish review-only effective source candidate branch
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
           BRANCH="review/effective-source-${GITHUB_RUN_NUMBER}"
+          if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
+            echo "Review branch already exists; leaving it unchanged: $BRANCH" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
           mkdir -p /tmp/effective-source-candidate
           unzip -q effective-android-source-snapshot.zip -d /tmp/effective-source-candidate
           test -f /tmp/effective-source-candidate/app/build.gradle.kts
