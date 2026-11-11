@@ -572,3 +572,12 @@ Build #126 با موفقیت Snapshot 31 فایلی از `android-build/` پس �
 - Snapshot فاقد source test و androidTest است؛ موفقیت Task ساخت، معادل پوشش تست یا تأیید روی دستگاه نیست.
 
 جزئیات و ترتیب اقدامات ایمن در `docs/IMPLEMENTATION_AUDIT_AND_NEXT_STEPS.md` بخش 12 ثبت شده است. هیچ کد برنامه، دیتابیس یا APK نصب‌شده‌ای در این مرحله تغییر داده نشده است.
+
+
+## 30. شکاف قابلیت‌ها و دامنه اعتبار تست در Snapshot #126
+
+سورس فعلی شامل مطالعه فصل/محتوا، Reader، فلش‌کارت و مرور فاصله‌دار، Quiz/Exam، Notes، Bookmarks، Planner، Progress، تنظیمات، قفل محلی، گفتار فارسی و همگام‌سازی محتواست.
+
+با این حال، مدل‌های مستقل Inbox/Mind Dump، JournalEntry، FutureTopic، CuriosityItem، KnowledgeEntry، LearningProfile، LearningSession/Feedback، LearningQuestion و ReviewItem/Attempt در دیتابیس Room فعلی مشاهده نشدند؛ همچنین مسیر Navigation صفحه‌های مستقل این ماژول‌ها را نشان نمی‌دهد. بنابراین ادغام مشخصات MindRebuild در MindUnlock هنوز از نظر قابلیت‌ها کامل نشده است. این ماژول‌ها باید پس از تثبیت Schema و Backup/Restore طراحی و توسعه داده شوند، نه با افزودن بی‌برنامه ستون‌ها یا فعال‌کردن Migration قدیمی.
+
+**تفسیر تست Build #126:** فرمان `testDebugUnitTest` موفق شد، اما همه Taskهای compile/test مربوط به JVM با `NO-SOURCE` رد شدند؛ در نتیجه هیچ تست JVM اجرا نشده است. assembleDebug و اعتبارسنجی ساختار APK و Package Name موفق‌اند، ولی این‌ها تست رفتار روی دستگاه یا تست منطق برنامه نیستند. جزئیات در بخش‌های 13 و 14 گزارش ممیزی آمده است.
