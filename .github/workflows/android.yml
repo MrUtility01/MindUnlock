@@ -2510,7 +2510,7 @@ jobs:
           p = Path("app/build.gradle.kts")
           s = p.read_text(encoding="utf-8")
           if 'testOptions { unitTests.isIncludeAndroidResources = true }' not in s:
-              s = s.replace('    buildFeatures { compose = true }', '    testOptions { unitTests.isIncludeAndroidResources = true }\\n    buildFeatures { compose = true }')
+              s = s.replace('    buildFeatures { compose = true }', '    testOptions { unitTests.isIncludeAndroidResources = true }\n    buildFeatures { compose = true }')
           deps = '''
           dependencies {
               testImplementation("junit:junit:4.13.2")
