@@ -56,7 +56,7 @@ fun JournalScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
         OutlinedTextField(title, { title = it }, Modifier.fillMaxWidth(), label = { Text("عنوان (اختیاری)") }, singleLine = true)
         PersianVoiceInputButton { spoken -> title = listOf(title, spoken).filter { it.isNotBlank() }.joinToString(" ") }
         OutlinedTextField(body, { body = it }, Modifier.fillMaxWidth(), label = { Text("امروز چه گذشت؟") }, minLines = 4, maxLines = 8)
-        PersianVoiceInputButton { spoken -> body = listOf(body, spoken).filter { it.isNotBlank() }.joinToString("\\n") }
+        PersianVoiceInputButton { spoken -> body = listOf(body, spoken).filter { it.isNotBlank() }.joinToString("\n") }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
             IconButton(onClick = { speech.speak(body.ifBlank { title }) }, enabled = body.isNotBlank() || title.isNotBlank()) {
                 androidx.compose.material3.Icon(Icons.Default.VolumeUp, contentDescription = "خواندن پیش‌نویس")
