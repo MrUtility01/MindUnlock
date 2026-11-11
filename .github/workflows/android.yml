@@ -2970,6 +2970,7 @@ jobs:
             app/src/main/java/com/mindunlock/app/JournalScreen.kt \
             app/src/main/java/com/mindunlock/app/LearningProfileScreen.kt \
             app/src/main/java/com/mindunlock/app/LearningEngineScreen.kt \
+            app/src/main/java/com/mindunlock/app/ui/StudyScreens.kt \
             app/src/main/java/com/mindunlock/app/LearningPathPolicy.kt \
             app/src/main/java/com/mindunlock/app/ReviewScheduler.kt \
             app/src/main/AndroidManifest.xml \
