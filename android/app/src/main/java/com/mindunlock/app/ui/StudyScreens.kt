@@ -155,6 +155,7 @@ fun ActionTile(label: String, destination: String, onNavigate: (String) -> Unit,
 fun DashboardScreen(
     db: AppDatabase,
     userDb: UserDatabase,
+    speech: PersianSpeech,
     onNavigate: (String) -> Unit,
     onContinue: (String) -> Unit
 ) {
