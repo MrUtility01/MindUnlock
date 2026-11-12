@@ -150,7 +150,7 @@ object PersianDate {
         }
     }
 
-    private fun toPersianDigits(value: String): String {
+    fun toPersianDigits(value: String): String {
         val digits = "۰۱۲۳۴۵۶۷۸۹"
         return buildString(value.length) {
             value.forEach { char ->
