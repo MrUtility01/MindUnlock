@@ -50,9 +50,28 @@ fun LearningEngineScreen(
     val progress by userDb.progressDao().observeAll().collectAsState(initial = emptyList())
     val activeSession by userDb.learningSessionDao().observeActive().collectAsState(initial = null)
     val sessions by userDb.learningSessionDao().observeAll().collectAsState(initial = emptyList())
+    val learningProfile by userDb.learningProfileDao().observe().collectAsState(initial = null)
     val scope = rememberCoroutineScope()
     var elapsedSeconds by remember(activeSession?.id, activeSession?.startedAt) {
         mutableLongStateOf(activeSession?.let { ((System.currentTimeMillis() - it.startedAt).coerceAtLeast(0L) / 1000L) } ?: 0L)
+    }
+    LaunchedEffect(learningProfile?.updatedAt) {
+        learningProfile?.let { profile ->
+            if (profile.sessionMinutes in 15..90) {
+                sessionMinutes = profile.sessionMinutes.toFloat()
+                preferences.edit().putInt("learning_session_minutes", profile.sessionMinutes).apply()
+            }
+        }
+    }
+    val learningStrategy = remember(learningProfile) {
+        learningProfile?.let { profile ->
+            LearningPersonalization.build(
+                answers = profile.answersCsv.split(",").mapNotNull { it.toIntOrNull() },
+                sessionMinutes = profile.sessionMinutes,
+                maxTopics = profile.maxTopics,
+                guidedMode = profile.guidedMode
+            )
+        }
     }
     LaunchedEffect(activeSession?.id, activeSession?.startedAt) {
         val session = activeSession
@@ -170,6 +189,21 @@ fun LearningEngineScreen(
                         valueRange = 15f..90f,
                         steps = 14
                     )
+                    learningStrategy?.let { strategy ->
+                        Card(Modifier.fillMaxWidth()) {
+                            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text("پیشنهاد شخصی‌سازی‌شده", fontWeight = FontWeight.SemiBold)
+                                Text("گرایش یادگیری: ${strategy.dominantPreference} · میانگین ${"%.1f".format(java.util.Locale.ROOT, strategy.score)} از ۵")
+                                Text(strategy.teachingEmphasis, style = MaterialTheme.typography.bodySmall)
+                                Text("ساختار پیشنهادی:", fontWeight = FontWeight.Medium)
+                                strategy.sessionStructure.forEachIndexed { index, step ->
+                                    Text("${index + 1}. $step", style = MaterialTheme.typography.bodySmall)
+                                }
+                                Text("حداکثر موضوع فعال: ${strategy.maxActiveTopics} · ${strategy.modeDescription}", style = MaterialTheme.typography.bodySmall)
+                                Text("این پیشنهاد از ترجیحات خوداظهاری ساخته شده و معادل سنجش توانایی نیست.", style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
+                    }
                     val sessionPlan = LearningPathPolicy.sessionPlan(sessionMinutes.toInt())
                     Text("تقسیم زمان: ${sessionPlan.learnMinutes} دقیقه یادگیری · ${sessionPlan.practiceMinutes} دقیقه تمرین · ${sessionPlan.reviewMinutes} دقیقه مرور")
                     Text("این برنامه زمان‌بندی پیشنهادی است؛ با زدن هر مرحله، بخش مربوطه باز می‌شود.", style = MaterialTheme.typography.bodySmall)
