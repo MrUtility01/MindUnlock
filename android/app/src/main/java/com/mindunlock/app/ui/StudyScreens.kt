@@ -334,26 +334,25 @@ fun DashboardScreen(
     val completedLastChapterItems = lastChapterItems.count { item ->
         progress.any { it.itemUid == item.uid && it.completed }
     }
-    val nextActionTitle = when {
-        dueReviews > 0 -> "مرور مطالب سررسیدشده"
-        todayTasks.isNotEmpty() -> "رسیدگی به برنامهٔ امروز"
-        activeTopic != null -> "پیگیری موضوع فعال: ${activeTopic.title}"
-        last != null -> "ادامهٔ مطالعه: ${last.title}"
-        else -> "انتخاب اولین موضوع یادگیری"
-    }
-    val nextActionDescription = when {
-        dueReviews > 0 -> "${PersianDate.toPersianDigits(dueReviews.toString())} مورد برای مرور آماده است."
-        todayTasks.isNotEmpty() -> "${PersianDate.toPersianDigits(todayTasks.size.toString())} کار زمان‌بندی‌شده برای امروز داری."
-        activeTopic != null -> "به موضوعی که برای پیگیری انتخاب کرده‌ای برگرد."
-        last != null -> "از آخرین مطلب بازشده ادامه بده."
-        else -> "یک موضوع یا فصل برای شروع انتخاب کن."
-    }
-    val nextAction = when {
-        dueReviews > 0 -> { { onNavigate("review") } }
-        todayTasks.isNotEmpty() -> { { onNavigate("planner") } }
-        activeTopic != null -> { { onNavigate("later") } }
-        last != null -> { { onContinue(lastReadItem?.let { "item:${it.uid}" } ?: "chapter:${last.id}") } }
-        else -> { { onNavigate("courses") } }
+    val resumeAction = ResumeActionPolicy.select(
+        dueReviewCount = dueReviews,
+        todayTaskCount = todayTasks.size,
+        activeTopicTitle = activeTopic?.title,
+        lastReadItemUid = lastReadItem?.uid,
+        lastReadChapterId = lastSession?.chapterId,
+        fallbackChapterId = last?.id
+    )
+    val nextActionTitle = resumeAction.title
+    val nextActionDescription = PersianDate.toPersianDigits(resumeAction.description)
+    val nextAction = {
+        when (resumeAction.kind) {
+            ResumeActionKind.REVIEW -> onNavigate("review")
+            ResumeActionKind.TODAY_TASKS -> onNavigate("planner")
+            ResumeActionKind.ACTIVE_TOPIC -> onNavigate("later")
+            ResumeActionKind.RESUME_ITEM -> resumeAction.targetId?.let { onContinue("item:$it") }
+            ResumeActionKind.RESUME_CHAPTER -> resumeAction.targetId?.let { onContinue("chapter:$it") }
+            ResumeActionKind.START_LEARNING -> onNavigate("courses")
+        }
     }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
