@@ -57,7 +57,7 @@
 | Learning Sessions | موجود، پایه | شروع/پایان دستی و مدت جلسه |
 | Persian TTS / ASR | پیاده‌سازی شده، پوشش UI ناقص | موتور آفلاین sherpa-onnx؛ ورودی صوتی در Inbox، Journal، Later Topics، Planner، Notes، Lab answers، session feedback و فیلدهای جست‌وجوی آموزشی؛ خواندن صوتی در Reader، Flashcards، Labs، Inbox، Journal، Later Topics، آرشیو، یادداشت‌ها و وظایف؛ افزودن کنترل به سایر فیلدها/صفحات و آزمون دستگاه باقی است |
 | Jalali / RTL | موجود، پوشش جزئی | تاریخ‌های اصلی شمسی؛ همه فرم‌ها و صفحات باید بازبینی شوند |
-| Scroll / Keyboard insets | اصلاح جزئی در 0.6.20، CI در انتظار | Inbox، Journal و Later Topics دارای ناحیه فرم قابل اسکرول، فهرست مستقل Lazy و imePadding شدند؛ بازبینی بقیه صفحات و آزمون چرخش/صفحه کوچک/صفحه‌کلید باقی است |
+| Scroll / Keyboard insets | اصلاح جزئی در 0.6.21، CI #511 موفق | Inbox، Journal و Later Topics دارای ناحیه فرم قابل اسکرول، فهرست مستقل Lazy و imePadding شدند؛ بازبینی بقیه صفحات و آزمون چرخش/صفحه کوچک/صفحه‌کلید باقی است |
 | Backup / Restore | موجود، پوشش گسترده | JSON نسخه‌دار، SHA-256، تراکنش، backup اضطراری و رمزگذاری AES-GCM |
 | Backup of Learning Profile | انجام‌شده در سطح داده | خروجی/بازیابی از Room، پاک‌سازی در Restore و سازگاری بکاپ قدیمی؛ تست round-trip و legacy |
 | Export Markdown / TXT | تأییدنشده / ناقص | باید برای یادداشت‌ها، دانش و داده‌های انتخابی پیاده‌سازی و تست شود |
