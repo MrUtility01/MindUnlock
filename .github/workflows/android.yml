@@ -2998,6 +2998,7 @@ jobs:
             app/src/main/java/com/mindunlock/app/LearningEngineScreen.kt \
             app/src/main/java/com/mindunlock/app/ui/StudyScreens.kt \
             app/src/main/java/com/mindunlock/app/LearningPathPolicy.kt \
+            app/src/main/java/com/mindunlock/app/LearningStagePolicy.kt \
             app/src/main/java/com/mindunlock/app/PersianDate.kt \
             app/src/main/java/com/mindunlock/app/ReviewScheduler.kt \
             app/src/main/java/com/mindunlock/app/LabScenarioMetadata.kt \
@@ -3012,6 +3013,7 @@ jobs:
             app/build.gradle.kts \
             app/src/test/java/com/mindunlock/app/data/local/UserDatabaseMindDumpMigrationTest.kt \
             app/src/test/java/com/mindunlock/app/LearningPathPolicyTest.kt \
+            app/src/test/java/com/mindunlock/app/LearningStagePolicyTest.kt \
             app/src/test/java/com/mindunlock/app/PersianDateTest.kt \
             app/src/test/java/com/mindunlock/app/ReviewSchedulerTest.kt \
             app/src/test/java/com/mindunlock/app/LabScenarioParserTest.kt \
