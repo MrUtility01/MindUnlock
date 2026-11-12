@@ -156,7 +156,10 @@ fun JournalScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
             onDismissRequest = { editingEntry = null },
             title = { Text("ویرایش نوشته") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(
+                    Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     OutlinedTextField(editTitle, { editTitle = it }, label = { Text("عنوان") }, modifier = Modifier.fillMaxWidth())
                     OutlinedTextField(editBody, { editBody = it }, label = { Text("متن نوشته") }, minLines = 4, modifier = Modifier.fillMaxWidth())
                     OutlinedTextField(editTags, { editTags = it }, label = { Text("برچسب‌ها") }, modifier = Modifier.fillMaxWidth())
