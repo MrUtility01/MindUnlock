@@ -2475,10 +2475,10 @@ jobs:
           source = p.read_text(encoding="utf-8")
           if "versionCode = 6" not in source or 'versionName = "0.5.1"' not in source:
               raise SystemExit("Expected v0.5.1 package version markers not found")
-          source = source.replace("versionCode = 6", "versionCode = 21", 1)
-          source = source.replace('versionName = "0.5.1"', 'versionName = "0.6.6"', 1)
+          source = source.replace("versionCode = 6", "versionCode = 22", 1)
+          source = source.replace('versionName = "0.5.1"', 'versionName = "0.6.7"', 1)
           p.write_text(source, encoding="utf-8")
-          print("Package version bumped to 0.6.6 (versionCode 21).")
+          print("Package version bumped to 0.6.7 (versionCode 22).")
           PY
 
       - name: Fix Room projections to include required sourceStatus column
@@ -2972,6 +2972,7 @@ jobs:
             app/src/main/java/com/mindunlock/app/LearningEngineScreen.kt \
             app/src/main/java/com/mindunlock/app/ui/StudyScreens.kt \
             app/src/main/java/com/mindunlock/app/LearningPathPolicy.kt \
+            app/src/main/java/com/mindunlock/app/PersianDate.kt \
             app/src/main/java/com/mindunlock/app/ReviewScheduler.kt \
             app/src/main/java/com/mindunlock/app/LabScenarioMetadata.kt \
             app/src/main/java/com/mindunlock/app/LearningAnalytics.kt \
@@ -2984,6 +2985,7 @@ jobs:
             app/build.gradle.kts \
             app/src/test/java/com/mindunlock/app/data/local/UserDatabaseMindDumpMigrationTest.kt \
             app/src/test/java/com/mindunlock/app/LearningPathPolicyTest.kt \
+            app/src/test/java/com/mindunlock/app/PersianDateTest.kt \
             app/src/test/java/com/mindunlock/app/ReviewSchedulerTest.kt \
             app/src/test/java/com/mindunlock/app/LabScenarioParserTest.kt \
             app/src/test/java/com/mindunlock/app/LearningAnalyticsTest.kt \
@@ -3440,7 +3442,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: MindUnlock-Android-v0.6.6-debug
+          name: MindUnlock-Android-v0.6.7-debug
           path: android-build/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
@@ -3448,10 +3450,10 @@ jobs:
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' && success()
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: android-v0.6.6-${{ github.run_number }}
-          name: MindUnlock Android 0.6.6 (#${{ github.run_number }})
+          tag_name: android-v0.6.7-${{ github.run_number }}
+          name: MindUnlock Android 0.6.7 (#${{ github.run_number }})
           body: |
-            Android Native 0.6.6 adds optional password-protected backup encryption using AES-256-GCM with PBKDF2-HMAC-SHA256 key derivation, authenticated import, and plaintext compatibility for older backups. It retains versioned user-data backup and restore with SHA-256 integrity validation, bounded JSON import, transactional replacement and automatic rolling pre-restore safety snapshots. The backup includes private progress, notes, bookmarks, tasks, Mind Dump, Journal, Later topics, lab checklists and learning sessions; downloaded content, speech models, preferences and connection settings are intentionally excluded. It retains local learning analytics, persistent lab checklists, structured scenarios, spaced-repetition review, the Learning Engine, Learning Profile and offline Persian speech features.
+            Android Native 0.6.7 adds Jalali calendar conversion and Persian-digit date entry across the journal, planner and later-topic reminders, while retaining encrypted backup and offline learning features using AES-256-GCM with PBKDF2-HMAC-SHA256 key derivation, authenticated import, and plaintext compatibility for older backups. It retains versioned user-data backup and restore with SHA-256 integrity validation, bounded JSON import, transactional replacement and automatic rolling pre-restore safety snapshots. The backup includes private progress, notes, bookmarks, tasks, Mind Dump, Journal, Later topics, lab checklists and learning sessions; downloaded content, speech models, preferences and connection settings are intentionally excluded. It retains local learning analytics, persistent lab checklists, structured scenarios, spaced-repetition review, the Learning Engine, Learning Profile and offline Persian speech features.
             HTTP sync is intended for trusted local networks only.
           files: android-build/app/build/outputs/apk/debug/app-debug.apk
           prerelease: true
