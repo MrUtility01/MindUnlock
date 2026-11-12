@@ -72,15 +72,16 @@ object UserDataBackupCodec {
     private const val GCM_TAG_BITS = 128
 
     fun encrypt(plainJson: String, password: CharArray): String {
-        require(password.size >= 8) { "گذرواژه پشتیبان باید حداقل ۸ نویسه باشد." }
-        val salt = ByteArray(16).also { SecureRandom().nextBytes(it) }
-        val iv = ByteArray(12).also { SecureRandom().nextBytes(it) }
-        val key = deriveKey(password, salt)
-        return try {
+        var key: ByteArray? = null
+        try {
+            require(password.size >= 8) { "گذرواژه پشتیبان باید حداقل ۸ نویسه باشد." }
+            val salt = ByteArray(16).also { SecureRandom().nextBytes(it) }
+            val iv = ByteArray(12).also { SecureRandom().nextBytes(it) }
+            key = deriveKey(password, salt)
             val cipher = Cipher.getInstance("AES/GCM/NoPadding")
             cipher.init(Cipher.ENCRYPT_MODE, SecretKeySpec(key, "AES"), GCMParameterSpec(GCM_TAG_BITS, iv))
             val encrypted = cipher.doFinal(plainJson.toByteArray(Charsets.UTF_8))
-            gson.toJson(JsonObject().apply {
+            return gson.toJson(JsonObject().apply {
                 addProperty("format", ENCRYPTED_FORMAT)
                 addProperty("kdf", "PBKDF2WithHmacSHA256")
                 addProperty("iterations", PBKDF2_ITERATIONS)
@@ -90,36 +91,38 @@ object UserDataBackupCodec {
                 addProperty("ciphertext", Base64.getEncoder().encodeToString(encrypted))
             })
         } finally {
-            key.fill(0)
+            key?.fill(0)
             password.fill(Char.MIN_VALUE)
         }
     }
 
     fun decryptIfEncrypted(input: String, password: CharArray): String {
-        val root = runCatching { JsonParser.parseString(input).asJsonObject }
-            .getOrElse { password.fill(Char.MIN_VALUE); return input }
-        if (root.get("format")?.takeIf { it.isJsonPrimitive }?.asString != ENCRYPTED_FORMAT) {
-            password.fill(Char.MIN_VALUE)
-            return input
-        }
-        require(password.size >= 8) { "برای بازکردن این پشتیبان، گذرواژه حداقل ۸ نویسه‌ای را وارد کن." }
-        val iterations = root.get("iterations")?.asInt ?: 0
-        require(iterations in 100_000..500_000) { "پارامتر مشتق‌سازی کلید در فایل معتبر نیست." }
-        val salt = decodeBase64(root, "salt", 16)
-        val iv = decodeBase64(root, "iv", 12)
-        val ciphertext = decodeBase64(root, "ciphertext", 25 * 1024 * 1024)
-        require(iv.size == 12 && salt.size == 16 && ciphertext.size >= 16) { "ساختار داده رمزگذاری‌شده ناقص است." }
-        val key = deriveKey(password, salt, iterations)
-        return try {
+        var key: ByteArray? = null
+        try {
+            val root = runCatching { JsonParser.parseString(input).asJsonObject }.getOrNull()
+                ?: return input
+            if (root.get("format")?.takeIf { it.isJsonPrimitive }?.asString != ENCRYPTED_FORMAT) {
+                return input
+            }
+            require(password.size >= 8) { "برای بازکردن این پشتیبان، گذرواژه حداقل ۸ نویسه‌ای را وارد کن." }
+            val iterations = root.get("iterations")?.asInt ?: 0
+            require(iterations in 100_000..500_000) { "پارامتر مشتق‌سازی کلید در فایل معتبر نیست." }
+            val salt = decodeBase64(root, "salt", 16)
+            val iv = decodeBase64(root, "iv", 12)
+            val ciphertext = decodeBase64(root, "ciphertext", 25 * 1024 * 1024)
+            require(iv.size == 12 && salt.size == 16 && ciphertext.size >= 16) { "ساختار داده رمزگذاری‌شده ناقص است." }
+            key = deriveKey(password, salt, iterations)
             val cipher = Cipher.getInstance("AES/GCM/NoPadding")
             cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(key, "AES"), GCMParameterSpec(GCM_TAG_BITS, iv))
-            String(cipher.doFinal(ciphertext), Charsets.UTF_8)
-        } catch (_: AEADBadTagException) {
-            throw IllegalArgumentException("گذرواژه اشتباه است یا فایل رمزگذاری‌شده دستکاری شده است.")
-        } catch (error: Exception) {
-            throw IllegalArgumentException("بازکردن پشتیبان رمزگذاری‌شده ناموفق بود: " + (error.message ?: "خطای رمزنگاری"))
+            return try {
+                String(cipher.doFinal(ciphertext), Charsets.UTF_8)
+            } catch (_: AEADBadTagException) {
+                throw IllegalArgumentException("گذرواژه اشتباه است یا فایل رمزگذاری‌شده دستکاری شده است.")
+            } catch (error: Exception) {
+                throw IllegalArgumentException("بازکردن پشتیبان رمزگذاری‌شده ناموفق بود: " + (error.message ?: "خطای رمزنگاری"))
+            }
         } finally {
-            key.fill(0)
+            key?.fill(0)
             password.fill(Char.MIN_VALUE)
         }
     }
