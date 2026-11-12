@@ -5,6 +5,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.weight
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -47,7 +51,8 @@ fun JournalScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
         query.isBlank() || it.title.contains(query, true) || it.body.contains(query, true) || it.tags.contains(query, true)
     }
 
-    Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(Modifier.fillMaxSize().imePadding().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(Modifier.fillMaxWidth().weight(0.58f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("دفتر روزانه", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         Text("فضایی خصوصی برای ثبت اتفاق‌ها، فکرها و تجربه‌های روزانه؛ اطلاعات فقط در پایگاه داده محلی برنامه ذخیره می‌شود.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         OutlinedTextField(title, { title = it }, Modifier.fillMaxWidth(), label = { Text("عنوان (اختیاری)") }, singleLine = true)
@@ -83,10 +88,11 @@ fun JournalScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
         if (message.isNotBlank()) Text(message, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
         OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth(), label = { Text("جست‌وجو در دفتر روزانه") }, singleLine = true)
         Text("نوشته‌ها: ${filtered.size}", style = MaterialTheme.typography.titleSmall)
+        }
         if (filtered.isEmpty()) {
-            Text("هنوز نوشته‌ای ثبت نشده است.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("هنوز نوشته‌ای ثبت نشده است.", modifier = Modifier.weight(0.42f).padding(8.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
         } else {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            LazyColumn(Modifier.weight(0.42f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(filtered, key = { it.id }) { entry ->
                     Card(Modifier.fillMaxWidth()) {
                         Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
