@@ -339,7 +339,7 @@ fun DashboardScreen(
         todayTaskCount = todayTasks.size,
         activeTopicTitle = activeTopic?.title,
         lastReadItemUid = lastReadItem?.uid,
-        lastReadChapterId = lastSession?.chapterId,
+        lastReadChapterId = lastReadProgress?.chapterId ?: lastSession?.chapterId,
         fallbackChapterId = last?.id
     )
     val nextActionTitle = resumeAction.title
