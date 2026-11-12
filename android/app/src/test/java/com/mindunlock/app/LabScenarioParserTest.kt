@@ -39,6 +39,19 @@ class LabScenarioParserTest {
     }
 
     @Test
+    fun parsesReferenceAnswersForLearningQuestions() {
+        val result = LabScenarioParser.parse(
+            """{"questions":["Why use VLANs?","What does DHCP provide?"],"question_answers":["To separate broadcast domains.","Automatic IP configuration."]}"""
+        )
+        assertEquals(2, result.questions.size)
+        assertEquals(
+            listOf("To separate broadcast domains.", "Automatic IP configuration."),
+            result.questionAnswers
+        )
+        assertTrue(result.hasStructuredDetails)
+    }
+
+    @Test
     fun ignoresUnreasonableDuration() {
         val result = LabScenarioParser.parse("""{"estimated_minutes":99999}""")
         assertEquals(null, result.estimatedMinutes)
