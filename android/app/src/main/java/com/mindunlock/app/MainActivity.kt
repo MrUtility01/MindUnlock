@@ -308,9 +308,13 @@ private fun MindUnlockRoot(
                 "home" -> DashboardScreen(repository.database, userDatabase, speech, onNavigate = { screen = it }, onContinue = { target ->
                     when {
                         target.startsWith("item:") -> {
-                            selectedItem = target.removePrefix("item:")
+                            val itemUid = target.removePrefix("item:")
+                            selectedItem = itemUid
                             previousScreen = "chapter"
                             screen = "reader"
+                            scope.launch {
+                                repository.database.contentItemDao().get(itemUid)?.let { selectedChapter = it.chapterId }
+                            }
                         }
                         target.startsWith("chapter:") -> {
                             selectedChapter = target.removePrefix("chapter:")
