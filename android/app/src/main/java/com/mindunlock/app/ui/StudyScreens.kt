@@ -916,31 +916,51 @@ private fun LabScenarioReaderPanel(
             details.troubleshooting.forEachIndexed { index, issue -> Text("${index + 1}. $issue", style = MaterialTheme.typography.bodyMedium) }
         }
         if (details.questions.isNotEmpty()) {
+            var revealedAnswers by remember(item.uid, details.questions) { mutableStateOf(emptySet<Int>()) }
             val checkedQuestions = details.questions.indices.count { index -> -(index + 1) in completedIndexes }
             Text("کنترل یادگیری · $checkedQuestions از ${details.questions.size} سؤال بررسی‌شده", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
             Text(
-                "پس از اجرای آزمایش، به هر سؤال پاسخ بده و فقط وقتی پاسخ خودت را بررسی کردی، آن را علامت بزن. این خودارزیابی است و نمرهٔ خودکار محسوب نمی‌شود.",
+                "ابتدا پاسخ را بدون راهنما بنویس یا در ذهن مرور کن؛ سپس پاسخ مرجع را ببین و در صورت بررسی، سؤال را علامت بزن. این خودارزیابی است و نمرهٔ خودکار محسوب نمی‌شود.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             details.questions.forEachIndexed { index, question ->
                 val checkpointIndex = -(index + 1)
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(
-                        checked = checkpointIndex in completedIndexes,
-                        onCheckedChange = { checked ->
-                            scope.launch {
-                                if (checked) {
-                                    userDb.labStepProgressDao().upsert(
-                                        LabStepProgressEntity(item.uid, checkpointIndex, true)
-                                    )
-                                } else {
-                                    userDb.labStepProgressDao().delete(item.uid, checkpointIndex)
+                Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(
+                            checked = checkpointIndex in completedIndexes,
+                            onCheckedChange = { checked ->
+                                scope.launch {
+                                    if (checked) {
+                                        userDb.labStepProgressDao().upsert(
+                                            LabStepProgressEntity(item.uid, checkpointIndex, true)
+                                        )
+                                    } else {
+                                        userDb.labStepProgressDao().delete(item.uid, checkpointIndex)
+                                    }
                                 }
                             }
+                        )
+                        Text("${index + 1}. $question", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                    }
+                    val referenceAnswer = details.questionAnswers.getOrNull(index).orEmpty()
+                    if (referenceAnswer.isNotBlank()) {
+                        TextButton(onClick = {
+                            revealedAnswers = if (index in revealedAnswers) revealedAnswers - index else revealedAnswers + index
+                        }) {
+                            Text(if (index in revealedAnswers) "پنهان‌کردن پاسخ مرجع" else "نمایش پاسخ مرجع")
                         }
-                    )
-                    Text("${index + 1}. $question", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                        if (index in revealedAnswers) {
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                color = MaterialTheme.colorScheme.secondaryContainer,
+                                shape = MaterialTheme.shapes.medium
+                            ) {
+                                Text(referenceAnswer, modifier = Modifier.padding(12.dp), style = MaterialTheme.typography.bodyMedium)
+                            }
+                        }
+                    }
                 }
             }
         }
