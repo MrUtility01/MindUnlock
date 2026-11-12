@@ -152,7 +152,7 @@ class UserDatabaseMindDumpMigrationTest {
                     db.mindDumpDao().insert(
                         MindDumpEntity(
                             content = listOf(topic.title, topic.details)
-                                .filter { it.isNotBlank() }.joinToString("\\n\\n"),
+                                .filter { it.isNotBlank() }.joinToString("\n\n"),
                             category = "learning"
                         )
                     )
@@ -160,7 +160,7 @@ class UserDatabaseMindDumpMigrationTest {
                 db.laterTopicDao().delete(staleSourceTopicId)
             }
             val recovered = db.mindDumpDao().getAll().last()
-            assertEquals("بازیابی پیوند خراب\\n\\nاین متن باید بازیابی شود", recovered.content)
+            assertEquals("بازیابی پیوند خراب\n\nاین متن باید بازیابی شود", recovered.content)
             assertEquals(3, db.mindDumpDao().getAll().size)
             assertEquals(0, db.laterTopicDao().getAll().size)
         } finally {
