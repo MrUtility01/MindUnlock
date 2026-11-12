@@ -172,6 +172,7 @@ fun DashboardScreen(
     onContinue: (String) -> Unit
 ) {
     val chapters by db.chapterDao().observeAll().collectAsState(initial = emptyList())
+    val contentItems by db.contentItemDao().observeAll().collectAsState(initial = emptyList())
     val itemCount by db.contentItemDao().observeItemCount().collectAsState(initial = 0)
     val flashcardCount by db.contentItemDao().observeFlashcardCount().collectAsState(initial = 0)
     val progress by userDb.progressDao().observeAll().collectAsState(initial = emptyList())
@@ -190,7 +191,9 @@ fun DashboardScreen(
     val tomorrowStart = today.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
     val todayTasks = tasks.filter { !it.completed && it.dueAt != null && it.dueAt >= todayStart && it.dueAt < tomorrowStart }
     val inboxCount = inboxItems.count { it.status == "inbox" }
-    val dueReviews = progress.count { it.dueAt != null && it.dueAt <= now }
+    val dueReviews = remember(chapters, contentItems, progress, tasks, sessions, now) {
+        LearningAnalytics.build(chapters, contentItems, progress, tasks, sessions, now).scheduledReviewsDue
+    }
     val activeTopic = laterTopics.firstOrNull { it.status == "active" }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
