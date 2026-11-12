@@ -164,6 +164,118 @@ fun ActionTile(label: String, destination: String, onNavigate: (String) -> Unit,
 }
 
 @Composable
+fun KnowledgeArchiveScreen(db: AppDatabase, onOpenItem: (String) -> Unit) {
+    val chapters by db.chapterDao().observeAll().collectAsState(initial = emptyList())
+    var query by rememberSaveable { mutableStateOf("") }
+    var kind by rememberSaveable { mutableStateOf("همه") }
+    val selectedType = when (kind) {
+        "درس" -> "lesson"
+        "سؤال" -> "question"
+        "فلش‌کارت" -> "flashcard"
+        "آزمایشگاه" -> "lab"
+        "دستور" -> "command"
+        "مثال" -> "example"
+        "یادداشت" -> "note"
+        else -> ""
+    }
+    val kindOptions = listOf("همه", "درس", "سؤال", "فلش‌کارت", "آزمایشگاه", "دستور", "مثال", "یادداشت")
+    val loadedItems = remember { mutableStateListOf<ContentItemListEntry>() }
+    var totalCount by remember { mutableIntStateOf(0) }
+    var loading by remember { mutableStateOf(false) }
+    var loadError by remember { mutableStateOf("") }
+    var loadAttempt by remember { mutableIntStateOf(0) }
+    val context = LocalContext.current
+    val pageSize = 30
+
+    LaunchedEffect(selectedType, query, loadAttempt) {
+        loading = true
+        loadedItems.clear()
+        loadError = ""
+        try {
+            val normalizedQuery = query.trim()
+            totalCount = db.contentItemDao().getArchiveFilteredCount(selectedType, normalizedQuery)
+            loadedItems.addAll(db.contentItemDao().getArchivePage(selectedType, normalizedQuery, pageSize, 0))
+        } catch (error: kotlinx.coroutines.CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            loadError = error.message ?: "بارگذاری آرشیو دانش ناموفق بود."
+            android.util.Log.e("MindUnlockArchive", "Global archive search failed", error)
+            CrashDiagnostics.recordHandled(context, "KnowledgeArchiveScreen", error)
+        } finally {
+            loading = false
+        }
+    }
+
+    Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+        Text("آرشیو دانش", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        Text("جست‌وجوی یکپارچه در مطالب تأییدشدهٔ همهٔ فصل‌ها؛ نتایج به‌صورت صفحه‌ای بارگذاری می‌شوند.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        OutlinedTextField(
+            value = query,
+            onValueChange = { query = it },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("جست‌وجو در عنوان، خلاصه و متن مطالب") },
+            singleLine = true
+        )
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            kindOptions.forEach { option ->
+                FilterChip(selected = kind == option, onClick = { kind = option }, label = { Text(option) })
+            }
+        }
+        Text("${PersianDate.toPersianDigits(loadedItems.size.toString())} از ${PersianDate.toPersianDigits(totalCount.toString())} مطلب", style = MaterialTheme.typography.labelSmall)
+        if (loadError.isNotBlank()) {
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("آرشیو بارگذاری نشد", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.SemiBold)
+                    Text(loadError, style = MaterialTheme.typography.bodySmall)
+                    TextButton(onClick = { loadAttempt++ }) { Text("تلاش مجدد") }
+                }
+            }
+        }
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
+            if (loadedItems.isEmpty() && !loading && loadError.isBlank()) {
+                item { EmptyMessage("مطلب تأییدشده‌ای با این عبارت یا فیلتر پیدا نشد.") }
+            }
+            items(loadedItems, key = { it.uid }) { item ->
+                val chapterTitle = chapters.firstOrNull { it.id == item.chapterId }?.title ?: item.chapterId
+                Card(onClick = { onOpenItem(item.uid) }, modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(item.title ?: "بدون عنوان", fontWeight = FontWeight.SemiBold)
+                        Text("${kindLabel(item.type)} · $chapterTitle", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                        if (!item.summary.isNullOrBlank()) {
+                            Text(cleanHtml(item.summary), maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+            }
+            if (loadedItems.size < totalCount) {
+                item {
+                    TextButton(
+                        enabled = !loading,
+                        onClick = {
+                            if (!loading) {
+                                loading = true
+                                val offset = loadedItems.size
+                                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
+                                    try {
+                                        val next = db.contentItemDao().getArchivePage(selectedType, query.trim(), pageSize, offset)
+                                        loadedItems.addAll(next)
+                                    } catch (error: Exception) {
+                                        loadError = error.message ?: "دریافت صفحهٔ بعدی ناموفق بود."
+                                    } finally {
+                                        loading = false
+                                    }
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text(if (loading) "در حال بارگذاری…" else "نمایش مطالب بیشتر") }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 fun DashboardScreen(
     db: AppDatabase,
     userDb: UserDatabase,
