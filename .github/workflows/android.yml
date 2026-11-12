@@ -3006,6 +3006,7 @@ jobs:
             app/src/main/AndroidManifest.xml \
             app/src/main/java/com/mindunlock/app/data/local/Entities.kt \
             app/src/main/java/com/mindunlock/app/data/local/UserDatabase.kt \
+            app/src/main/java/com/mindunlock/app/data/local/AppDatabase.kt \
             app/build.gradle.kts \
             app/src/test/java/com/mindunlock/app/data/local/UserDatabaseMindDumpMigrationTest.kt \
             app/src/test/java/com/mindunlock/app/LearningPathPolicyTest.kt \
