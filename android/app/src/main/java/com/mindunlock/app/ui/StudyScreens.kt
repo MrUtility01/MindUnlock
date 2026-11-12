@@ -120,8 +120,6 @@ import com.mindunlock.app.data.repository.ManifestChapter
 import com.mindunlock.app.data.repository.SyncRepository
 import kotlinx.coroutines.launch
 import java.time.LocalDateTime
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.roundToInt
 
