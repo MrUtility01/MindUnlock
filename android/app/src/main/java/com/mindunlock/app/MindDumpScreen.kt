@@ -15,12 +15,14 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -38,6 +40,7 @@ import com.mindunlock.app.data.local.MindDumpEntity
 import com.mindunlock.app.data.local.NoteEntity
 import com.mindunlock.app.data.local.StudyTaskEntity
 import com.mindunlock.app.data.local.UserDatabase
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 @Composable
@@ -49,6 +52,7 @@ fun MindDumpScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
     var showArchived by rememberSaveable { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
     var processingEntryIds by remember { mutableStateOf(emptySet<Long>()) }
+    var pendingDeleteEntryId by rememberSaveable { mutableStateOf<Long?>(null) }
     fun runEntryAction(entryId: Long, successMessage: String, action: suspend () -> Unit) {
         if (entryId in processingEntryIds) return
         processingEntryIds = processingEntryIds + entryId
@@ -56,6 +60,8 @@ fun MindDumpScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
             try {
                 action()
                 message = successMessage
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (_: Exception) {
                 message = "عملیات انجام نشد؛ ورودی اصلی حفظ شده است. دوباره تلاش کن."
             } finally {
@@ -203,13 +209,34 @@ fun MindDumpScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
                             }
                         },
                         onDelete = {
-                            runEntryAction(entry.id, "مورد حذف شد.") {
-                                userDatabase.mindDumpDao().delete(entry.id)
-                            }
+                            pendingDeleteEntryId = entry.id
                         }
                     )
                 }
             }
+        }
+    }
+    pendingDeleteEntryId?.let { entryId ->
+        val pendingEntry = entries.firstOrNull { it.id == entryId }
+        if (pendingEntry != null) {
+            AlertDialog(
+                onDismissRequest = { pendingDeleteEntryId = null },
+                title = { Text("حذف این ورودی؟") },
+                text = { Text(pendingEntry.content.take(180)) },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            pendingDeleteEntryId = null
+                            runEntryAction(entryId, "مورد حذف شد.") {
+                                userDatabase.mindDumpDao().delete(entryId)
+                            }
+                        }
+                    ) { Text("حذف") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { pendingDeleteEntryId = null }) { Text("انصراف") }
+                }
+            )
         }
     }
 }
