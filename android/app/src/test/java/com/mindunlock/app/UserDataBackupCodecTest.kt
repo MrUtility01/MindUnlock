@@ -5,6 +5,7 @@ import com.mindunlock.app.data.local.LearningSessionEntity
 import com.mindunlock.app.data.local.LabStepProgressEntity
 import com.mindunlock.app.data.local.LabQuestionResponseEntity
 import com.mindunlock.app.data.local.LearningProfileEntity
+import com.mindunlock.app.data.local.LearningSessionFeedbackEntity
 import com.mindunlock.app.data.local.MindDumpEntity
 import com.mindunlock.app.data.local.ProgressEntity
 import com.mindunlock.app.data.local.StudyTaskEntity
@@ -23,6 +24,7 @@ class UserDataBackupCodecTest {
             labStepProgress = listOf(LabStepProgressEntity("lab-1", 2, true)),
             labQuestionResponses = listOf(LabQuestionResponseEntity("lab-1", 0, "پاسخ ذخیره‌شده", 1_800_000_000_000L)),
             learningProfile = listOf(LearningProfileEntity(answersCsv = List(20) { "4" }.joinToString(","), sessionMinutes = 45, maxTopics = 2, guidedMode = "guided", completed = true)),
+            learningSessionFeedback = listOf(LearningSessionFeedbackEntity(sessionId = 12, comprehension = 4, perceivedDifficulty = 3, focus = 5, energyBefore = 2, energyAfter = 4, note = "تمرین عملی مفید بود")),
             learningSessions = listOf(
                 LearningSessionEntity(
                     id = 12,
@@ -39,7 +41,7 @@ class UserDataBackupCodecTest {
         assertEquals(1, restored.schemaVersion)
         assertEquals(1_800_000_000_000L, restored.exportedAt)
         assertEquals("0.6.5", restored.appVersion)
-        assertEquals(8, restored.payload.totalRecords)
+        assertEquals(9, restored.payload.totalRecords)
         assertEquals(3, restored.payload.progress.single().correct)
         assertEquals("مرور DNS", restored.payload.tasks.single().title)
         assertEquals("یادداشت خصوصی", restored.payload.journalEntries.single().body)
@@ -47,6 +49,14 @@ class UserDataBackupCodecTest {
         assertEquals("پاسخ ذخیره‌شده", restored.payload.labQuestionResponses.single().answer)
         assertEquals(45, restored.payload.learningProfile.single().sessionMinutes)
         assertEquals("guided", restored.payload.learningProfile.single().guidedMode)
+        val feedback = restored.payload.learningSessionFeedback.single()
+        assertEquals(12L, feedback.sessionId)
+        assertEquals(4, feedback.comprehension)
+        assertEquals(3, feedback.perceivedDifficulty)
+        assertEquals(5, feedback.focus)
+        assertEquals(2, feedback.energyBefore)
+        assertEquals(4, feedback.energyAfter)
+        assertEquals("تمرین عملی مفید بود", feedback.note)
         val session = restored.payload.learningSessions.single()
         assertEquals(1_800_000_000_000L, session.startedAt)
         assertEquals(1_800_001_800_000L, session.endedAt)
@@ -69,6 +79,7 @@ class UserDataBackupCodecTest {
         payload.remove("learningSessions")
         payload.remove("labQuestionResponses")
         payload.remove("learningProfile")
+        payload.remove("learningSessionFeedback")
         val digest = java.security.MessageDigest.getInstance("SHA-256")
             .digest(payload.toString().toByteArray(Charsets.UTF_8))
             .joinToString("") { "%02x".format(it) }
@@ -80,6 +91,26 @@ class UserDataBackupCodecTest {
         assertEquals(true, restored.payload.learningSessions.isEmpty())
         assertEquals(true, restored.payload.labQuestionResponses.isEmpty())
         assertEquals(true, restored.payload.learningProfile.isEmpty())
+    }
+
+
+    @Test
+    fun rejectsInvalidOrDuplicateSessionFeedback() {
+        val feedback = LearningSessionFeedbackEntity(sessionId = 1, comprehension = 3, perceivedDifficulty = 3, focus = 3)
+        assertThrows(IllegalArgumentException::class.java) {
+            UserDataBackupCodec.encode(
+                UserDataBackupPayload(learningSessionFeedback = listOf(feedback, feedback)),
+                1_800_000_000_000L,
+                "test"
+            ).let { UserDataBackupCodec.decode(it) }
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            UserDataBackupCodec.encode(
+                UserDataBackupPayload(learningSessionFeedback = listOf(feedback.copy(comprehension = 6))),
+                1_800_000_000_000L,
+                "test"
+            ).let { UserDataBackupCodec.decode(it) }
+        }
     }
 
     @Test
