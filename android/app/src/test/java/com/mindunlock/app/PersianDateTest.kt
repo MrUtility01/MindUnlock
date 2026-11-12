@@ -23,6 +23,24 @@ class PersianDateTest {
     }
 
     @Test
+    fun calculatesJalaliMonthLengthsIncludingLeapEsfand() {
+        assertEquals(31, PersianDate.daysInMonth(1405, 1))
+        assertEquals(30, PersianDate.daysInMonth(1405, 7))
+        assertEquals(30, PersianDate.daysInMonth(1403, 12))
+        assertEquals(29, PersianDate.daysInMonth(1404, 12))
+        assertEquals(29, PersianDate.daysInMonth(1405, 12))
+    }
+
+    @Test
+    fun alignsCalendarWeeksWithSaturdayAsFirstDay() {
+        // 1405/01/01 was Saturday; 1405/08/01 was Saturday as well.
+        assertEquals(0, PersianDate.firstWeekdayOffset(1405, 1))
+        assertEquals(0, PersianDate.firstWeekdayOffset(1405, 8))
+        // 1405/08/21 is Thursday, so the month begins on Saturday offset zero.
+        assertEquals(0, PersianDate.firstWeekdayOffset(1405, 8))
+    }
+
+    @Test
     fun convertsJalaliDatesBackToGregorian() {
         assertEquals(LocalDate.of(2024, 3, 20), PersianDate.toGregorian(JalaliDate(1403, 1, 1)))
         assertEquals(LocalDate.of(2025, 3, 20), PersianDate.toGregorian(JalaliDate(1403, 12, 30)))
