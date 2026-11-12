@@ -3045,6 +3045,7 @@ jobs:
                       Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                           Text("MindUnlock", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                           Text("مرکز کنترل یادگیری و مدیریت ذهن", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                          Text("امروز · " + PersianDate.format(System.currentTimeMillis(), includeTime = false), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                       }
                       Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.primaryContainer) {
                           Icon(Icons.Default.Bookmark, contentDescription = null, modifier = Modifier.padding(12.dp), tint = MaterialTheme.colorScheme.primary)
