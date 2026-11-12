@@ -156,14 +156,23 @@ object UserDataBackupCodec {
         val payloadJson = root.get("payload")?.takeIf { it.isJsonObject }?.asJsonObject
             ?: throw IllegalArgumentException("بخش داده‌های پشتیبان وجود ندارد.")
         requiredCollections.forEach { key ->
-            require(payloadJson.get(key)?.isJsonArray == true) { "بخش داده «$key» ناقص است." }
-            require(payloadJson.getAsJsonArray(key).size() <= 50_000) { "تعداد رکوردهای «$key» از حد مجاز بیشتر است." }
+            val collection = payloadJson.get(key)
+            if (collection != null) {
+                require(collection.isJsonArray) { "ساختار بخش داده «$key» معتبر نیست." }
+                require(collection.asJsonArray.size() <= 50_000) { "تعداد رکوردهای «$key» از حد مجاز بیشتر است." }
+            }
         }
         val expected = root.get("sha256")?.takeIf { it.isJsonPrimitive }?.asString
             ?: throw IllegalArgumentException("امضای صحت فایل وجود ندارد.")
         val actual = sha256(payloadJson.toString())
         require(MessageDigest.isEqual(expected.toByteArray(Charsets.US_ASCII), actual.toByteArray(Charsets.US_ASCII))) {
             "صحت فایل پشتیبان تأیید نشد؛ فایل تغییر کرده یا آسیب دیده است."
+        }
+        // Schema v1 backups created by older app versions may not contain collections
+        // introduced later. Verify the original payload hash first, then normalize
+        // absent collections to empty arrays so Gson can safely decode the payload.
+        requiredCollections.forEach { key ->
+            if (!payloadJson.has(key)) payloadJson.add(key, com.google.gson.JsonArray())
         }
         val payload = runCatching { gson.fromJson(payloadJson, UserDataBackupPayload::class.java) }
             .getOrElse { throw IllegalArgumentException("خواندن داده‌های پشتیبان ناموفق بود.") }
