@@ -181,9 +181,11 @@ fun LaterTopicsScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
                                     val restoredContent = listOf(topic.title, topic.details)
                                         .filter { it.isNotBlank() }.joinToString("\n\n")
                                     val sourceId = topic.sourceMindDumpId
-                                    if (sourceId != null) {
+                                    val sourceExists = sourceId != null &&
+                                        userDatabase.mindDumpDao().getAll().any { it.id == sourceId }
+                                    if (sourceExists) {
                                         userDatabase.mindDumpDao().updateStatus(
-                                            sourceId, "inbox", System.currentTimeMillis(), null
+                                            sourceId!!, "inbox", System.currentTimeMillis(), null
                                         )
                                     } else {
                                         userDatabase.mindDumpDao().insert(
@@ -211,11 +213,25 @@ fun LaterTopicsScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
                     TextButton(
                         onClick = {
                             pendingDeleteTopicId = null
-                            runTopicAction(topicId, "موضوع حذف شد و ورودی اصلی حفظ شد.") {
+                            runTopicAction(
+                                topicId,
+                                if (pendingTopic.sourceMindDumpId == null) "موضوع حذف شد." else "موضوع حذف شد و ورودی اصلی به صندوق بازگشت."
+                            ) {
                                 userDatabase.withTransaction {
-                                    pendingTopic.sourceMindDumpId?.let { sourceId ->
+                                    val sourceId = pendingTopic.sourceMindDumpId
+                                    val sourceExists = sourceId != null &&
+                                        userDatabase.mindDumpDao().getAll().any { it.id == sourceId }
+                                    if (sourceExists) {
                                         userDatabase.mindDumpDao().updateStatus(
-                                            sourceId, "inbox", System.currentTimeMillis(), null
+                                            sourceId!!, "inbox", System.currentTimeMillis(), null
+                                        )
+                                    } else if (sourceId != null) {
+                                        userDatabase.mindDumpDao().insert(
+                                            MindDumpEntity(
+                                                content = listOf(pendingTopic.title, pendingTopic.details)
+                                                    .filter { it.isNotBlank() }.joinToString("\n\n"),
+                                                category = "learning"
+                                            )
                                         )
                                     }
                                     userDatabase.laterTopicDao().delete(topicId)
