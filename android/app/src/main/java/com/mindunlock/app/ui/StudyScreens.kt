@@ -494,6 +494,8 @@ fun DashboardScreen(
                     Text("انرژی بعد از جلسه: ${feedbackEnergyAfter} از ۵")
                     Slider(value = feedbackEnergyAfter.toFloat(), onValueChange = { feedbackEnergyAfter = it.roundToInt().coerceIn(1, 5) }, valueRange = 1f..5f, steps = 3)
                     OutlinedTextField(value = feedbackNote, onValueChange = { if (it.length <= 2000) feedbackNote = it }, label = { Text("یادداشت اختیاری") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
+                    PersianVoiceInputButton { spoken -> feedbackNote = listOf(feedbackNote, spoken).filter { it.isNotBlank() }.joinToString("\n").take(2000) }
+                    PersianVoiceInputButton { spoken -> feedbackNote = listOf(feedbackNote, spoken).filter { it.isNotBlank() }.joinToString("\n").take(2000) }
                     Button(onClick = {
                         feedbackScope.launch {
                             userDb.learningSessionFeedbackDao().upsert(
@@ -1066,6 +1068,13 @@ private fun LabScenarioReaderPanel(
                         minLines = 2,
                         maxLines = 5
                     )
+                    PersianVoiceInputButton { spoken ->
+                        val updatedAnswer = listOf(answerDrafts[index] ?: answerValues[index].orEmpty(), spoken)
+                            .filter { it.isNotBlank() }.joinToString("\n")
+                        answerDrafts = answerDrafts + (index to updatedAnswer)
+                        answerSaveErrors = answerSaveErrors - index
+                        saveLabAnswer(index, updatedAnswer)
+                    }
                     if (index in answerSaveErrors) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
