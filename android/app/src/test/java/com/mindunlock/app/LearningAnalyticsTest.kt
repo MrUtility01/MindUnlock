@@ -44,6 +44,7 @@ class LearningAnalyticsTest {
         assertEquals(1, result.completedSessions)
         assertEquals(60L, result.averageSessionMinutes)
         assertEquals(60L, result.recentActivity.last().sessionMinutes)
+        assertEquals(PersianDate.format(result.recentActivity.last().date), result.recentActivity.last().dateLabel)
         assertTrue(result.chapters.single().needsPractice)
     }
 
