@@ -263,6 +263,23 @@ class UserDatabaseMindDumpMigrationTest {
             assertEquals(42L, later.sourceMindDumpId)
             migrated.laterTopicDao().updateStatus(later.id, "active", System.currentTimeMillis())
             assertEquals("active", migrated.laterTopicDao().observeAll().first().single().status)
+            val activeTopic = migrated.laterTopicDao().getAll().single()
+            migrated.laterTopicDao().update(
+                activeTopic.copy(
+                    title = "بررسی پیشرفته VLANها",
+                    details = "توضیحات تکمیل‌شده",
+                    priority = 2,
+                    revisitAt = 50_000L,
+                    updatedAt = 51_000L
+                )
+            )
+            val editedTopic = migrated.laterTopicDao().getAll().single()
+            assertEquals("بررسی پیشرفته VLANها", editedTopic.title)
+            assertEquals("توضیحات تکمیل‌شده", editedTopic.details)
+            assertEquals(2, editedTopic.priority)
+            assertEquals(50_000L, editedTopic.revisitAt)
+            assertEquals(42L, editedTopic.sourceMindDumpId)
+            assertEquals("active", editedTopic.status)
 
             migrated.labStepProgressDao().upsert(
                 LabStepProgressEntity(itemUid = "lab-vlan-01", stepIndex = 0, completed = true, updatedAt = 2000)
