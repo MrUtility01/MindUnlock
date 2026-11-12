@@ -56,6 +56,16 @@ interface LabStepProgressDao {
 }
 
 @Dao
+interface LabQuestionResponseDao {
+    @Query("SELECT * FROM lab_question_responses WHERE itemUid = :uid ORDER BY questionIndex ASC") fun observeByItem(uid: String): Flow<List<LabQuestionResponseEntity>>
+    @Query("SELECT * FROM lab_question_responses") suspend fun getAll(): List<LabQuestionResponseEntity>
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsert(response: LabQuestionResponseEntity)
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertAll(items: List<LabQuestionResponseEntity>)
+    @Query("DELETE FROM lab_question_responses WHERE itemUid = :uid AND questionIndex = :questionIndex") suspend fun delete(uid: String, questionIndex: Int)
+    @Query("DELETE FROM lab_question_responses") suspend fun deleteAll()
+}
+
+@Dao
 interface NoteDao {
     @Query("SELECT * FROM notes ORDER BY updatedAt DESC") fun observeAll(): Flow<List<NoteEntity>>
     @Query("SELECT * FROM notes") suspend fun getAll(): List<NoteEntity>
@@ -138,7 +148,7 @@ interface LaterTopicDao {
     suspend fun delete(id: Long)
 }
 
-@Database(entities = [ProgressEntity::class, NoteEntity::class, BookmarkEntity::class, StudyTaskEntity::class, MindDumpEntity::class, JournalEntryEntity::class, LaterTopicEntity::class, LabStepProgressEntity::class, LearningSessionEntity::class], version = 7, exportSchema = false)
+@Database(entities = [ProgressEntity::class, NoteEntity::class, BookmarkEntity::class, StudyTaskEntity::class, MindDumpEntity::class, JournalEntryEntity::class, LaterTopicEntity::class, LabStepProgressEntity::class, LearningSessionEntity::class, LabQuestionResponseEntity::class], version = 8, exportSchema = false)
 abstract class UserDatabase : RoomDatabase() {
     abstract fun progressDao(): ProgressDao
     abstract fun noteDao(): NoteDao
@@ -148,6 +158,7 @@ abstract class UserDatabase : RoomDatabase() {
     abstract fun journalEntryDao(): JournalEntryDao
     abstract fun laterTopicDao(): LaterTopicDao
     abstract fun labStepProgressDao(): LabStepProgressDao
+    abstract fun labQuestionResponseDao(): LabQuestionResponseDao
     abstract fun learningSessionDao(): LearningSessionDao
     companion object {
         val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -188,9 +199,15 @@ abstract class UserDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE progress ADD COLUMN lastOpenedAt INTEGER")
             }
         }
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS lab_question_responses (itemUid TEXT NOT NULL, questionIndex INTEGER NOT NULL, answer TEXT NOT NULL, updatedAt INTEGER NOT NULL, PRIMARY KEY(itemUid, questionIndex))")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_lab_question_responses_itemUid ON lab_question_responses(itemUid)")
+            }
+        }
         @Volatile private var instance: UserDatabase? = null
         fun getInstance(context: Context): UserDatabase = instance ?: synchronized(this) {
-            instance ?: Room.databaseBuilder(context.applicationContext, UserDatabase::class.java, "mindunlock-user.db").addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7).build().also { instance = it }
+            instance ?: Room.databaseBuilder(context.applicationContext, UserDatabase::class.java, "mindunlock-user.db").addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8).build().also { instance = it }
         }
     }
 }
