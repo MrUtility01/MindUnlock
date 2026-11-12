@@ -32,6 +32,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.room.withTransaction
 import com.mindunlock.app.data.local.LaterTopicEntity
 import com.mindunlock.app.data.local.MindDumpEntity
 import com.mindunlock.app.data.local.NoteEntity
@@ -47,6 +48,21 @@ fun MindDumpScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
     var category by rememberSaveable { mutableStateOf("thought") }
     var showArchived by rememberSaveable { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
+    var processingEntryIds by remember { mutableStateOf(emptySet<Long>()) }
+    fun runEntryAction(entryId: Long, successMessage: String, action: suspend () -> Unit) {
+        if (entryId in processingEntryIds) return
+        processingEntryIds = processingEntryIds + entryId
+        scope.launch {
+            try {
+                action()
+                message = successMessage
+            } catch (_: Exception) {
+                message = "عملیات انجام نشد؛ ورودی اصلی حفظ شده است. دوباره تلاش کن."
+            } finally {
+                processingEntryIds = processingEntryIds - entryId
+            }
+        }
+    }
     val visibleEntries = entries.filter { (it.status == "archived") == showArchived }
 
     Column(
@@ -127,43 +143,69 @@ fun MindDumpScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
                     MindDumpCard(
                         entry = entry,
                         speech = speech,
+                        busy = entry.id in processingEntryIds,
                         onConvertToLater = {
-                            scope.launch {
-                                userDatabase.laterTopicDao().insert(LaterTopicEntity(title = entry.content.lineSequence().first().take(120), details = entry.content, sourceMindDumpId = entry.id))
-                                userDatabase.mindDumpDao().updateStatus(entry.id, "later", System.currentTimeMillis(), entry.linkedTaskId)
-                                message = "به موضوعات برای بعد منتقل شد؛ متن اصلی حفظ شده است."
+                            runEntryAction(entry.id, "به موضوعات برای بعد منتقل شد؛ متن اصلی حفظ شده است.") {
+                                userDatabase.withTransaction {
+                                    userDatabase.laterTopicDao().insert(
+                                        LaterTopicEntity(
+                                            title = entry.content.lineSequence().first().take(120),
+                                            details = entry.content,
+                                            sourceMindDumpId = entry.id
+                                        )
+                                    )
+                                    userDatabase.mindDumpDao().updateStatus(
+                                        entry.id, "later", System.currentTimeMillis(), entry.linkedTaskId
+                                    )
+                                }
                             }
                         },
                         onConvertToTask = {
-                            scope.launch {
-                                val taskId = userDatabase.studyTaskDao().upsert(
-                                    StudyTaskEntity(title = entry.content.lineSequence().first().take(80), details = entry.content, taskType = "task")
-                                )
-                                userDatabase.mindDumpDao().updateStatus(entry.id, "task", System.currentTimeMillis(), taskId)
-                                message = "به برنامه‌ریز منتقل شد."
+                            runEntryAction(entry.id, "به برنامه‌ریز منتقل شد.") {
+                                userDatabase.withTransaction {
+                                    val taskId = userDatabase.studyTaskDao().upsert(
+                                        StudyTaskEntity(
+                                            title = entry.content.lineSequence().first().take(80),
+                                            details = entry.content,
+                                            taskType = "task"
+                                        )
+                                    )
+                                    userDatabase.mindDumpDao().updateStatus(
+                                        entry.id, "task", System.currentTimeMillis(), taskId
+                                    )
+                                }
                             }
                         },
                         onSaveAsNote = {
-                            scope.launch {
-                                userDatabase.noteDao().upsert(NoteEntity(title = "یادداشت از تخلیه ذهن", body = entry.content))
-                                userDatabase.mindDumpDao().updateStatus(entry.id, "note", System.currentTimeMillis(), null)
-                                message = "در دفتر یادداشت ذخیره شد."
+                            runEntryAction(entry.id, "در دفتر یادداشت ذخیره شد.") {
+                                userDatabase.withTransaction {
+                                    userDatabase.noteDao().upsert(
+                                        NoteEntity(title = "یادداشت از تخلیه ذهن", body = entry.content)
+                                    )
+                                    userDatabase.mindDumpDao().updateStatus(
+                                        entry.id, "note", System.currentTimeMillis(), null
+                                    )
+                                }
                             }
                         },
                         onArchive = {
-                            scope.launch {
-                                userDatabase.mindDumpDao().updateStatus(entry.id, "archived", System.currentTimeMillis(), entry.linkedTaskId)
-                                message = "مورد بایگانی شد."
+                            runEntryAction(entry.id, "مورد بایگانی شد.") {
+                                userDatabase.mindDumpDao().updateStatus(
+                                    entry.id, "archived", System.currentTimeMillis(), entry.linkedTaskId
+                                )
                             }
                         },
                         onRestore = {
-                            scope.launch {
-                                userDatabase.mindDumpDao().updateStatus(entry.id, "inbox", System.currentTimeMillis(), entry.linkedTaskId)
-                                message = "به صندوق ورودی بازگشت."
+                            runEntryAction(entry.id, "به صندوق ورودی بازگشت.") {
+                                userDatabase.mindDumpDao().updateStatus(
+                                    entry.id, "inbox", System.currentTimeMillis(), entry.linkedTaskId
+                                )
                             }
                         },
                         onDelete = {
-                            scope.launch { userDatabase.mindDumpDao().delete(entry.id) }
+                            runEntryAction(entry.id, "مورد حذف شد.") {
+                                userDatabase.mindDumpDao().delete(entry.id)
+                            }
                         }
                     )
                 }
@@ -176,6 +218,7 @@ fun MindDumpScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
 private fun MindDumpCard(
     entry: MindDumpEntity,
     speech: PersianSpeech,
+    busy: Boolean,
     onConvertToLater: () -> Unit,
     onConvertToTask: () -> Unit,
     onSaveAsNote: () -> Unit,
@@ -215,22 +258,22 @@ private fun MindDumpCard(
                 )
             }
             Text(entry.content, style = MaterialTheme.typography.bodyLarge)
-            OutlinedButton(onClick = { speech.speak(entry.content) }, modifier = Modifier.fillMaxWidth()) { Text("خواندن با صدا") }
+            OutlinedButton(onClick = { speech.speak(entry.content) }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("خواندن با صدا") }
             Text(statusLabel, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (entry.status == "archived") {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = onRestore) { Text("بازگردانی") }
-                    OutlinedButton(onClick = onDelete) { Text("حذف") }
+                    OutlinedButton(onClick = onRestore, enabled = !busy) { Text(if (busy) "در حال انجام…" else "بازگردانی") }
+                    OutlinedButton(onClick = onDelete, enabled = !busy) { Text("حذف") }
                 }
             } else if (entry.status == "inbox" || entry.status == "learning" || entry.status == "thought" || entry.status == "idea") {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = onConvertToTask) { Text("تبدیل به کار") }
-                    OutlinedButton(onClick = onConvertToLater) { Text("برای بعد") }
-                    OutlinedButton(onClick = onSaveAsNote) { Text("ذخیره یادداشت") }
+                    OutlinedButton(onClick = onConvertToTask, enabled = !busy) { Text(if (busy) "در حال انجام…" else "تبدیل به کار") }
+                    OutlinedButton(onClick = onConvertToLater, enabled = !busy) { Text("برای بعد") }
+                    OutlinedButton(onClick = onSaveAsNote, enabled = !busy) { Text("ذخیره یادداشت") }
                 }
-                OutlinedButton(onClick = onArchive, modifier = Modifier.fillMaxWidth()) { Text("بایگانی") }
+                OutlinedButton(onClick = onArchive, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("بایگانی") }
             } else {
-                OutlinedButton(onClick = onArchive, modifier = Modifier.fillMaxWidth()) { Text("انتقال به بایگانی") }
+                OutlinedButton(onClick = onArchive, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("انتقال به بایگانی") }
             }
         }
     }
