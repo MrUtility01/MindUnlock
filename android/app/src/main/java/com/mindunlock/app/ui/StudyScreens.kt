@@ -295,11 +295,14 @@ fun DashboardScreen(
     val laterTopics by userDb.laterTopicDao().observeAll().collectAsState(initial = emptyList())
     val completed = progress.count { it.completed }
     val lastSession = sessions.firstOrNull()
-    val lastReadProgress = progress.filter { it.lastOpenedAt != null }
+    val verifiedItemsByUid = contentItems
+        .asSequence()
+        .filter { it.sourceStatus == "verified" }
+        .associateBy { it.uid }
+    val lastReadProgress = progress.asSequence()
+        .filter { it.lastOpenedAt != null && verifiedItemsByUid.containsKey(it.itemUid) }
         .maxByOrNull { it.lastOpenedAt ?: 0L }
-    val lastReadItem = lastReadProgress?.let { saved ->
-        contentItems.firstOrNull { it.uid == saved.itemUid && it.sourceStatus == "verified" }
-    }
+    val lastReadItem = lastReadProgress?.let { saved -> verifiedItemsByUid[saved.itemUid] }
     val last = lastReadItem?.chapterId?.let { chapterId -> chapters.firstOrNull { it.id == chapterId } }
         ?: lastSession?.chapterId?.let { chapterId -> chapters.firstOrNull { it.id == chapterId } }
         ?: chapters.firstOrNull()
