@@ -313,6 +313,8 @@ fun DashboardScreen(
     var feedbackEnergyAfter by remember(feedbackSession?.id) { mutableIntStateOf(3) }
     var feedbackNote by remember(feedbackSession?.id) { mutableStateOf("") }
     val feedbackScope = rememberCoroutineScope()
+    var isSavingFeedback by remember(feedbackSession?.id) { mutableStateOf(false) }
+    var feedbackMessage by remember(feedbackSession?.id) { mutableStateOf("") }
     val verifiedItemsByUid = contentItems
         .asSequence()
         .filter { it.sourceStatus == "verified" }
@@ -506,21 +508,40 @@ fun DashboardScreen(
                     Slider(value = feedbackEnergyAfter.toFloat(), onValueChange = { feedbackEnergyAfter = it.roundToInt().coerceIn(1, 5) }, valueRange = 1f..5f, steps = 3)
                     OutlinedTextField(value = feedbackNote, onValueChange = { if (it.length <= 2000) feedbackNote = it }, label = { Text("یادداشت اختیاری") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
                     PersianVoiceInputButton { spoken -> feedbackNote = listOf(feedbackNote, spoken).filter { it.isNotBlank() }.joinToString("\n").take(2000) }
-                    Button(onClick = {
-                        feedbackScope.launch {
-                            userDb.learningSessionFeedbackDao().upsert(
-                                LearningSessionFeedbackEntity(
-                                    sessionId = feedbackSession.id,
-                                    comprehension = feedbackComprehension,
-                                    perceivedDifficulty = feedbackDifficulty,
-                                    focus = feedbackFocus,
-                                    energyBefore = feedbackEnergyBefore,
-                                    energyAfter = feedbackEnergyAfter,
-                                    note = feedbackNote.trim().takeIf { it.isNotEmpty() }
-                                )
-                            )
-                        }
-                    }, modifier = Modifier.fillMaxWidth()) { Text("ذخیره بازخورد") }
+                    Button(
+                        onClick = {
+                            if (!isSavingFeedback) {
+                                isSavingFeedback = true
+                                feedbackScope.launch {
+                                    try {
+                                        userDb.learningSessionFeedbackDao().upsert(
+                                            LearningSessionFeedbackEntity(
+                                                sessionId = feedbackSession.id,
+                                                comprehension = feedbackComprehension,
+                                                perceivedDifficulty = feedbackDifficulty,
+                                                focus = feedbackFocus,
+                                                energyBefore = feedbackEnergyBefore,
+                                                energyAfter = feedbackEnergyAfter,
+                                                note = feedbackNote.trim().takeIf { it.isNotEmpty() }
+                                            )
+                                        )
+                                        feedbackMessage = "بازخورد ذخیره شد."
+                                    } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                                        throw cancelled
+                                    } catch (_: Exception) {
+                                        feedbackMessage = "ذخیره بازخورد انجام نشد؛ دوباره تلاش کن."
+                                    } finally {
+                                        isSavingFeedback = false
+                                    }
+                                }
+                            }
+                        },
+                        enabled = !isSavingFeedback,
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text(if (isSavingFeedback) "در حال ذخیره…" else "ذخیره بازخورد") }
+                    if (feedbackMessage.isNotBlank()) {
+                        Text(feedbackMessage, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                    }
                     Text("این داده‌ها برداشت شخصی تو از جلسه‌اند و از نمره آزمون یا عملکرد عملی جدا نگهداری می‌شوند.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
