@@ -31,6 +31,24 @@ interface ProgressDao {
 }
 
 @Dao
+interface LearningStageProgressDao {
+    @Query("SELECT * FROM learning_stage_progress WHERE chapterId = :chapterId ORDER BY stageIndex ASC")
+    fun observeByChapter(chapterId: String): Flow<List<LearningStageProgressEntity>>
+    @Query("SELECT * FROM learning_stage_progress")
+    suspend fun getAll(): List<LearningStageProgressEntity>
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(progress: LearningStageProgressEntity)
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertAll(items: List<LearningStageProgressEntity>)
+    @Query("DELETE FROM learning_stage_progress WHERE chapterId = :chapterId AND stageId = :stageId")
+    suspend fun delete(chapterId: String, stageId: String)
+    @Query("DELETE FROM learning_stage_progress WHERE chapterId = :chapterId AND stageIndex >= :stageIndex")
+    suspend fun deleteFromIndex(chapterId: String, stageIndex: Int)
+    @Query("DELETE FROM learning_stage_progress")
+    suspend fun deleteAll()
+}
+
+@Dao
 interface LearningSessionFeedbackDao {
     @Query("SELECT * FROM learning_session_feedback ORDER BY updatedAt DESC")
     fun observeAll(): Flow<List<LearningSessionFeedbackEntity>>
@@ -174,7 +192,7 @@ interface LaterTopicDao {
     suspend fun delete(id: Long)
 }
 
-@Database(entities = [ProgressEntity::class, NoteEntity::class, BookmarkEntity::class, StudyTaskEntity::class, MindDumpEntity::class, JournalEntryEntity::class, LaterTopicEntity::class, LabStepProgressEntity::class, LearningSessionEntity::class, LabQuestionResponseEntity::class, LearningProfileEntity::class, LearningSessionFeedbackEntity::class], version = 10, exportSchema = false)
+@Database(entities = [ProgressEntity::class, NoteEntity::class, BookmarkEntity::class, StudyTaskEntity::class, MindDumpEntity::class, JournalEntryEntity::class, LaterTopicEntity::class, LabStepProgressEntity::class, LearningSessionEntity::class, LabQuestionResponseEntity::class, LearningProfileEntity::class, LearningSessionFeedbackEntity::class, LearningStageProgressEntity::class], version = 11, exportSchema = false)
 abstract class UserDatabase : RoomDatabase() {
     abstract fun progressDao(): ProgressDao
     abstract fun noteDao(): NoteDao
@@ -188,6 +206,7 @@ abstract class UserDatabase : RoomDatabase() {
     abstract fun learningSessionDao(): LearningSessionDao
     abstract fun learningProfileDao(): LearningProfileDao
     abstract fun learningSessionFeedbackDao(): LearningSessionFeedbackDao
+    abstract fun learningStageProgressDao(): LearningStageProgressDao
     companion object {
         val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
@@ -243,9 +262,15 @@ abstract class UserDatabase : RoomDatabase() {
                 db.execSQL("CREATE TABLE IF NOT EXISTS learning_session_feedback (sessionId INTEGER NOT NULL PRIMARY KEY, comprehension INTEGER NOT NULL, perceivedDifficulty INTEGER NOT NULL, focus INTEGER NOT NULL, energyBefore INTEGER, energyAfter INTEGER, note TEXT, updatedAt INTEGER NOT NULL)")
             }
         }
+        val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS learning_stage_progress (chapterId TEXT NOT NULL, stageId TEXT NOT NULL, stageIndex INTEGER NOT NULL, completed INTEGER NOT NULL, completedAt INTEGER NOT NULL, updatedAt INTEGER NOT NULL, PRIMARY KEY(chapterId, stageId))")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_learning_stage_progress_chapterId ON learning_stage_progress(chapterId)")
+            }
+        }
         @Volatile private var instance: UserDatabase? = null
         fun getInstance(context: Context): UserDatabase = instance ?: synchronized(this) {
-            instance ?: Room.databaseBuilder(context.applicationContext, UserDatabase::class.java, "mindunlock-user.db").addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10).build().also { instance = it }
+            instance ?: Room.databaseBuilder(context.applicationContext, UserDatabase::class.java, "mindunlock-user.db").addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11).build().also { instance = it }
         }
     }
 }
