@@ -29,9 +29,7 @@ import com.mindunlock.app.data.local.LaterTopicEntity
 import com.mindunlock.app.data.local.UserDatabase
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
-import java.time.LocalDate
 import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 
 @Composable
 fun LaterTopicsScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
@@ -57,7 +55,7 @@ fun LaterTopicsScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
         PersianVoiceInputButton { spoken -> title = listOf(title, spoken).filter { it.isNotBlank() }.joinToString("\n") }
         OutlinedTextField(details, { details = it }, Modifier.fillMaxWidth(), label = { Text("توضیحات (اختیاری)") }, minLines = 2)
         PersianVoiceInputButton { spoken -> details = listOf(details, spoken).filter { it.isNotBlank() }.joinToString("\n") }
-        OutlinedTextField(revisitDate, { revisitDate = it }, Modifier.fillMaxWidth(), label = { Text("تاریخ یادآوری اختیاری · YYYY-MM-DD") }, singleLine = true)
+        OutlinedTextField(revisitDate, { revisitDate = it }, Modifier.fillMaxWidth(), label = { Text("تاریخ یادآوری اختیاری · شمسی: ۱۴۰۵/۰۸/۲۱ یا میلادی: 2026-11-12") }, singleLine = true)
         Text("اولویت", style = MaterialTheme.typography.labelLarge)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf(1 to "زیاد", 2 to "معمولی", 3 to "کم").forEach { (value, label) ->
@@ -69,14 +67,12 @@ fun LaterTopicsScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
             if (cleanTitle.isBlank()) {
                 message = "عنوان موضوع را وارد کن."
             } else {
-                val parsedDate = runCatching {
-                    if (revisitDate.isBlank()) null else LocalDate.parse(revisitDate.trim()).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
-                }
-                if (parsedDate.isFailure) {
-                    message = "تاریخ معتبر نیست؛ قالب YYYY-MM-DD را وارد کن."
+                val parsedDate = if (revisitDate.isBlank()) null else PersianDate.parseDateTime(revisitDate.trim())
+                if (revisitDate.isNotBlank() && parsedDate == null) {
+                    message = "تاریخ معتبر نیست؛ شمسی را به شکل ۱۴۰۵/۰۸/۲۱ یا میلادی را به شکل 2026-11-12 وارد کن."
                 } else {
                     scope.launch {
-                        userDatabase.laterTopicDao().insert(LaterTopicEntity(title = cleanTitle, details = details.trim(), priority = priority, revisitAt = parsedDate.getOrNull()))
+                        userDatabase.laterTopicDao().insert(LaterTopicEntity(title = cleanTitle, details = details.trim(), priority = priority, revisitAt = parsedDate))
                         title = ""; details = ""; revisitDate = ""; priority = 2
                         message = "موضوع برای بعد ذخیره شد."
                     }
@@ -119,9 +115,7 @@ private fun LaterTopicCard(
         "done" -> "انجام‌شده"
         else -> "در انتظار"
     }
-    val dateLabel = topic.revisitAt?.let {
-        DateTimeFormatter.ISO_LOCAL_DATE.format(java.time.Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate())
-    } ?: "بدون تاریخ یادآوری"
+    val dateLabel = topic.revisitAt?.let { PersianDate.format(it, includeTime = false) } ?: "بدون تاریخ یادآوری"
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
             Text(topic.title, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleMedium)
