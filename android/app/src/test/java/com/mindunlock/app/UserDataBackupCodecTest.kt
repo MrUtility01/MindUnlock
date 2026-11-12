@@ -46,6 +46,31 @@ class UserDataBackupCodecTest {
         assertEquals(1800L, session.durationSeconds)
     }
 
+
+    @Test
+    fun decodesOlderSchemaV1BackupWhenLearningSessionsCollectionIsAbsent() {
+        val root = com.google.gson.JsonParser.parseString(
+            UserDataBackupCodec.encode(
+                UserDataBackupPayload(
+                    mindDump = listOf(MindDumpEntity(content = "یادداشت قدیمی"))
+                ),
+                1_800_000_000_000L,
+                "0.5.8"
+            )
+        ).asJsonObject
+        val payload = root.getAsJsonObject("payload")
+        payload.remove("learningSessions")
+        val digest = java.security.MessageDigest.getInstance("SHA-256")
+            .digest(payload.toString().toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
+        root.addProperty("sha256", digest)
+
+        val restored = UserDataBackupCodec.decode(root.toString())
+
+        assertEquals("یادداشت قدیمی", restored.payload.mindDump.single().content)
+        assertEquals(true, restored.payload.learningSessions.isEmpty())
+    }
+
     @Test
     fun rejectsTamperedPayload() {
         val json = UserDataBackupCodec.encode(
