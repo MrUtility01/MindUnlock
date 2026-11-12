@@ -22,6 +22,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.LaunchedEffect
+import kotlinx.coroutines.launch
 import com.mindunlock.app.data.local.LearningProfileEntity
 import com.mindunlock.app.data.local.UserDatabase
 import androidx.compose.ui.Alignment
