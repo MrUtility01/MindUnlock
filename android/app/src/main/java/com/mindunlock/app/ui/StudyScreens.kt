@@ -292,11 +292,20 @@ fun DashboardScreen(
     val flashcardCount by db.contentItemDao().observeFlashcardCount().collectAsState(initial = 0)
     val progress by userDb.progressDao().observeAll().collectAsState(initial = emptyList())
     val sessions by userDb.learningSessionDao().observeAll().collectAsState(initial = emptyList())
+    val sessionFeedback by userDb.learningSessionFeedbackDao().observeAll().collectAsState(initial = emptyList())
     val tasks by userDb.studyTaskDao().observeAll().collectAsState(initial = emptyList())
     val inboxItems by userDb.mindDumpDao().observeAll().collectAsState(initial = emptyList())
     val laterTopics by userDb.laterTopicDao().observeAll().collectAsState(initial = emptyList())
     val completed = progress.count { it.completed }
     val lastSession = sessions.firstOrNull()
+    val feedbackSession = sessions.firstOrNull { it.endedAt != null && it.durationSeconds > 0 && sessionFeedback.none { saved -> saved.sessionId == it.id } }
+    var feedbackComprehension by remember(feedbackSession?.id) { mutableIntStateOf(3) }
+    var feedbackDifficulty by remember(feedbackSession?.id) { mutableIntStateOf(3) }
+    var feedbackFocus by remember(feedbackSession?.id) { mutableIntStateOf(3) }
+    var feedbackEnergyBefore by remember(feedbackSession?.id) { mutableIntStateOf(3) }
+    var feedbackEnergyAfter by remember(feedbackSession?.id) { mutableIntStateOf(3) }
+    var feedbackNote by remember(feedbackSession?.id) { mutableStateOf("") }
+    val feedbackScope = rememberCoroutineScope()
     val verifiedItemsByUid = contentItems
         .asSequence()
         .filter { it.sourceStatus == "verified" }
@@ -425,6 +434,41 @@ fun DashboardScreen(
         Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
             ActionTile("آرشیو دانش", "archive", onNavigate, Modifier.weight(1f))
             ActionTile("گزارش پیشرفت", "progress", onNavigate, Modifier.weight(1f))
+        }
+        if (feedbackSession != null) {
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("ثبت بازخورد جلسه", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text("${feedbackSession.topicTitle} · ${PersianDate.format(feedbackSession.endedAt ?: feedbackSession.startedAt)}", style = MaterialTheme.typography.bodySmall)
+                    Text("میزان درک مطلب: ${feedbackComprehension} از ۵")
+                    Slider(value = feedbackComprehension.toFloat(), onValueChange = { feedbackComprehension = it.roundToInt().coerceIn(1, 5) }, valueRange = 1f..5f, steps = 3)
+                    Text("سختی ادراک‌شده: ${feedbackDifficulty} از ۵")
+                    Slider(value = feedbackDifficulty.toFloat(), onValueChange = { feedbackDifficulty = it.roundToInt().coerceIn(1, 5) }, valueRange = 1f..5f, steps = 3)
+                    Text("تمرکز: ${feedbackFocus} از ۵")
+                    Slider(value = feedbackFocus.toFloat(), onValueChange = { feedbackFocus = it.roundToInt().coerceIn(1, 5) }, valueRange = 1f..5f, steps = 3)
+                    Text("انرژی قبل از جلسه: ${feedbackEnergyBefore} از ۵")
+                    Slider(value = feedbackEnergyBefore.toFloat(), onValueChange = { feedbackEnergyBefore = it.roundToInt().coerceIn(1, 5) }, valueRange = 1f..5f, steps = 3)
+                    Text("انرژی بعد از جلسه: ${feedbackEnergyAfter} از ۵")
+                    Slider(value = feedbackEnergyAfter.toFloat(), onValueChange = { feedbackEnergyAfter = it.roundToInt().coerceIn(1, 5) }, valueRange = 1f..5f, steps = 3)
+                    OutlinedTextField(value = feedbackNote, onValueChange = { if (it.length <= 2000) feedbackNote = it }, label = { Text("یادداشت اختیاری") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
+                    Button(onClick = {
+                        feedbackScope.launch {
+                            userDb.learningSessionFeedbackDao().upsert(
+                                LearningSessionFeedbackEntity(
+                                    sessionId = feedbackSession.id,
+                                    comprehension = feedbackComprehension,
+                                    perceivedDifficulty = feedbackDifficulty,
+                                    focus = feedbackFocus,
+                                    energyBefore = feedbackEnergyBefore,
+                                    energyAfter = feedbackEnergyAfter,
+                                    note = feedbackNote.trim().takeIf { it.isNotEmpty() }
+                                )
+                            )
+                        }
+                    }, modifier = Modifier.fillMaxWidth()) { Text("ذخیره بازخورد") }
+                    Text("این داده‌ها برداشت شخصی تو از جلسه‌اند و از نمره آزمون یا عملکرد عملی جدا نگهداری می‌شوند.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
         }
         Text("ادامهٔ مطالعه", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         if (last != null) {
