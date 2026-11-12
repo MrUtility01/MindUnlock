@@ -45,7 +45,7 @@ class UserDatabaseMindDumpMigrationTest {
             context,
             UserDatabase::class.java,
             databaseName
-        ).addMigrations(UserDatabase.MIGRATION_1_2, UserDatabase.MIGRATION_2_3, UserDatabase.MIGRATION_3_4, UserDatabase.MIGRATION_4_5, UserDatabase.MIGRATION_5_6, UserDatabase.MIGRATION_6_7, UserDatabase.MIGRATION_7_8, UserDatabase.MIGRATION_8_9).allowMainThreadQueries().build()
+        ).addMigrations(UserDatabase.MIGRATION_1_2, UserDatabase.MIGRATION_2_3, UserDatabase.MIGRATION_3_4, UserDatabase.MIGRATION_4_5, UserDatabase.MIGRATION_5_6, UserDatabase.MIGRATION_6_7, UserDatabase.MIGRATION_7_8, UserDatabase.MIGRATION_8_9, UserDatabase.MIGRATION_9_10).allowMainThreadQueries().build()
 
         try {
             val migratedProfile = LearningProfileEntity(answersCsv = List(20) { "5" }.joinToString(","), sessionMinutes = 60, maxTopics = 3, guidedMode = "flexible", completed = true)
@@ -174,6 +174,30 @@ class UserDatabaseMindDumpMigrationTest {
             assertEquals(16_000L, finishedSession.endedAt)
             assertEquals(6L, finishedSession.durationSeconds)
             assertEquals(null, migrated.learningSessionDao().observeActive().first())
+
+
+            migrated.learningSessionFeedbackDao().upsert(
+                LearningSessionFeedbackEntity(
+                    sessionId = sessionId,
+                    comprehension = 4,
+                    perceivedDifficulty = 2,
+                    focus = 5,
+                    energyBefore = 2,
+                    energyAfter = 4,
+                    note = "بازخورد پس از جلسه"
+                )
+            )
+            val feedback = migrated.learningSessionFeedbackDao().get(sessionId)
+            assertEquals(4, feedback?.comprehension)
+            assertEquals(2, feedback?.perceivedDifficulty)
+            assertEquals(5, feedback?.focus)
+            assertEquals(2, feedback?.energyBefore)
+            assertEquals(4, feedback?.energyAfter)
+            assertEquals("بازخورد پس از جلسه", feedback?.note)
+            migrated.learningSessionFeedbackDao().delete(sessionId)
+            assertEquals(null, migrated.learningSessionFeedbackDao().get(sessionId))
+
+
 
         } finally {
             migrated.close()
