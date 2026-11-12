@@ -123,13 +123,13 @@ class UserDatabaseMindDumpMigrationTest {
                     db.mindDumpDao().updateStatus(topic.sourceMindDumpId, "inbox", 11_000L, null)
                 } else {
                     db.mindDumpDao().insert(
-                        MindDumpEntity(content = listOf(topic.title, topic.details).filter { it.isNotBlank() }.joinToString("\\n\\n"), category = "learning")
+                        MindDumpEntity(content = listOf(topic.title, topic.details).filter { it.isNotBlank() }.joinToString("\n\n"), category = "learning")
                     )
                 }
                 db.laterTopicDao().delete(orphanTopicId)
             }
             assertEquals(2, db.mindDumpDao().getAll().size)
-            assertEquals("موضوع مستقل\\n\\nبدون منبع قبلی", db.mindDumpDao().getAll().last().content)
+            assertEquals("موضوع مستقل\n\nبدون منبع قبلی", db.mindDumpDao().getAll().last().content)
             assertEquals(0, db.laterTopicDao().getAll().size)
         } finally {
             db.close()
