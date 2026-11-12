@@ -45,9 +45,17 @@ class UserDatabaseMindDumpMigrationTest {
             context,
             UserDatabase::class.java,
             databaseName
-        ).addMigrations(UserDatabase.MIGRATION_1_2, UserDatabase.MIGRATION_2_3, UserDatabase.MIGRATION_3_4, UserDatabase.MIGRATION_4_5, UserDatabase.MIGRATION_5_6, UserDatabase.MIGRATION_6_7, UserDatabase.MIGRATION_7_8).allowMainThreadQueries().build()
+        ).addMigrations(UserDatabase.MIGRATION_1_2, UserDatabase.MIGRATION_2_3, UserDatabase.MIGRATION_3_4, UserDatabase.MIGRATION_4_5, UserDatabase.MIGRATION_5_6, UserDatabase.MIGRATION_6_7, UserDatabase.MIGRATION_7_8, UserDatabase.MIGRATION_8_9).allowMainThreadQueries().build()
 
         try {
+            val migratedProfile = LearningProfileEntity(answersCsv = List(20) { "5" }.joinToString(","), sessionMinutes = 60, maxTopics = 3, guidedMode = "flexible", completed = true)
+            migrated.learningProfileDao().upsert(migratedProfile)
+            val storedProfile = migrated.learningProfileDao().get()
+            assertEquals(60, storedProfile?.sessionMinutes)
+            assertEquals(3, storedProfile?.maxTopics)
+            assertEquals("flexible", storedProfile?.guidedMode)
+            assertEquals(20, storedProfile?.answersCsv?.split(",")?.size)
+
             val preservedProgress = migrated.progressDao().get("old-item")
             assertEquals(true, preservedProgress?.completed)
             assertEquals(null, preservedProgress?.lastOpenedAt)
