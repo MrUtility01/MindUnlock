@@ -119,8 +119,18 @@ object LearningAnalytics {
         }.sortedWith(compareBy<ChapterLearningStats> { !it.needsPractice }.thenBy { it.accuracyPercent }.thenBy { it.title })
 
         val today = Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
-        val completedSessions = sessions.filter { it.endedAt != null }
-        val totalStudyMinutes = completedSessions.sumOf { it.durationSeconds.coerceAtLeast(0L) } / 60L
+        // Session timestamps are the source of truth. Do not trust a cached duration
+        // because older clients or interrupted writes may have left it inconsistent.
+        fun elapsedSessionSeconds(session: LearningSessionEntity): Long {
+            val endedAt = session.endedAt ?: return 0L
+            return if (endedAt < session.startedAt) 0L else (endedAt - session.startedAt) / 1000L
+        }
+        val completedSessions = sessions.filter { session ->
+            val endedAt = session.endedAt
+            endedAt != null && endedAt >= session.startedAt
+        }
+        val totalStudySeconds = completedSessions.sumOf(::elapsedSessionSeconds)
+        val totalStudyMinutes = totalStudySeconds / 60L
         val completedSessionIds = completedSessions.mapTo(HashSet()) { it.id }
         val validFeedback = sessionFeedback.filter { feedback ->
             feedback.sessionId in completedSessionIds &&
@@ -170,7 +180,7 @@ object LearningAnalytics {
                 label = persianWeekday(date.dayOfWeek.value),
                 dateLabel = PersianDate.format(date),
                 updatedItems = count,
-                sessionMinutes = daySessions.sumOf { it.durationSeconds.coerceAtLeast(0L) } / 60L,
+                sessionMinutes = daySessions.sumOf(::elapsedSessionSeconds) / 60L,
                 sessions = daySessions.size
             )
         }
