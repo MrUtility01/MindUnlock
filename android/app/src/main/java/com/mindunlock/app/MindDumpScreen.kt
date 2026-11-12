@@ -34,9 +34,6 @@ import com.mindunlock.app.data.local.NoteEntity
 import com.mindunlock.app.data.local.StudyTaskEntity
 import com.mindunlock.app.data.local.UserDatabase
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 @Composable
 fun MindDumpScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
@@ -182,7 +179,7 @@ private fun MindDumpCard(
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(categoryLabel, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                 Text(
-                    SimpleDateFormat("yyyy/MM/dd · HH:mm", Locale.getDefault()).format(Date(entry.createdAt)),
+                    PersianDate.format(entry.createdAt),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
