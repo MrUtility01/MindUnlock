@@ -148,6 +148,15 @@ class UserDataBackupCodecTest {
                 )
             )
         }
+        assertThrows(IllegalArgumentException::class.java) {
+            UserDataBackupCodec.decode(
+                UserDataBackupCodec.encode(
+                    UserDataBackupPayload(learningStageProgress = listOf(stage.copy(stageId = "overview"))),
+                    1_800_000_000_000L,
+                    "test"
+                )
+            )
+        }
     }
 
     @Test
