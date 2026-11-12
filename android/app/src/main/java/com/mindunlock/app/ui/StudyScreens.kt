@@ -219,6 +219,7 @@ fun KnowledgeArchiveScreen(db: AppDatabase, speech: PersianSpeech, onOpenItem: (
             label = { Text("جست‌وجو در عنوان، خلاصه و متن مطالب") },
             singleLine = true
         )
+        PersianVoiceInputButton(compact = true) { spoken -> query = listOf(query, spoken).filter { it.isNotBlank() }.joinToString(" ") }
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             kindOptions.forEach { option ->
                 FilterChip(selected = kind == option, onClick = { kind = option }, label = { Text(option) })
