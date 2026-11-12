@@ -301,7 +301,11 @@ fun DashboardScreen(
     val laterTopics by userDb.laterTopicDao().observeAll().collectAsState(initial = emptyList())
     val completed = progress.count { it.completed }
     val lastSession = sessions.firstOrNull()
-    val feedbackSession = sessions.firstOrNull { it.endedAt != null && it.durationSeconds > 0 && sessionFeedback.none { saved -> saved.sessionId == it.id } }
+    val feedbackSession = sessions.firstOrNull { session ->
+        val endedAt = session.endedAt
+        endedAt != null && endedAt > session.startedAt &&
+            sessionFeedback.none { saved -> saved.sessionId == session.id }
+    }
     var feedbackComprehension by remember(feedbackSession?.id) { mutableIntStateOf(3) }
     var feedbackDifficulty by remember(feedbackSession?.id) { mutableIntStateOf(3) }
     var feedbackFocus by remember(feedbackSession?.id) { mutableIntStateOf(3) }
@@ -399,8 +403,9 @@ fun DashboardScreen(
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(lastCompletedSession.topicTitle, fontWeight = FontWeight.SemiBold)
+                    val elapsedSeconds = ((lastCompletedSession.endedAt ?: lastCompletedSession.startedAt) - lastCompletedSession.startedAt).coerceAtLeast(0L) / 1000L
                     Text(
-                        "${PersianDate.format(lastCompletedSession.startedAt)} · مدت ${lastCompletedSession.durationSeconds / 60} دقیقه و ${lastCompletedSession.durationSeconds % 60} ثانیه",
+                        "${PersianDate.format(lastCompletedSession.startedAt)} · مدت ${elapsedSeconds / 60} دقیقه و ${elapsedSeconds % 60} ثانیه",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -1832,7 +1837,8 @@ fun ProgressScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeech)
                 Card(Modifier.fillMaxWidth()) {
                     Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(session.topicTitle, fontWeight = FontWeight.SemiBold)
-                        Text("${PersianDate.format(Instant.ofEpochMilli(session.startedAt).atZone(ZoneId.systemDefault()).toLocalDate())} · ${session.durationSeconds.coerceAtLeast(0L) / 60L} دقیقه", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        val elapsedSeconds = ((session.endedAt ?: session.startedAt) - session.startedAt).coerceAtLeast(0L) / 1000L
+                        Text("${PersianDate.format(Instant.ofEpochMilli(session.startedAt).atZone(ZoneId.systemDefault()).toLocalDate())} · ${elapsedSeconds / 60L} دقیقه", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Text(if (savedFeedback == null) "بازخوردی ثبت نشده" else "درک: ${savedFeedback.comprehension}/۵ · تمرکز: ${savedFeedback.focus}/۵ · دشواری: ${savedFeedback.perceivedDifficulty}/۵", style = MaterialTheme.typography.bodySmall)
                         TextButton(onClick = {
                             feedbackComprehension = savedFeedback?.comprehension ?: 3
