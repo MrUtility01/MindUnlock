@@ -2420,7 +2420,7 @@ fun SettingsScreen(
                     onFontScaleChange(1f)
                     readingLineSpacing = 1.45f
                     readingHorizontalMargin = 16f
-                    keepScreenOnWhileReading = true
+                    keepScreenOnWhileReading = false
                     speed = 1f
                     voiceName = "gyro"
                     preferences.edit()
@@ -2428,7 +2428,7 @@ fun SettingsScreen(
                         .putFloat("font_scale", 1f)
                         .putFloat("reading_line_spacing", 1.45f)
                         .putFloat("reading_horizontal_margin", 16f)
-                        .putBoolean("keep_screen_on_while_reading", true)
+                        .putBoolean("keep_screen_on_while_reading", false)
                         .putFloat("speech_rate", 1f)
                         .putString("speech_voice", "gyro")
                         .apply()

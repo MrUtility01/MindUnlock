@@ -356,11 +356,6 @@ private fun MindUnlockRoot(
         speech.stop()
         super.onPause()
     }
-
-    override fun onDestroy() {
-        speech.close()
-        super.onDestroy()
-    }
 }
 
 @Composable
