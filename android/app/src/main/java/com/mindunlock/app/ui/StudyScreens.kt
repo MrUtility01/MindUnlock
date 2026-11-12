@@ -195,6 +195,27 @@ fun DashboardScreen(
         LearningAnalytics.build(chapters, contentItems, progress, tasks, sessions, now).scheduledReviewsDue
     }
     val activeTopic = laterTopics.firstOrNull { it.status == "active" }
+    val nextActionTitle = when {
+        dueReviews > 0 -> "مرور مطالب سررسیدشده"
+        todayTasks.isNotEmpty() -> "رسیدگی به برنامهٔ امروز"
+        activeTopic != null -> "پیگیری موضوع فعال: ${activeTopic.title}"
+        last != null -> "ادامهٔ مطالعه: ${last.title}"
+        else -> "انتخاب اولین موضوع یادگیری"
+    }
+    val nextActionDescription = when {
+        dueReviews > 0 -> "${PersianDate.toPersianDigits(dueReviews.toString())} مورد برای مرور آماده است."
+        todayTasks.isNotEmpty() -> "${PersianDate.toPersianDigits(todayTasks.size.toString())} کار زمان‌بندی‌شده برای امروز داری."
+        activeTopic != null -> "به موضوعی که برای پیگیری انتخاب کرده‌ای برگرد."
+        last != null -> "از آخرین فصل مطالعه‌شده ادامه بده."
+        else -> "یک موضوع یا فصل برای شروع انتخاب کن."
+    }
+    val nextAction = when {
+        dueReviews > 0 -> { { onNavigate("review") } }
+        todayTasks.isNotEmpty() -> { { onNavigate("planner") } }
+        activeTopic != null -> { { onNavigate("later") } }
+        last != null -> { { onContinue(last.id) } }
+        else -> { { onNavigate("courses") } }
+    }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
             Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
@@ -215,6 +236,16 @@ fun DashboardScreen(
             MetricCard("صندوق ورودی", inboxCount.toString(), Modifier.weight(1f))
             MetricCard("کارهای امروز", todayTasks.size.toString(), Modifier.weight(1f))
             MetricCard("مرورهای سررسید", dueReviews.toString(), Modifier.weight(1f))
+        }
+        Text("اولویت بعدی", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Card(onClick = { nextAction() }, modifier = Modifier.fillMaxWidth()) {
+            Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(nextActionTitle, fontWeight = FontWeight.SemiBold)
+                    Text(nextActionDescription, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Icon(Icons.Default.ArrowForward, contentDescription = "رفتن به اقدام بعدی")
+            }
         }
         Text("کارهای امروز", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         if (todayTasks.isEmpty()) {
