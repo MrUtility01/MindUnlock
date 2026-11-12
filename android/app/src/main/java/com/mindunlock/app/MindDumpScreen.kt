@@ -5,6 +5,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.weight
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -46,9 +50,10 @@ fun MindDumpScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
     val visibleEntries = entries.filter { (it.status == "archived") == showArchived }
 
     Column(
-        modifier = Modifier.fillMaxSize().padding(16.dp),
+        modifier = Modifier.fillMaxSize().imePadding().padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        Column(Modifier.fillMaxWidth().weight(0.48f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("تخلیه ذهن", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         Text(
             "هر فکر، کار نیمه‌تمام، سؤال یا ایده‌ای را سریع ثبت کن؛ لازم نیست همین حالا برایش تصمیم بگیری.",
@@ -93,14 +98,15 @@ fun MindDumpScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
             FilterChip(selected = !showArchived, onClick = { showArchived = false }, label = { Text("ورودی‌ها (" + entries.count { it.status != "archived" } + ")") })
             FilterChip(selected = showArchived, onClick = { showArchived = true }, label = { Text("بایگانی (" + entries.count { it.status == "archived" } + ")") })
         }
+        }
         if (visibleEntries.isEmpty()) {
             Text(
                 if (showArchived) "هنوز موردی بایگانی نشده است." else "صندوق ورودی خالی است. هرچه در ذهن داری اینجا ثبت کن.",
-                modifier = Modifier.padding(vertical = 18.dp),
+                modifier = Modifier.weight(0.52f).padding(vertical = 18.dp),
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         } else {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            LazyColumn(Modifier.weight(0.52f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 items(visibleEntries, key = { it.id }) { entry ->
                     MindDumpCard(
                         entry = entry,
