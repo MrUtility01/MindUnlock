@@ -1221,18 +1221,8 @@ private fun PersianJalaliDatePicker(
     val weekDays = listOf("ش", "ی", "د", "س", "چ", "پ", "ج")
     var year by rememberSaveable(initialDate.year) { mutableIntStateOf(initialDate.year) }
     var month by rememberSaveable(initialDate.month) { mutableIntStateOf(initialDate.month) }
-    val monthStart = remember(year, month) {
-        PersianDate.toGregorian(JalaliDate(year, month, 1))
-    }
-    val firstCell = (monthStart.dayOfWeek.value + 1) % 7
-    val monthDays = when (month) {
-        in 1..6 -> 31
-        in 7..11 -> 30
-        else -> try {
-            PersianDate.toGregorian(JalaliDate(year, 12, 30))
-            30
-        } catch (_: IllegalArgumentException) { 29 }
-    }
+    val firstCell = remember(year, month) { PersianDate.firstWeekdayOffset(year, month) }
+    val monthDays = remember(year, month) { PersianDate.daysInMonth(year, month) }
     val cellCount = ((firstCell + monthDays + 6) / 7) * 7
 
     AlertDialog(
