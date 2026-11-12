@@ -1209,7 +1209,7 @@ fun PlannerScreen(userDb: UserDatabase, speech: PersianSpeech) {
 
 
 @Composable
-private fun PersianJalaliDatePicker(
+fun PersianJalaliDatePicker(
     initialDate: JalaliDate,
     onDismiss: () -> Unit,
     onSelect: (JalaliDate) -> Unit
