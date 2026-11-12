@@ -29,7 +29,6 @@ import com.mindunlock.app.data.local.LaterTopicEntity
 import com.mindunlock.app.data.local.UserDatabase
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
-import java.time.ZoneId
 
 @Composable
 fun LaterTopicsScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
