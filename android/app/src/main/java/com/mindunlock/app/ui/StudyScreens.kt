@@ -1253,7 +1253,7 @@ fun PersianJalaliDatePicker(
                             Box(Modifier.weight(1f).height(40.dp), contentAlignment = Alignment.Center) {
                                 if (day in 1..monthDays) {
                                     Box(
-                                        Modifier.weight(1f).height(40.dp).clickable {
+                                        Modifier.fillMaxWidth().height(40.dp).clickable {
                                             onSelect(JalaliDate(year, month, day))
                                         },
                                         contentAlignment = Alignment.Center
