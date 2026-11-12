@@ -384,7 +384,10 @@ fun DashboardScreen(
             MetricCard("کارهای امروز", todayTasks.size.toString(), Modifier.weight(1f))
             MetricCard("مرورهای سررسید", dueReviews.toString(), Modifier.weight(1f))
         }
-        val lastCompletedSession = sessions.firstOrNull { it.endedAt != null }
+        val lastCompletedSession = sessions.firstOrNull { session ->
+            val endedAt = session.endedAt
+            endedAt != null && endedAt > session.startedAt
+        }
         val lastSessionReflection = lastCompletedSession?.let { session -> sessionFeedback.firstOrNull { it.sessionId == session.id } }
         if (lastCompletedSession == null) {
             Text("اولویت بعدی", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
