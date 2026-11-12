@@ -143,7 +143,7 @@ fun ActionTile(label: String, destination: String, onNavigate: (String) -> Unit,
     ) {
         Column(
             Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp, Alignment.SpaceBetween)
+            verticalArrangement = Arrangement.SpaceBetween
         ) {
             Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.primaryContainer) {
                 Icon(icon, contentDescription = null, modifier = Modifier.padding(8.dp).size(22.dp), tint = MaterialTheme.colorScheme.primary)
