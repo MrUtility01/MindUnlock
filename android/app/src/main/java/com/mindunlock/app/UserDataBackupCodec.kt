@@ -10,6 +10,7 @@ import com.mindunlock.app.data.local.LabQuestionResponseEntity
 import com.mindunlock.app.data.local.LaterTopicEntity
 import com.mindunlock.app.data.local.LearningSessionEntity
 import com.mindunlock.app.data.local.LearningProfileEntity
+import com.mindunlock.app.data.local.LearningSessionFeedbackEntity
 import com.mindunlock.app.data.local.MindDumpEntity
 import com.mindunlock.app.data.local.NoteEntity
 import com.mindunlock.app.data.local.ProgressEntity
@@ -35,11 +36,12 @@ data class UserDataBackupPayload(
     val labStepProgress: List<LabStepProgressEntity> = emptyList(),
     val learningSessions: List<LearningSessionEntity> = emptyList(),
     val labQuestionResponses: List<LabQuestionResponseEntity> = emptyList(),
-    val learningProfile: List<LearningProfileEntity> = emptyList()
+    val learningProfile: List<LearningProfileEntity> = emptyList(),
+    val learningSessionFeedback: List<LearningSessionFeedbackEntity> = emptyList()
 ) {
     val totalRecords: Int
         get() = progress.size + notes.size + bookmarks.size + tasks.size + mindDump.size +
-            journalEntries.size + laterTopics.size + labStepProgress.size + learningSessions.size + labQuestionResponses.size + learningProfile.size
+            journalEntries.size + laterTopics.size + labStepProgress.size + learningSessions.size + labQuestionResponses.size + learningProfile.size + learningSessionFeedback.size
 }
 
 data class UserDataBackupDocument(
@@ -54,7 +56,7 @@ object UserDataBackupCodec {
     private val gson = Gson()
     private val requiredCollections = listOf(
         "progress", "notes", "bookmarks", "tasks", "mindDump",
-        "journalEntries", "laterTopics", "labStepProgress", "learningSessions", "labQuestionResponses", "learningProfile"
+        "journalEntries", "laterTopics", "labStepProgress", "learningSessions", "labQuestionResponses", "learningProfile", "learningSessionFeedback"
     )
 
     fun encode(payload: UserDataBackupPayload, exportedAt: Long, appVersion: String): String {
@@ -199,6 +201,8 @@ object UserDataBackupCodec {
         require(payload.laterTopics.map { it.id }.distinct().size == payload.laterTopics.size) { "موضوع تکراری است." }
         require(payload.learningSessions.map { it.id }.distinct().size == payload.learningSessions.size) { "جلسه یادگیری تکراری است." }
         require(payload.labQuestionResponses.map { it.itemUid to it.questionIndex }.distinct().size == payload.labQuestionResponses.size) { "پاسخ سؤال آزمایشگاه تکراری است." }
+        require(payload.learningSessionFeedback.map { it.sessionId }.distinct().size == payload.learningSessionFeedback.size) { "بازخورد جلسه تکراری است." }
+        require(payload.learningSessionFeedback.all { it.sessionId > 0 && it.comprehension in 1..5 && it.perceivedDifficulty in 1..5 && it.focus in 1..5 && (it.energyBefore == null || it.energyBefore in 1..5) && (it.energyAfter == null || it.energyAfter in 1..5) && (it.note?.length ?: 0) <= 2000 }) { "بازخورد جلسه یادگیری معتبر نیست." }
         require(payload.learningProfile.map { it.id }.distinct().size == payload.learningProfile.size && payload.learningProfile.all { it.id == 1 }) { "پروفایل یادگیری نامعتبر یا تکراری است." }
         require(payload.learningProfile.all { profile -> val values = profile.answersCsv.split(","); profile.sessionMinutes in 15..90 && profile.maxTopics in 1..3 && profile.guidedMode in setOf("guided", "flexible") && values.size == 20 && values.all { it.toIntOrNull()?.let { answer -> answer in 1..5 } == true } }) { "تنظیمات پروفایل یادگیری معتبر نیست." }
     }
