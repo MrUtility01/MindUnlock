@@ -6,6 +6,7 @@ import com.mindunlock.app.data.local.LabStepProgressEntity
 import com.mindunlock.app.data.local.LabQuestionResponseEntity
 import com.mindunlock.app.data.local.LearningProfileEntity
 import com.mindunlock.app.data.local.LearningSessionFeedbackEntity
+import com.mindunlock.app.data.local.LearningStageProgressEntity
 import com.mindunlock.app.data.local.MindDumpEntity
 import com.mindunlock.app.data.local.ProgressEntity
 import com.mindunlock.app.data.local.StudyTaskEntity
@@ -25,6 +26,7 @@ class UserDataBackupCodecTest {
             labQuestionResponses = listOf(LabQuestionResponseEntity("lab-1", 0, "پاسخ ذخیره‌شده", 1_800_000_000_000L)),
             learningProfile = listOf(LearningProfileEntity(answersCsv = List(20) { "4" }.joinToString(","), sessionMinutes = 45, maxTopics = 2, guidedMode = "guided", completed = true)),
             learningSessionFeedback = listOf(LearningSessionFeedbackEntity(sessionId = 12, comprehension = 4, perceivedDifficulty = 3, focus = 5, energyBefore = 2, energyAfter = 4, note = "تمرین عملی مفید بود")),
+            learningStageProgress = listOf(LearningStageProgressEntity(chapterId = "chapter-1", stageId = "overview", stageIndex = 1, completedAt = 1_800_000_000_000L, updatedAt = 1_800_000_000_000L)),
             learningSessions = listOf(
                 LearningSessionEntity(
                     id = 12,
@@ -41,7 +43,7 @@ class UserDataBackupCodecTest {
         assertEquals(1, restored.schemaVersion)
         assertEquals(1_800_000_000_000L, restored.exportedAt)
         assertEquals("0.6.5", restored.appVersion)
-        assertEquals(9, restored.payload.totalRecords)
+        assertEquals(10, restored.payload.totalRecords)
         assertEquals(3, restored.payload.progress.single().correct)
         assertEquals("مرور DNS", restored.payload.tasks.single().title)
         assertEquals("یادداشت خصوصی", restored.payload.journalEntries.single().body)
@@ -57,6 +59,10 @@ class UserDataBackupCodecTest {
         assertEquals(2, feedback.energyBefore)
         assertEquals(4, feedback.energyAfter)
         assertEquals("تمرین عملی مفید بود", feedback.note)
+        val stage = restored.payload.learningStageProgress.single()
+        assertEquals("chapter-1", stage.chapterId)
+        assertEquals("overview", stage.stageId)
+        assertEquals(1, stage.stageIndex)
         val session = restored.payload.learningSessions.single()
         assertEquals(1_800_000_000_000L, session.startedAt)
         assertEquals(1_800_001_800_000L, session.endedAt)
@@ -80,6 +86,7 @@ class UserDataBackupCodecTest {
         payload.remove("labQuestionResponses")
         payload.remove("learningProfile")
         payload.remove("learningSessionFeedback")
+        payload.remove("learningStageProgress")
         val digest = java.security.MessageDigest.getInstance("SHA-256")
             .digest(payload.toString().toByteArray(Charsets.UTF_8))
             .joinToString("") { "%02x".format(it) }
@@ -110,6 +117,36 @@ class UserDataBackupCodecTest {
                 1_800_000_000_000L,
                 "test"
             ).let { UserDataBackupCodec.decode(it) }
+        }
+    }
+
+
+    @Test
+    fun rejectsDuplicateOrInvalidLearningStageProgress() {
+        val stage = LearningStageProgressEntity(
+            chapterId = "network",
+            stageId = "why",
+            stageIndex = 0,
+            completedAt = 1_800_000_000_000L,
+            updatedAt = 1_800_000_000_000L
+        )
+        assertThrows(IllegalArgumentException::class.java) {
+            UserDataBackupCodec.decode(
+                UserDataBackupCodec.encode(
+                    UserDataBackupPayload(learningStageProgress = listOf(stage, stage)),
+                    1_800_000_000_000L,
+                    "test"
+                )
+            )
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            UserDataBackupCodec.decode(
+                UserDataBackupCodec.encode(
+                    UserDataBackupPayload(learningStageProgress = listOf(stage.copy(stageIndex = 9))),
+                    1_800_000_000_000L,
+                    "test"
+                )
+            )
         }
     }
 
