@@ -40,31 +40,9 @@ object UserDataBackupManager {
             "نسخه ساختار پشتیبان پشتیبانی نمی‌شود."
         }
         val safetyDirectory = File(context.filesDir, "backup-safety")
-        if (!safetyDirectory.exists() && !safetyDirectory.mkdirs()) {
-            throw IOException("ایجاد پوشه پشتیبان ایمنی پیش از بازیابی ناموفق بود.")
-        }
-        if (!safetyDirectory.isDirectory) {
-            throw IOException("مسیر پشتیبان ایمنی معتبر نیست.")
-        }
-
         // Persist a complete safety copy before touching any database table.
         val safetyJson = export(context, userDb)
-        val temporaryFile = File.createTempFile("restore-safety-", ".tmp", safetyDirectory)
-        try {
-            FileOutputStream(temporaryFile).use { output ->
-                output.write(safetyJson.toByteArray(Charsets.UTF_8))
-                output.fd.sync()
-            }
-            val safetyFile = File(
-                safetyDirectory,
-                "before-restore-${System.currentTimeMillis()}-${UUID.randomUUID()}.json"
-            )
-            if (!temporaryFile.renameTo(safetyFile)) {
-                throw IOException("ذخیره اتمیک پشتیبان ایمنی ناموفق بود؛ بازیابی انجام نشد.")
-            }
-        } finally {
-            if (temporaryFile.exists()) temporaryFile.delete()
-        }
+        writeSafetyBackupAtomically(safetyDirectory, safetyJson)
 
         safetyDirectory.listFiles()?.filter { it.isFile && it.name.endsWith(".json") }
             ?.sortedByDescending { it.lastModified() }
@@ -91,5 +69,37 @@ object UserDataBackupManager {
             document.payload.labStepProgress.takeIf { it.isNotEmpty() }?.let { userDb.labStepProgressDao().upsertAll(it) }
             document.payload.learningSessions.takeIf { it.isNotEmpty() }?.let { userDb.learningSessionDao().upsertAll(it) }
         }
+    }
+}
+
+
+internal fun writeSafetyBackupAtomically(
+    safetyDirectory: File,
+    safetyJson: String,
+    timestamp: Long = System.currentTimeMillis()
+): File {
+    if (!safetyDirectory.exists() && !safetyDirectory.mkdirs()) {
+        throw IOException("ایجاد پوشه پشتیبان ایمنی پیش از بازیابی ناموفق بود.")
+    }
+    if (!safetyDirectory.isDirectory) {
+        throw IOException("مسیر پشتیبان ایمنی معتبر نیست.")
+    }
+
+    val temporaryFile = File.createTempFile("restore-safety-", ".tmp", safetyDirectory)
+    try {
+        FileOutputStream(temporaryFile).use { output ->
+            output.write(safetyJson.toByteArray(Charsets.UTF_8))
+            output.fd.sync()
+        }
+        val safetyFile = File(
+            safetyDirectory,
+            "before-restore-$timestamp-${UUID.randomUUID()}.json"
+        )
+        if (!temporaryFile.renameTo(safetyFile)) {
+            throw IOException("ذخیره اتمیک پشتیبان ایمنی ناموفق بود؛ بازیابی انجام نشد.")
+        }
+        return safetyFile
+    } finally {
+        if (temporaryFile.exists()) temporaryFile.delete()
     }
 }
