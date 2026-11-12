@@ -5,6 +5,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.weight
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -53,7 +57,8 @@ fun LaterTopicsScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
             (query.isBlank() || topic.title.contains(query, true) || topic.details.contains(query, true))
     }
 
-    Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(Modifier.fillMaxSize().imePadding().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(Modifier.fillMaxWidth().weight(0.58f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("موضوعات برای بعد", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         Text("سؤال‌ها و ایده‌هایی را که نمی‌خواهی همین حالا دنبال کنی، اینجا نگه‌دار تا تمرکز مسیر فعلی به‌هم نخورد.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         OutlinedTextField(title, { title = it }, Modifier.fillMaxWidth(), label = { Text("عنوان یا سؤال") }, singleLine = true)
@@ -109,10 +114,11 @@ fun LaterTopicsScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
                 FilterChip(selected = filter == value, onClick = { filter = value }, label = { Text(label) })
             }
         }
+        }
         if (visible.isEmpty()) {
-            Text("موضوعی برای نمایش وجود ندارد.", modifier = Modifier.padding(vertical = 16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("موضوعی برای نمایش وجود ندارد.", modifier = Modifier.weight(0.42f).padding(vertical = 16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
         } else {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            LazyColumn(Modifier.weight(0.42f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(visible, key = { it.id }) { topic ->
                     LaterTopicCard(
                         topic = topic,
