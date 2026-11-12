@@ -156,6 +156,36 @@ class UserDataBackupCodecTest {
     }
 
     @Test
+    fun writesRestoreSafetyBackupAtomicallyAndLeavesNoTemporaryFile() {
+        val directory = java.nio.file.Files.createTempDirectory("mindunlock-safety-test").toFile()
+        try {
+            val json = """{"schemaVersion":1,"payload":"complete"}"""
+            val saved = writeSafetyBackupAtomically(directory, json, 123456L)
+
+            assertEquals(true, saved.isFile)
+            assertEquals(json, saved.readText(Charsets.UTF_8))
+            assertEquals(1, directory.listFiles()?.count { it.extension == "json" })
+            assertEquals(0, directory.listFiles()?.count { it.extension == "tmp" })
+        } finally {
+            directory.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun refusesSafetyBackupWhenTargetPathIsNotDirectory() {
+        val parent = java.nio.file.Files.createTempDirectory("mindunlock-safety-invalid").toFile()
+        val file = java.io.File(parent, "not-a-directory").apply { writeText("preserve") }
+        try {
+            assertThrows(java.io.IOException::class.java) {
+                writeSafetyBackupAtomically(file, """{"payload":"new"}""", 123456L)
+            }
+            assertEquals("preserve", file.readText())
+        } finally {
+            parent.deleteRecursively()
+        }
+    }
+
+    @Test
     fun rejectsDuplicatePrimaryKeys() {
         val payload = UserDataBackupPayload(
             progress = listOf(
