@@ -305,14 +305,21 @@ private fun MindUnlockRoot(
         Column(Modifier.fillMaxSize().padding(padding)) {
             androidx.compose.runtime.SideEffect { CrashDiagnostics.setCurrentScreen("screen=" + screen + "; item=" + selectedItem) }
         when (screen) {
-                "home" -> DashboardScreen(repository.database, userDatabase, speech, onNavigate = { screen = it }, onContinue = { chapterId, itemUid ->
-                    selectedChapter = chapterId
-                    if (itemUid != null) {
-                        selectedItem = itemUid
-                        previousScreen = "chapter"
-                        screen = "reader"
-                    } else {
-                        screen = "chapter"
+                "home" -> DashboardScreen(repository.database, userDatabase, speech, onNavigate = { screen = it }, onContinue = { target ->
+                    when {
+                        target.startsWith("item:") -> {
+                            selectedItem = target.removePrefix("item:")
+                            previousScreen = "chapter"
+                            screen = "reader"
+                        }
+                        target.startsWith("chapter:") -> {
+                            selectedChapter = target.removePrefix("chapter:")
+                            screen = "chapter"
+                        }
+                        else -> {
+                            selectedChapter = target
+                            screen = "chapter"
+                        }
                     }
                 })
                 "courses" -> SubjectListScreen(repository.database, onSubjectClick = { subject -> selectedSubject = subject; screen = "subject" })
