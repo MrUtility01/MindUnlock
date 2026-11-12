@@ -352,6 +352,15 @@ private fun MindUnlockRoot(
             }
         }
     }
+    override fun onPause() {
+        speech.stop()
+        super.onPause()
+    }
+
+    override fun onDestroy() {
+        speech.close()
+        super.onDestroy()
+    }
 }
 
 @Composable
@@ -406,6 +415,22 @@ fun PersianVoiceInputButton(compact: Boolean = false, onText: (String) -> Unit) 
     var busy by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("تشخیص گفتار فارسی کاملاً محلی است؛ دریافت اولیه مدل حدود ۱۱۷ مگابایت است.") }
     var job by remember { mutableStateOf<Job?>(null) }
+    val voiceLifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+
+    androidx.compose.runtime.DisposableEffect(voiceLifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP) {
+                stopSignal.set(true)
+                job?.cancel()
+            }
+        }
+        voiceLifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            voiceLifecycleOwner.lifecycle.removeObserver(observer)
+            stopSignal.set(true)
+            job?.cancel()
+        }
+    }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()

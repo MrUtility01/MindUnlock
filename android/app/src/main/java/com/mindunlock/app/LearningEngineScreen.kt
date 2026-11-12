@@ -37,6 +37,9 @@ import com.mindunlock.app.data.local.UserDatabase
 import com.mindunlock.app.data.local.LearningSessionEntity
 import com.mindunlock.app.data.local.LearningStageProgressEntity
 import kotlinx.coroutines.delay
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.launch
 
 @Composable
@@ -66,11 +69,14 @@ fun LearningEngineScreen(
             )
         }
     }
-    LaunchedEffect(activeSession?.id, activeSession?.startedAt) {
-        val session = activeSession
-        while (session != null) {
-            elapsedSeconds = (System.currentTimeMillis() - session.startedAt).coerceAtLeast(0L) / 1000L
-            delay(1000L)
+    val sessionLifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(activeSession?.id, activeSession?.startedAt, sessionLifecycle) {
+        val session = activeSession ?: return@LaunchedEffect
+        sessionLifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (true) {
+                elapsedSeconds = (System.currentTimeMillis() - session.startedAt).coerceAtLeast(0L) / 1000L
+                delay(15_000L)
+            }
         }
     }
     var search by rememberSaveable { mutableStateOf("") }

@@ -56,8 +56,8 @@ fun LaterTopicsScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
             (query.isBlank() || topic.title.contains(query, true) || topic.details.contains(query, true))
     }
 
-    Column(Modifier.fillMaxSize().imePadding().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Column(Modifier.fillMaxWidth().weight(0.58f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("موضوعات برای بعد", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         Text("سؤال‌ها و ایده‌هایی را که نمی‌خواهی همین حالا دنبال کنی، اینجا نگه‌دار تا تمرکز مسیر فعلی به‌هم نخورد.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         OutlinedTextField(title, { title = it }, Modifier.fillMaxWidth(), label = { Text("عنوان یا سؤال") }, singleLine = true)
@@ -115,10 +115,10 @@ fun LaterTopicsScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
         }
         }
         if (visible.isEmpty()) {
-            Text("موضوعی برای نمایش وجود ندارد.", modifier = Modifier.weight(0.42f).padding(vertical = 16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("موضوعی برای نمایش وجود ندارد.", modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
         } else {
-            LazyColumn(Modifier.weight(0.42f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(visible, key = { it.id }) { topic ->
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                visible.forEach { topic ->
                     LaterTopicCard(
                         topic = topic,
                         onSpeak = { speech.speak(topic.title + ". " + topic.details) },

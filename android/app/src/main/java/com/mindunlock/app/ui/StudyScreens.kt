@@ -585,7 +585,7 @@ fun SubjectListScreen(db: AppDatabase, onSubjectClick: (String) -> Unit) {
         OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth(), label = { Text("جست‌وجوی موضوع") }, singleLine = true)
         PersianVoiceInputButton(compact = true) { spoken -> query = listOf(query, spoken).filter { it.isNotBlank() }.joinToString(" ") }
         Text("${subjects.size} موضوع · ${chapters.size} فصل · ${allItemsCount} مطلب", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+        LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(9.dp)) {
             items(subjects, key = { it.key }) { entry ->
                 val chapterCount = entry.value.size
                 val itemCount = entry.value.sumOf { it.itemCount }
@@ -616,7 +616,7 @@ fun ChapterListScreen(db: AppDatabase, subject: String, onChapterClick: (String)
         Text(subject, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth(), label = { Text("جست‌وجو در فصل‌ها") }, singleLine = true)
         PersianVoiceInputButton(compact = true) { spoken -> query = listOf(query, spoken).filter { it.isNotBlank() }.joinToString(" ") }
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+        LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(9.dp)) {
             items(filtered, key = { it.id }) { chapter ->
                 Card(onClick = { onChapterClick(chapter.id) }, modifier = Modifier.fillMaxWidth()) {
                     Row(Modifier.fillMaxWidth().padding(15.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -776,7 +776,7 @@ fun ReaderScreen(db: AppDatabase, userDb: UserDatabase, itemUid: String, speech:
         }
         node as? android.app.Activity
     }
-    val keepAwakeEnabled = preferences.getBoolean("keep_screen_on_while_reading", true)
+    val keepAwakeEnabled = preferences.getBoolean("keep_screen_on_while_reading", false)
     val readingLineSpacing = preferences.getFloat("reading_line_spacing", 1.45f).coerceIn(1.1f, 2.2f)
     val readingHorizontalMargin = preferences.getFloat("reading_horizontal_margin", 16f).coerceIn(8f, 32f)
     androidx.compose.runtime.DisposableEffect(keepAwakeActivity, keepAwakeEnabled) {
@@ -2021,7 +2021,7 @@ fun SettingsScreen(
     var fontScale by remember { mutableStateOf(preferences.getFloat("font_scale", 1f).coerceIn(0.85f, 1.35f)) }
     var readingLineSpacing by remember { mutableStateOf(preferences.getFloat("reading_line_spacing", 1.45f).coerceIn(1.1f, 2.2f)) }
     var readingHorizontalMargin by remember { mutableStateOf(preferences.getFloat("reading_horizontal_margin", 16f).coerceIn(8f, 32f)) }
-    var keepScreenOnWhileReading by remember { mutableStateOf(preferences.getBoolean("keep_screen_on_while_reading", true)) }
+    var keepScreenOnWhileReading by remember { mutableStateOf(preferences.getBoolean("keep_screen_on_while_reading", false)) }
     var newAppPassword by remember { mutableStateOf("") }
     var passwordMessage by remember { mutableStateOf("") }
     var settingsMessage by remember { mutableStateOf("") }

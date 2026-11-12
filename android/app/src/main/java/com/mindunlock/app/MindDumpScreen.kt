@@ -49,10 +49,10 @@ fun MindDumpScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
     val visibleEntries = entries.filter { (it.status == "archived") == showArchived }
 
     Column(
-        modifier = Modifier.fillMaxSize().imePadding().padding(16.dp),
+        modifier = Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Column(Modifier.fillMaxWidth().weight(0.48f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("تخلیه ذهن", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         Text(
             "هر فکر، کار نیمه‌تمام، سؤال یا ایده‌ای را سریع ثبت کن؛ لازم نیست همین حالا برایش تصمیم بگیری.",
@@ -101,12 +101,12 @@ fun MindDumpScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
         if (visibleEntries.isEmpty()) {
             Text(
                 if (showArchived) "هنوز موردی بایگانی نشده است." else "صندوق ورودی خالی است. هرچه در ذهن داری اینجا ثبت کن.",
-                modifier = Modifier.weight(0.52f).padding(vertical = 18.dp),
+                modifier = Modifier.fillMaxWidth().padding(vertical = 18.dp),
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         } else {
-            LazyColumn(Modifier.weight(0.52f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                items(visibleEntries, key = { it.id }) { entry ->
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                visibleEntries.forEach { entry ->
                     MindDumpCard(
                         entry = entry,
                         speech = speech,

@@ -50,8 +50,8 @@ fun JournalScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
         query.isBlank() || it.title.contains(query, true) || it.body.contains(query, true) || it.tags.contains(query, true)
     }
 
-    Column(Modifier.fillMaxSize().imePadding().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Column(Modifier.fillMaxWidth().weight(0.58f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("دفتر روزانه", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         Text("فضایی خصوصی برای ثبت اتفاق‌ها، فکرها و تجربه‌های روزانه؛ اطلاعات فقط در پایگاه داده محلی برنامه ذخیره می‌شود.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         OutlinedTextField(title, { title = it }, Modifier.fillMaxWidth(), label = { Text("عنوان (اختیاری)") }, singleLine = true)
@@ -89,10 +89,10 @@ fun JournalScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
         Text("نوشته‌ها: ${filtered.size}", style = MaterialTheme.typography.titleSmall)
         }
         if (filtered.isEmpty()) {
-            Text("هنوز نوشته‌ای ثبت نشده است.", modifier = Modifier.weight(0.42f).padding(8.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("هنوز نوشته‌ای ثبت نشده است.", modifier = Modifier.fillMaxWidth().padding(8.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
         } else {
-            LazyColumn(Modifier.weight(0.42f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(filtered, key = { it.id }) { entry ->
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                filtered.forEach { entry ->
                     Card(Modifier.fillMaxWidth()) {
                         Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Text(entry.title.ifBlank { "بدون عنوان" }, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
