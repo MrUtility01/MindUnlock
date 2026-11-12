@@ -597,7 +597,6 @@ fun ReaderScreen(db: AppDatabase, userDb: UserDatabase, itemUid: String, speech:
 }
 
 @Composable
-@Composable
 private fun LabScenarioReaderPanel(
     item: ContentItemEntity,
     details: LabScenarioMetadata,
