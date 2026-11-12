@@ -167,3 +167,18 @@ data class LearningProfileEntity(
     val completed: Boolean = false,
     val updatedAt: Long = System.currentTimeMillis()
 )
+
+/**
+ * Learner-reported session reflection; subjective signals, not assessment scores.
+ */
+@Entity(tableName = "learning_session_feedback")
+data class LearningSessionFeedbackEntity(
+    @PrimaryKey val sessionId: Long,
+    val comprehension: Int,
+    val perceivedDifficulty: Int,
+    val focus: Int,
+    val energyBefore: Int? = null,
+    val energyAfter: Int? = null,
+    val note: String? = null,
+    val updatedAt: Long = System.currentTimeMillis()
+)
