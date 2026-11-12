@@ -244,7 +244,7 @@ fun DashboardScreen(
                     Text(nextActionTitle, fontWeight = FontWeight.SemiBold)
                     Text(nextActionDescription, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                Icon(Icons.Default.ArrowForward, contentDescription = "رفتن به اقدام بعدی")
+                Icon(Icons.Default.PlayArrow, contentDescription = "رفتن به اقدام بعدی")
             }
         }
         Text("کارهای امروز", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
