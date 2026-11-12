@@ -916,8 +916,33 @@ private fun LabScenarioReaderPanel(
             details.troubleshooting.forEachIndexed { index, issue -> Text("${index + 1}. $issue", style = MaterialTheme.typography.bodyMedium) }
         }
         if (details.questions.isNotEmpty()) {
-            Text("سؤالات کنترل یادگیری", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
-            details.questions.forEachIndexed { index, question -> Text("${index + 1}. $question", style = MaterialTheme.typography.bodyMedium) }
+            val checkedQuestions = details.questions.indices.count { index -> -(index + 1) in completedIndexes }
+            Text("کنترل یادگیری · $checkedQuestions از ${details.questions.size} سؤال بررسی‌شده", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
+            Text(
+                "پس از اجرای آزمایش، به هر سؤال پاسخ بده و فقط وقتی پاسخ خودت را بررسی کردی، آن را علامت بزن. این خودارزیابی است و نمرهٔ خودکار محسوب نمی‌شود.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            details.questions.forEachIndexed { index, question ->
+                val checkpointIndex = -(index + 1)
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(
+                        checked = checkpointIndex in completedIndexes,
+                        onCheckedChange = { checked ->
+                            scope.launch {
+                                if (checked) {
+                                    userDb.labStepProgressDao().upsert(
+                                        LabStepProgressEntity(item.uid, checkpointIndex, true)
+                                    )
+                                } else {
+                                    userDb.labStepProgressDao().delete(item.uid, checkpointIndex)
+                                }
+                            }
+                        }
+                    )
+                    Text("${index + 1}. $question", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                }
+            }
         }
         val metadataLine = listOfNotNull(
             details.difficulty.takeIf(String::isNotBlank),
