@@ -45,7 +45,7 @@ class UserDatabaseMindDumpMigrationTest {
             context,
             UserDatabase::class.java,
             databaseName
-        ).addMigrations(UserDatabase.MIGRATION_1_2, UserDatabase.MIGRATION_2_3, UserDatabase.MIGRATION_3_4, UserDatabase.MIGRATION_4_5, UserDatabase.MIGRATION_5_6, UserDatabase.MIGRATION_6_7, UserDatabase.MIGRATION_7_8, UserDatabase.MIGRATION_8_9, UserDatabase.MIGRATION_9_10).allowMainThreadQueries().build()
+        ).addMigrations(UserDatabase.MIGRATION_1_2, UserDatabase.MIGRATION_2_3, UserDatabase.MIGRATION_3_4, UserDatabase.MIGRATION_4_5, UserDatabase.MIGRATION_5_6, UserDatabase.MIGRATION_6_7, UserDatabase.MIGRATION_7_8, UserDatabase.MIGRATION_8_9, UserDatabase.MIGRATION_9_10, UserDatabase.MIGRATION_10_11).allowMainThreadQueries().build()
 
         try {
             val migratedProfile = LearningProfileEntity(answersCsv = List(20) { "5" }.joinToString(","), sessionMinutes = 60, maxTopics = 3, guidedMode = "flexible", completed = true)
@@ -195,6 +195,26 @@ class UserDatabaseMindDumpMigrationTest {
             assertEquals(4, feedback?.energyAfter)
             assertEquals("بازخورد پس از جلسه", feedback?.note)
             migrated.learningSessionFeedbackDao().delete(sessionId)
+
+
+            migrated.learningStageProgressDao().upsert(
+                LearningStageProgressEntity(
+                    chapterId = "network-basics",
+                    stageId = "why",
+                    stageIndex = 0,
+                    completed = true,
+                    completedAt = 18_000L,
+                    updatedAt = 18_000L
+                )
+            )
+            val stageProgress = migrated.learningStageProgressDao().observeByChapter("network-basics").first()
+            assertEquals(1, stageProgress.size)
+            assertEquals("why", stageProgress.single().stageId)
+            assertEquals(true, stageProgress.single().completed)
+            migrated.learningStageProgressDao().deleteFromIndex("network-basics", 0)
+            assertEquals(0, migrated.learningStageProgressDao().observeByChapter("network-basics").first().size)
+
+
             assertEquals(null, migrated.learningSessionFeedbackDao().get(sessionId))
 
 
