@@ -47,7 +47,8 @@ data class ProgressEntity(
     val quality: Int = 0,
     val intervalDays: Int = 0,
     val dueAt: Long? = null,
-    val updatedAt: Long = System.currentTimeMillis()
+    val updatedAt: Long = System.currentTimeMillis(),
+    val lastOpenedAt: Long? = null
 )
 
 @Entity(tableName = "server_config")
