@@ -87,6 +87,56 @@ class UserDatabaseMindDumpMigrationTest {
     }
 
     @Test
+    fun returningOrDeletingLaterTopicPreservesItsOriginalMindDumpEntry() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(context, UserDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+        try {
+            val sourceId = db.mindDumpDao().insert(
+                MindDumpEntity(content = "سؤال درباره مسیریابی", category = "learning")
+            )
+            val topicId = db.laterTopicDao().insert(
+                LaterTopicEntity(
+                    title = "سؤال درباره مسیریابی",
+                    details = "متن کامل سؤال و زمینه آن",
+                    sourceMindDumpId = sourceId
+                )
+            )
+            db.withTransaction {
+                db.mindDumpDao().updateStatus(sourceId, "inbox", 10_000L, null)
+                db.laterTopicDao().delete(topicId)
+            }
+            val restored = db.mindDumpDao().getAll().single()
+            assertEquals("inbox", restored.status)
+            assertEquals("سؤال درباره مسیریابی", restored.content)
+            assertEquals(0, db.laterTopicDao().getAll().size)
+
+            val orphanTopicId = db.laterTopicDao().insert(
+                LaterTopicEntity(
+                    title = "موضوع مستقل",
+                    details = "بدون منبع قبلی"
+                )
+            )
+            db.withTransaction {
+                val topic = db.laterTopicDao().getAll().first { it.id == orphanTopicId }
+                if (topic.sourceMindDumpId != null) {
+                    db.mindDumpDao().updateStatus(topic.sourceMindDumpId, "inbox", 11_000L, null)
+                } else {
+                    db.mindDumpDao().insert(
+                        MindDumpEntity(content = listOf(topic.title, topic.details).filter { it.isNotBlank() }.joinToString("\\n\\n"), category = "learning")
+                    )
+                }
+                db.laterTopicDao().delete(orphanTopicId)
+            }
+            assertEquals(2, db.mindDumpDao().getAll().size)
+            assertEquals("موضوع مستقل\\n\\nبدون منبع قبلی", db.mindDumpDao().getAll().last().content)
+            assertEquals(0, db.laterTopicDao().getAll().size)
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test
     fun versionOneUserDataSurvivesMindDumpSchemaMigration() = runBlocking {
         val file = context.getDatabasePath(databaseName)
         file.parentFile?.mkdirs()
