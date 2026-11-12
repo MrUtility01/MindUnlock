@@ -35,6 +35,7 @@ class UserDatabaseMindDumpMigrationTest {
         legacy.execSQL("CREATE TABLE bookmarks (itemUid TEXT NOT NULL PRIMARY KEY, chapterId TEXT NOT NULL, createdAt INTEGER NOT NULL)")
         legacy.execSQL("CREATE TABLE study_tasks (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, title TEXT NOT NULL, details TEXT NOT NULL, taskType TEXT NOT NULL, dueAt INTEGER, remindAt INTEGER, completed INTEGER NOT NULL, createdAt INTEGER NOT NULL)")
         legacy.execSQL("CREATE INDEX index_study_tasks_remindAt ON study_tasks(remindAt)")
+        legacy.execSQL("INSERT INTO progress (itemUid, chapterId, completed, completedAt, attempts, correct, wrong, lastResult, quality, intervalDays, dueAt, updatedAt) VALUES ('old-item', 'old-chapter', 1, 900, 2, 1, 1, 'correct', 4, 3, 2000, 1000)")
         legacy.execSQL("INSERT INTO notes (id, itemUid, chapterId, title, body, updatedAt) VALUES (7, NULL, NULL, 'یادداشت قبلی', 'محتوای حفظ‌شده', 1000)")
         legacy.execSQL("INSERT INTO study_tasks (id, title, details, taskType, dueAt, remindAt, completed, createdAt) VALUES (9, 'کار قبلی', 'جزئیات قبلی', 'task', NULL, NULL, 0, 1000)")
         legacy.version = 1
@@ -44,9 +45,15 @@ class UserDatabaseMindDumpMigrationTest {
             context,
             UserDatabase::class.java,
             databaseName
-        ).addMigrations(UserDatabase.MIGRATION_1_2, UserDatabase.MIGRATION_2_3, UserDatabase.MIGRATION_3_4, UserDatabase.MIGRATION_4_5, UserDatabase.MIGRATION_5_6).allowMainThreadQueries().build()
+        ).addMigrations(UserDatabase.MIGRATION_1_2, UserDatabase.MIGRATION_2_3, UserDatabase.MIGRATION_3_4, UserDatabase.MIGRATION_4_5, UserDatabase.MIGRATION_5_6, UserDatabase.MIGRATION_6_7).allowMainThreadQueries().build()
 
         try {
+            val preservedProgress = migrated.progressDao().get("old-item")
+            assertEquals(true, preservedProgress?.completed)
+            assertEquals(null, preservedProgress?.lastOpenedAt)
+            migrated.progressDao().upsert(preservedProgress!!.copy(lastOpenedAt = 5_000L))
+            assertEquals(5_000L, migrated.progressDao().get("old-item")?.lastOpenedAt)
+
             val notes = migrated.noteDao().observeAll().first()
             val tasks = migrated.studyTaskDao().observeAll().first()
             assertEquals(1, notes.size)
