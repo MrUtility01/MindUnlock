@@ -164,7 +164,7 @@ fun ActionTile(label: String, destination: String, onNavigate: (String) -> Unit,
 }
 
 @Composable
-fun KnowledgeArchiveScreen(db: AppDatabase, onOpenItem: (String) -> Unit) {
+fun KnowledgeArchiveScreen(db: AppDatabase, speech: PersianSpeech, onOpenItem: (String) -> Unit) {
     val chapters by db.chapterDao().observeAll().collectAsState(initial = emptyList())
     var query by rememberSaveable { mutableStateOf("") }
     var kind by rememberSaveable { mutableStateOf("همه") }
