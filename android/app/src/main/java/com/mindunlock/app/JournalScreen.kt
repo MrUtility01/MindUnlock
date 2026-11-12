@@ -32,9 +32,6 @@ import androidx.compose.ui.unit.dp
 import com.mindunlock.app.data.local.JournalEntryEntity
 import com.mindunlock.app.data.local.UserDatabase
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 @Composable
 fun JournalScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
