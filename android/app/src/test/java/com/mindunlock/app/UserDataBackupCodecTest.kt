@@ -3,6 +3,7 @@ package com.mindunlock.app
 import com.mindunlock.app.data.local.JournalEntryEntity
 import com.mindunlock.app.data.local.LearningSessionEntity
 import com.mindunlock.app.data.local.LabStepProgressEntity
+import com.mindunlock.app.data.local.LabQuestionResponseEntity
 import com.mindunlock.app.data.local.MindDumpEntity
 import com.mindunlock.app.data.local.ProgressEntity
 import com.mindunlock.app.data.local.StudyTaskEntity
@@ -19,6 +20,7 @@ class UserDataBackupCodecTest {
             mindDump = listOf(MindDumpEntity(id = 8, content = "بررسی DHCP")),
             journalEntries = listOf(JournalEntryEntity(id = 9, body = "یادداشت خصوصی")),
             labStepProgress = listOf(LabStepProgressEntity("lab-1", 2, true)),
+            labQuestionResponses = listOf(LabQuestionResponseEntity("lab-1", 0, "پاسخ ذخیره‌شده", 1_800_000_000_000L)),
             learningSessions = listOf(
                 LearningSessionEntity(
                     id = 12,
@@ -35,11 +37,12 @@ class UserDataBackupCodecTest {
         assertEquals(1, restored.schemaVersion)
         assertEquals(1_800_000_000_000L, restored.exportedAt)
         assertEquals("0.6.5", restored.appVersion)
-        assertEquals(6, restored.payload.totalRecords)
+        assertEquals(7, restored.payload.totalRecords)
         assertEquals(3, restored.payload.progress.single().correct)
         assertEquals("مرور DNS", restored.payload.tasks.single().title)
         assertEquals("یادداشت خصوصی", restored.payload.journalEntries.single().body)
         assertEquals(true, restored.payload.labStepProgress.single().completed)
+        assertEquals("پاسخ ذخیره‌شده", restored.payload.labQuestionResponses.single().answer)
         val session = restored.payload.learningSessions.single()
         assertEquals(1_800_000_000_000L, session.startedAt)
         assertEquals(1_800_001_800_000L, session.endedAt)
