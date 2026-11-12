@@ -251,6 +251,10 @@ fun DashboardScreen(
             ActionTile("دفتر یادداشت", "notes", onNavigate, Modifier.weight(1f))
             ActionTile("برنامه‌ریز", "planner", onNavigate, Modifier.weight(1f))
         }
+        Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+            ActionTile("ثبت فکر سریع", "inbox", onNavigate, Modifier.weight(1f))
+            ActionTile("موضوعات برای بعد", "later", onNavigate, Modifier.weight(1f))
+        }
         Text("ادامهٔ مطالعه", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         if (last != null) {
             Card(onClick = { onContinue(last.id) }, modifier = Modifier.fillMaxWidth()) {
