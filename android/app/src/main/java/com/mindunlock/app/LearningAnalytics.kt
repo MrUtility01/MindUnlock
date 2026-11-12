@@ -99,6 +99,7 @@ object LearningAnalytics {
                 record == null || (record.dueAt != null && record.dueAt <= now)
             }
         }
+        val chapterTitlesById = chapters.associate { it.id to it.title }
         val chapterStats = verified.groupBy { it.chapterId }.map { (chapterId, chapterItems) ->
             val chapterRecords = chapterItems.mapNotNull { byItem[it.uid] }
             val attempts = chapterRecords.sumOf { it.attempts }
@@ -107,7 +108,7 @@ object LearningAnalytics {
             val chapterAccuracy = if (attempts == 0) 0 else (correct * 100f / attempts).roundToInt()
             ChapterLearningStats(
                 chapterId = chapterId,
-                title = chapters.firstOrNull { it.id == chapterId }?.title ?: chapterId,
+                title = chapterTitlesById[chapterId] ?: chapterId,
                 totalItems = chapterItems.size,
                 completedItems = chapterRecords.count { it.completed },
                 attempts = attempts,
