@@ -94,7 +94,7 @@ fun JournalScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
                     Card(Modifier.fillMaxWidth()) {
                         Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Text(entry.title.ifBlank { "بدون عنوان" }, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                            Text(SimpleDateFormat("yyyy/MM/dd · HH:mm", Locale.getDefault()).format(Date(entry.createdAt)), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(PersianDate.format(entry.createdAt), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Text(entry.body, style = MaterialTheme.typography.bodyMedium)
                             OutlinedButton(onClick = { speech.speak((entry.title + ". " + entry.body).trim()) }, modifier = Modifier.fillMaxWidth()) { Text("خواندن نوشته با صدا") }
                             if (entry.mood != null) Text("حال‌وهوا: " + when(entry.mood) { "calm" -> "آرام"; "good" -> "خوب"; "tired" -> "خسته"; "stressed" -> "پرفشار"; else -> entry.mood }, style = MaterialTheme.typography.labelSmall)
