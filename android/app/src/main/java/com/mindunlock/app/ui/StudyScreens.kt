@@ -195,6 +195,12 @@ fun DashboardScreen(
         LearningAnalytics.build(chapters, contentItems, progress, tasks, sessions, now).scheduledReviewsDue
     }
     val activeTopic = laterTopics.firstOrNull { it.status == "active" }
+    val lastChapterItems = last?.let { chapter ->
+        contentItems.filter { it.chapterId == chapter.id && it.sourceStatus == "verified" }
+    }.orEmpty()
+    val completedLastChapterItems = lastChapterItems.count { item ->
+        progress.any { it.itemUid == item.uid && it.completed }
+    }
     val nextActionTitle = when {
         dueReviews > 0 -> "مرور مطالب سررسیدشده"
         todayTasks.isNotEmpty() -> "رسیدگی به برنامهٔ امروز"
@@ -299,6 +305,23 @@ fun DashboardScreen(
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                         Text(last.title, fontWeight = FontWeight.SemiBold)
                         Text(last.groupName ?: "بدون موضوع", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                        if (lastChapterItems.isNotEmpty()) {
+                            val percent = (completedLastChapterItems * 100) / lastChapterItems.size
+                            Text(
+                                "پیشرفت فصل: ${PersianDate.toPersianDigits(completedLastChapterItems.toString())} از ${PersianDate.toPersianDigits(lastChapterItems.size.toString())} مطلب · ${PersianDate.toPersianDigits(percent.toString())}٪",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            LinearProgressIndicator(
+                                progress = { completedLastChapterItems.toFloat() / lastChapterItems.size.toFloat() },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        } else {
+                            Text("محتوای تأییدشده‌ای برای نمایش پیشرفت این فصل موجود نیست.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        lastSession?.startedAt?.let {
+                            Text("آخرین نشست: ${PersianDate.format(it)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                     }
                     Icon(Icons.Default.PlayArrow, contentDescription = "ادامه")
                 }
