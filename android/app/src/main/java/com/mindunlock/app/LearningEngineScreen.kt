@@ -19,11 +19,11 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -36,10 +36,9 @@ import com.mindunlock.app.data.local.AppDatabase
 import com.mindunlock.app.data.local.UserDatabase
 import com.mindunlock.app.data.local.LearningSessionEntity
 import com.mindunlock.app.data.local.LearningStageProgressEntity
-import kotlinx.coroutines.delay
 import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.LifecycleEventObserver
 import kotlinx.coroutines.launch
 
 @Composable
@@ -56,9 +55,6 @@ fun LearningEngineScreen(
     val sessions by userDb.learningSessionDao().observeAll().collectAsState(initial = emptyList())
     val learningProfile by userDb.learningProfileDao().observe().collectAsState(initial = null)
     val scope = rememberCoroutineScope()
-    var elapsedSeconds by remember(activeSession?.id, activeSession?.startedAt) {
-        mutableLongStateOf(activeSession?.let { ((System.currentTimeMillis() - it.startedAt).coerceAtLeast(0L) / 1000L) } ?: 0L)
-    }
     val learningStrategy = remember(learningProfile) {
         learningProfile?.let { profile ->
             LearningPersonalization.build(
@@ -70,13 +66,22 @@ fun LearningEngineScreen(
         }
     }
     val sessionLifecycle = LocalLifecycleOwner.current.lifecycle
-    LaunchedEffect(activeSession?.id, activeSession?.startedAt, sessionLifecycle) {
-        val session = activeSession ?: return@LaunchedEffect
-        sessionLifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-            while (true) {
-                elapsedSeconds = (System.currentTimeMillis() - session.startedAt).coerceAtLeast(0L) / 1000L
-                delay(15_000L)
+    DisposableEffect(activeSession?.id, sessionLifecycle) {
+        val session = activeSession
+        if (session == null) {
+            onDispose { }
+        } else {
+            val observer = LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_STOP) {
+                    scope.launch {
+                        val endedAt = System.currentTimeMillis()
+                        val durationSeconds = ((endedAt - session.startedAt).coerceAtLeast(0L) / 1000L)
+                        userDb.learningSessionDao().finish(session.id, endedAt, durationSeconds)
+                    }
+                }
             }
+            sessionLifecycle.addObserver(observer)
+            onDispose { sessionLifecycle.removeObserver(observer) }
         }
     }
     var search by rememberSaveable { mutableStateOf("") }
@@ -130,7 +135,7 @@ fun LearningEngineScreen(
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("ثبت زمان واقعی یادگیری", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     if (activeSession == null) {
-                        Text("با شروع دستی جلسه، زمان سپری‌شده ثبت می‌شود. می‌توانی از برنامه خارج شوی و بعداً جلسه را ادامه بدهی.")
+                        Text("زمان شروع با زدن دکمه ثبت می‌شود؛ با خروج از برنامه یا پایان دستی، زمان پایان ثبت و مدت جلسه محاسبه می‌شود.")
                         Button(
                             onClick = {
                                 val target = selected ?: nextChapter
@@ -149,8 +154,8 @@ fun LearningEngineScreen(
                         ) { Text("شروع جلسه یادگیری") }
                     } else {
                         Text("جلسه فعال: ${activeSession?.topicTitle}", fontWeight = FontWeight.SemiBold)
-                        Text(formatSessionDuration(elapsedSeconds), style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.primary)
-                        Text("جلسه تا زمان پایان دستی فعال می‌ماند؛ زمان توقف یا بیکاری دستگاه به‌طور خودکار تشخیص داده نمی‌شود.", style = MaterialTheme.typography.bodySmall)
+                        Text("شروع: " + PersianDate.format(activeSession?.startedAt ?: 0L), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+                        Text("با رفتن برنامه به پس‌زمینه یا زدن دکمه پایان، ساعت پایان ثبت می‌شود. زمان بیکاری در حالی که برنامه باز است از زمان مطالعه جدا نمی‌شود.", style = MaterialTheme.typography.bodySmall)
                         Button(
                             onClick = {
                                 val session = activeSession ?: return@Button
