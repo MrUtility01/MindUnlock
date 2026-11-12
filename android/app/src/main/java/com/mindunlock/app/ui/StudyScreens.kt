@@ -1234,7 +1234,7 @@ private fun PersianJalaliDatePicker(
                     TextButton(onClick = {
                         if (month == 1) { month = 12; year-- } else month--
                     }) { Text("ماه قبل") }
-                    Text("${monthNames[month - 1]} $year", style = MaterialTheme.typography.titleMedium)
+                    Text("${monthNames[month - 1]} ${PersianDate.toPersianDigits(year.toString())}", style = MaterialTheme.typography.titleMedium)
                     TextButton(onClick = {
                         if (month == 12) { month = 1; year++ } else month++
                     }) { Text("ماه بعد") }
@@ -1252,10 +1252,14 @@ private fun PersianJalaliDatePicker(
                             val day = week * 7 + column - firstCell + 1
                             Box(Modifier.weight(1f).height(40.dp), contentAlignment = Alignment.Center) {
                                 if (day in 1..monthDays) {
-                                    TextButton(
-                                        onClick = { onSelect(JalaliDate(year, month, day)) },
-                                        modifier = Modifier.size(40.dp)
-                                    ) { Text(day.toString()) }
+                                    Box(
+                                        Modifier.weight(1f).height(40.dp).clickable {
+                                            onSelect(JalaliDate(year, month, day))
+                                        },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(PersianDate.toPersianDigits(day.toString()))
+                                    }
                                 }
                             }
                         }
