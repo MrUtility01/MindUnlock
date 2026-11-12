@@ -182,3 +182,15 @@ data class LearningSessionFeedbackEntity(
     val note: String? = null,
     val updatedAt: Long = System.currentTimeMillis()
 )
+
+
+/** Persisted completion state for the nine-stage learning workflow. */
+@Entity(tableName = "learning_stage_progress", primaryKeys = ["chapterId", "stageId"], indices = [Index("chapterId")])
+data class LearningStageProgressEntity(
+    val chapterId: String,
+    val stageId: String,
+    val stageIndex: Int,
+    val completed: Boolean = true,
+    val completedAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis()
+)
