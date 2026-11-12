@@ -31,6 +31,24 @@ interface ProgressDao {
 }
 
 @Dao
+interface LearningSessionFeedbackDao {
+    @Query("SELECT * FROM learning_session_feedback ORDER BY updatedAt DESC")
+    fun observeAll(): Flow<List<LearningSessionFeedbackEntity>>
+    @Query("SELECT * FROM learning_session_feedback WHERE sessionId = :sessionId LIMIT 1")
+    suspend fun get(sessionId: Long): LearningSessionFeedbackEntity?
+    @Query("SELECT * FROM learning_session_feedback")
+    suspend fun getAll(): List<LearningSessionFeedbackEntity>
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(feedback: LearningSessionFeedbackEntity)
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertAll(items: List<LearningSessionFeedbackEntity>)
+    @Query("DELETE FROM learning_session_feedback WHERE sessionId = :sessionId")
+    suspend fun delete(sessionId: Long)
+    @Query("DELETE FROM learning_session_feedback")
+    suspend fun deleteAll()
+}
+
+@Dao
 interface LearningSessionDao {
     @Query("SELECT * FROM learning_sessions ORDER BY startedAt DESC")
     fun observeAll(): Flow<List<LearningSessionEntity>>
@@ -156,7 +174,7 @@ interface LaterTopicDao {
     suspend fun delete(id: Long)
 }
 
-@Database(entities = [ProgressEntity::class, NoteEntity::class, BookmarkEntity::class, StudyTaskEntity::class, MindDumpEntity::class, JournalEntryEntity::class, LaterTopicEntity::class, LabStepProgressEntity::class, LearningSessionEntity::class, LabQuestionResponseEntity::class, LearningProfileEntity::class], version = 9, exportSchema = false)
+@Database(entities = [ProgressEntity::class, NoteEntity::class, BookmarkEntity::class, StudyTaskEntity::class, MindDumpEntity::class, JournalEntryEntity::class, LaterTopicEntity::class, LabStepProgressEntity::class, LearningSessionEntity::class, LabQuestionResponseEntity::class, LearningProfileEntity::class, LearningSessionFeedbackEntity::class], version = 10, exportSchema = false)
 abstract class UserDatabase : RoomDatabase() {
     abstract fun progressDao(): ProgressDao
     abstract fun noteDao(): NoteDao
@@ -169,6 +187,7 @@ abstract class UserDatabase : RoomDatabase() {
     abstract fun labQuestionResponseDao(): LabQuestionResponseDao
     abstract fun learningSessionDao(): LearningSessionDao
     abstract fun learningProfileDao(): LearningProfileDao
+    abstract fun learningSessionFeedbackDao(): LearningSessionFeedbackDao
     companion object {
         val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
@@ -219,9 +238,14 @@ abstract class UserDatabase : RoomDatabase() {
                 db.execSQL("CREATE TABLE IF NOT EXISTS learning_profile (id INTEGER NOT NULL PRIMARY KEY, answersCsv TEXT NOT NULL, sessionMinutes INTEGER NOT NULL, maxTopics INTEGER NOT NULL, guidedMode TEXT NOT NULL, completed INTEGER NOT NULL, updatedAt INTEGER NOT NULL)")
             }
         }
+        val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS learning_session_feedback (sessionId INTEGER NOT NULL PRIMARY KEY, comprehension INTEGER NOT NULL, perceivedDifficulty INTEGER NOT NULL, focus INTEGER NOT NULL, energyBefore INTEGER, energyAfter INTEGER, note TEXT, updatedAt INTEGER NOT NULL)")
+            }
+        }
         @Volatile private var instance: UserDatabase? = null
         fun getInstance(context: Context): UserDatabase = instance ?: synchronized(this) {
-            instance ?: Room.databaseBuilder(context.applicationContext, UserDatabase::class.java, "mindunlock-user.db").addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9).build().also { instance = it }
+            instance ?: Room.databaseBuilder(context.applicationContext, UserDatabase::class.java, "mindunlock-user.db").addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10).build().also { instance = it }
         }
     }
 }
