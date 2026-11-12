@@ -26,6 +26,7 @@ data class ChapterLearningStats(
 data class RecentLearningDay(
     val date: LocalDate,
     val label: String,
+    val dateLabel: String,
     val updatedItems: Int,
     val sessionMinutes: Long,
     val sessions: Int
@@ -111,6 +112,7 @@ object LearningAnalytics {
             RecentLearningDay(
                 date = date,
                 label = persianWeekday(date.dayOfWeek.value),
+                dateLabel = PersianDate.format(date),
                 updatedItems = count,
                 sessionMinutes = daySessions.sumOf { it.durationSeconds.coerceAtLeast(0L) } / 60L,
                 sessions = daySessions.size
