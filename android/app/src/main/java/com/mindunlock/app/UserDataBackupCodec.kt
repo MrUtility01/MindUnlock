@@ -6,6 +6,7 @@ import com.google.gson.JsonParser
 import com.mindunlock.app.data.local.BookmarkEntity
 import com.mindunlock.app.data.local.JournalEntryEntity
 import com.mindunlock.app.data.local.LabStepProgressEntity
+import com.mindunlock.app.data.local.LabQuestionResponseEntity
 import com.mindunlock.app.data.local.LaterTopicEntity
 import com.mindunlock.app.data.local.LearningSessionEntity
 import com.mindunlock.app.data.local.MindDumpEntity
@@ -31,11 +32,12 @@ data class UserDataBackupPayload(
     val journalEntries: List<JournalEntryEntity> = emptyList(),
     val laterTopics: List<LaterTopicEntity> = emptyList(),
     val labStepProgress: List<LabStepProgressEntity> = emptyList(),
-    val learningSessions: List<LearningSessionEntity> = emptyList()
+    val learningSessions: List<LearningSessionEntity> = emptyList(),
+    val labQuestionResponses: List<LabQuestionResponseEntity> = emptyList()
 ) {
     val totalRecords: Int
         get() = progress.size + notes.size + bookmarks.size + tasks.size + mindDump.size +
-            journalEntries.size + laterTopics.size + labStepProgress.size + learningSessions.size
+            journalEntries.size + laterTopics.size + labStepProgress.size + learningSessions.size + labQuestionResponses.size
 }
 
 data class UserDataBackupDocument(
@@ -50,7 +52,7 @@ object UserDataBackupCodec {
     private val gson = Gson()
     private val requiredCollections = listOf(
         "progress", "notes", "bookmarks", "tasks", "mindDump",
-        "journalEntries", "laterTopics", "labStepProgress", "learningSessions"
+        "journalEntries", "laterTopics", "labStepProgress", "learningSessions", "labQuestionResponses"
     )
 
     fun encode(payload: UserDataBackupPayload, exportedAt: Long, appVersion: String): String {
@@ -194,6 +196,7 @@ object UserDataBackupCodec {
         require(payload.journalEntries.map { it.id }.distinct().size == payload.journalEntries.size) { "یادداشت روزانه تکراری است." }
         require(payload.laterTopics.map { it.id }.distinct().size == payload.laterTopics.size) { "موضوع تکراری است." }
         require(payload.learningSessions.map { it.id }.distinct().size == payload.learningSessions.size) { "جلسه یادگیری تکراری است." }
+        require(payload.labQuestionResponses.map { it.itemUid to it.questionIndex }.distinct().size == payload.labQuestionResponses.size) { "پاسخ سؤال آزمایشگاه تکراری است." }
     }
 
     private fun sha256(value: String): String = MessageDigest.getInstance("SHA-256")
