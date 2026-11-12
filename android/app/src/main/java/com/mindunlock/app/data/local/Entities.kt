@@ -142,6 +142,9 @@ data class LabStepProgressEntity(
 )
 
 
+@Entity(tableName = "lab_question_responses", primaryKeys = ["itemUid", "questionIndex"], indices = [Index("itemUid")])
+data class LabQuestionResponseEntity(val itemUid: String, val questionIndex: Int, val answer: String, val updatedAt: Long = System.currentTimeMillis())
+
 @Entity(tableName = "learning_sessions", indices = [Index("startedAt"), Index("endedAt")])
 data class LearningSessionEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
