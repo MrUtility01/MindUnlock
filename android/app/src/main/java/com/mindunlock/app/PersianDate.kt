@@ -42,6 +42,21 @@ object PersianDate {
         return JalaliYearStart(gregorianYear, marchDay, leap)
     }
 
+    fun daysInMonth(year: Int, month: Int): Int {
+        require(month in 1..12) { "ماه جلالی باید بین ۱ تا ۱۲ باشد." }
+        return when {
+            month <= 6 -> 31
+            month <= 11 -> 30
+            runCatching { toGregorian(JalaliDate(year, 12, 30)) }.isSuccess -> 30
+            else -> 29
+        }
+    }
+
+    fun firstWeekdayOffset(year: Int, month: Int): Int {
+        val firstGregorianDay = toGregorian(JalaliDate(year, month, 1)).dayOfWeek.value
+        return (firstGregorianDay + 1) % 7 // Saturday is the first column.
+    }
+
     fun fromGregorian(date: LocalDate): JalaliDate {
         var jalaliYear = date.year - 621
         var start = yearStart(jalaliYear)
