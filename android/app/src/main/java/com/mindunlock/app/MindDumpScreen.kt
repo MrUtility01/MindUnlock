@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
@@ -73,8 +74,24 @@ fun MindDumpScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
             OutlinedButton(onClick = { speech.speak(draft) }, enabled = draft.isNotBlank()) { Text("خواندن متن") }
         }
         Text("نوع ورودی", style = MaterialTheme.typography.labelLarge)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf("thought" to "فکر", "task" to "کار", "idea" to "ایده", "learning" to "یادگیری").forEach { (value, label) ->
+        Row(
+            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            listOf(
+                "thought" to "فکر",
+                "task" to "کار",
+                "idea" to "ایده",
+                "learning" to "یادگیری",
+                "government_job" to "کار دولتی",
+                "freelance" to "کار آزاد",
+                "private_job" to "کار شرکتی",
+                "project" to "پروژه",
+                "finance" to "مالی",
+                "personal" to "شخصی",
+                "family" to "خانواده",
+                "other" to "سایر"
+            ).forEach { (value, label) ->
                 FilterChip(selected = category == value, onClick = { category = value }, label = { Text(label) })
             }
         }
@@ -170,6 +187,14 @@ private fun MindDumpCard(
         "task" -> "کار"
         "idea" -> "ایده"
         "learning" -> "یادگیری"
+        "government_job" -> "کار دولتی"
+        "freelance" -> "کار آزاد"
+        "private_job" -> "کار شرکتی"
+        "project" -> "پروژه"
+        "finance" -> "مالی"
+        "personal" -> "شخصی"
+        "family" -> "خانواده"
+        "other" -> "سایر"
         else -> "فکر"
     }
     val statusLabel = when (entry.status) {
