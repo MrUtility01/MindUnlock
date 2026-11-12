@@ -55,14 +55,6 @@ fun LearningEngineScreen(
     var elapsedSeconds by remember(activeSession?.id, activeSession?.startedAt) {
         mutableLongStateOf(activeSession?.let { ((System.currentTimeMillis() - it.startedAt).coerceAtLeast(0L) / 1000L) } ?: 0L)
     }
-    LaunchedEffect(learningProfile?.updatedAt) {
-        learningProfile?.let { profile ->
-            if (profile.sessionMinutes in 15..90) {
-                sessionMinutes = profile.sessionMinutes.toFloat()
-                preferences.edit().putInt("learning_session_minutes", profile.sessionMinutes).apply()
-            }
-        }
-    }
     val learningStrategy = remember(learningProfile) {
         learningProfile?.let { profile ->
             LearningPersonalization.build(
@@ -86,6 +78,14 @@ fun LearningEngineScreen(
     }
     var sessionMinutes by rememberSaveable {
         mutableStateOf(preferences.getInt("learning_session_minutes", 30).toFloat())
+    }
+    LaunchedEffect(learningProfile?.updatedAt) {
+        learningProfile?.let { profile ->
+            if (profile.sessionMinutes in 15..90) {
+                sessionMinutes = profile.sessionMinutes.toFloat()
+                preferences.edit().putInt("learning_session_minutes", profile.sessionMinutes).apply()
+            }
+        }
     }
     val completedItems = progress.count { it.completed }
     val totalContentItems = chapters.sumOf { it.itemCount }.takeIf { it > 0 } ?: progress.size
