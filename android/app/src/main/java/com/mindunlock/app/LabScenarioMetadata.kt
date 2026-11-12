@@ -12,6 +12,7 @@ data class LabScenarioMetadata(
     val expectedOutput: List<String> = emptyList(),
     val troubleshooting: List<String> = emptyList(),
     val questions: List<String> = emptyList(),
+    val questionAnswers: List<String> = emptyList(),
     val difficulty: String = "",
     val estimatedMinutes: Int? = null
 ) {
@@ -19,7 +20,7 @@ data class LabScenarioMetadata(
         get() = goal.isNotBlank() || prerequisites.isNotEmpty() || topology.isNotBlank() ||
             equipment.isNotEmpty() || services.isNotEmpty() || commands.isNotEmpty() ||
             expectedOutput.isNotEmpty() || troubleshooting.isNotEmpty() ||
-            questions.isNotEmpty() || difficulty.isNotBlank() || estimatedMinutes != null
+            questions.isNotEmpty() || questionAnswers.isNotEmpty() || difficulty.isNotBlank() || estimatedMinutes != null
 }
 
 object LabScenarioParser {
@@ -68,6 +69,7 @@ object LabScenarioParser {
             expectedOutput = list("expected_output", "expected_results", "validation"),
             troubleshooting = list("troubleshooting", "common_errors", "faults"),
             questions = list("questions", "review_questions", "checkpoints"),
+            questionAnswers = list("question_answers", "reference_answers", "answers"),
             difficulty = scalar("difficulty", "level"),
             estimatedMinutes = minutes
         )
