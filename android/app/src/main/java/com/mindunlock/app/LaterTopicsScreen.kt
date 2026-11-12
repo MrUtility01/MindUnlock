@@ -58,6 +58,11 @@ fun LaterTopicsScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
     var isSavingTopic by remember { mutableStateOf(false) }
     var processingTopicIds by remember { mutableStateOf(emptySet<Long>()) }
     var pendingDeleteTopicId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var editingTopic by remember { mutableStateOf<LaterTopicEntity?>(null) }
+    var editTitle by rememberSaveable { mutableStateOf("") }
+    var editDetails by rememberSaveable { mutableStateOf("") }
+    var editPriority by rememberSaveable { mutableIntStateOf(2) }
+    var editRevisitDate by rememberSaveable { mutableStateOf("") }
 
     fun runTopicAction(topicId: Long, success: String, action: suspend () -> Unit) {
         if (topicId in processingTopicIds) return
@@ -175,6 +180,13 @@ fun LaterTopicsScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
                                 userDatabase.laterTopicDao().updateStatus(topic.id, status, System.currentTimeMillis())
                             }
                         },
+                        onEdit = {
+                            editingTopic = topic
+                            editTitle = topic.title
+                            editDetails = topic.details
+                            editPriority = topic.priority
+                            editRevisitDate = topic.revisitAt?.let { PersianDate.format(it, includeTime = false) }.orEmpty()
+                        },
                         onReturnToInbox = {
                             runTopicAction(topic.id, "موضوع به صندوق ورودی بازگردانده شد.") {
                                 userDatabase.withTransaction {
@@ -201,6 +213,77 @@ fun LaterTopicsScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
                 }
             }
         }
+    }
+    editingTopic?.let { topic ->
+        AlertDialog(
+            onDismissRequest = { editingTopic = null },
+            title = { Text("ویرایش موضوع برای بعد") },
+            text = {
+                Column(
+                    Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedTextField(
+                        editTitle, { editTitle = it },
+                        label = { Text("عنوان یا سؤال") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        editDetails, { editDetails = it },
+                        label = { Text("توضیحات و زمینه") },
+                        minLines = 3,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Text("اولویت", style = MaterialTheme.typography.labelLarge)
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf(1 to "زیاد", 2 to "معمولی", 3 to "کم").forEach { (value, label) ->
+                            FilterChip(
+                                selected = editPriority == value,
+                                onClick = { editPriority = value },
+                                label = { Text(label) }
+                            )
+                        }
+                    }
+                    OutlinedTextField(
+                        editRevisitDate, { editRevisitDate = it },
+                        label = { Text("تاریخ یادآوری (اختیاری)") },
+                        placeholder = { Text("۱۴۰۵/۰۸/۲۱") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = editTitle.isNotBlank() && topic.id !in processingTopicIds,
+                    onClick = {
+                        val cleanTitle = editTitle.trim()
+                        val parsedDate = if (editRevisitDate.isBlank()) null
+                            else PersianDate.parseDateTime(editRevisitDate.trim())
+                        if (cleanTitle.isBlank()) {
+                            message = "عنوان موضوع نمی‌تواند خالی باشد."
+                        } else if (editRevisitDate.isNotBlank() && parsedDate == null) {
+                            message = "تاریخ معتبر نیست؛ تاریخ شمسی یا میلادی وارد کن."
+                        } else {
+                            runTopicAction(topic.id, "موضوع به‌روزرسانی شد.") {
+                                userDatabase.laterTopicDao().update(
+                                    topic.copy(
+                                        title = cleanTitle,
+                                        details = editDetails.trim(),
+                                        priority = editPriority,
+                                        revisitAt = parsedDate,
+                                        updatedAt = System.currentTimeMillis()
+                                    )
+                                )
+                                editingTopic = null
+                            }
+                        }
+                    }
+                ) { Text("ذخیره تغییرات") }
+            },
+            dismissButton = {
+                TextButton(onClick = { editingTopic = null }) { Text("انصراف") }
+            }
+        )
     }
     pendingDeleteTopicId?.let { topicId ->
         val pendingTopic = topics.firstOrNull { it.id == topicId }
@@ -254,6 +337,7 @@ private fun LaterTopicCard(
     busy: Boolean,
     onSpeak: () -> Unit,
     onStatus: (String) -> Unit,
+    onEdit: () -> Unit,
     onReturnToInbox: () -> Unit,
     onDelete: () -> Unit
 ) {
@@ -271,6 +355,7 @@ private fun LaterTopicCard(
             Text(statusLabel, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
             OutlinedButton(onClick = onSpeak, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("خواندن با صدا") }
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                OutlinedButton(onClick = onEdit, enabled = !busy) { Text("ویرایش") }
                 if (topic.status != "active") OutlinedButton(onClick = { onStatus("active") }, enabled = !busy) { Text("پیگیری") }
                 if (topic.status != "done") OutlinedButton(onClick = { onStatus("done") }, enabled = !busy) { Text("انجام شد") }
                 if (topic.status != "parked") OutlinedButton(onClick = { onStatus("parked") }, enabled = !busy) { Text("بعداً") }
