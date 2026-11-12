@@ -104,6 +104,7 @@ import androidx.core.content.ContextCompat
 import android.Manifest
 import android.content.pm.PackageManager
 import com.google.gson.JsonParser
+import com.mindunlock.app.PersianDate
 import com.mindunlock.app.PersianSpeech
 import com.mindunlock.app.StudyReminderReceiver
 import com.mindunlock.app.data.local.AppDatabase
@@ -1128,6 +1129,7 @@ fun PlannerScreen(userDb: UserDatabase, speech: PersianSpeech) {
     var title by rememberSaveable { mutableStateOf("") }
     var details by rememberSaveable { mutableStateOf("") }
     var whenText by rememberSaveable { mutableStateOf(PersianDate.formatInput(LocalDateTime.now().plusHours(2))) }
+    var dateError by rememberSaveable { mutableStateOf("") }
     var type by rememberSaveable { mutableStateOf("task") }
     var reminder by rememberSaveable { mutableStateOf(true) }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -1140,14 +1142,19 @@ fun PlannerScreen(userDb: UserDatabase, speech: PersianSpeech) {
             FilterChip(selected = type == "task", onClick = { type = "task" }, label = { Text("کار مطالعاتی") })
             FilterChip(selected = type == "project", onClick = { type = "project" }, label = { Text("پروژه") })
         }
-        OutlinedTextField(whenText, { whenText = it }, Modifier.fillMaxWidth(), label = { Text("تاریخ و ساعت شمسی: ۱۴۰۵/۰۸/۲۱ ۰۹:۳۰ (میلادی ISO نیز پذیرفته می‌شود)") }, singleLine = true)
+        OutlinedTextField(whenText, { whenText = it; dateError = "" }, Modifier.fillMaxWidth(), label = { Text("تاریخ و ساعت شمسی: ۱۴۰۵/۰۸/۲۱ ۰۹:۳۰ (میلادی ISO نیز پذیرفته می‌شود)") }, isError = dateError.isNotBlank(), singleLine = true)
+        if (dateError.isNotBlank()) Text(dateError, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
         Row(verticalAlignment = Alignment.CenterVertically) { Switch(checked = reminder, onCheckedChange = { reminder = it }); Text("یادآور اعلان‌دار") }
         Button(enabled = title.isNotBlank(), onClick = {
             val due = PersianDate.parseDateTime(whenText)
-            scope.launch {
-                val id = userDb.studyTaskDao().upsert(StudyTaskEntity(title = title.trim(), details = details.trim(), taskType = type, dueAt = due, remindAt = if (reminder) due else null))
-                if (reminder && due != null) scheduleReminder(context, id, title.trim(), due)
-                title = ""; details = ""
+            if (due == null) {
+                dateError = "تاریخ یا ساعت معتبر نیست؛ نمونه: ۱۴۰۵/۰۸/۲۱ ۰۹:۳۰"
+            } else {
+                scope.launch {
+                    val id = userDb.studyTaskDao().upsert(StudyTaskEntity(title = title.trim(), details = details.trim(), taskType = type, dueAt = due, remindAt = if (reminder) due else null))
+                    if (reminder) scheduleReminder(context, id, title.trim(), due)
+                    title = ""; details = ""; dateError = ""
+                }
             }
         }, modifier = Modifier.fillMaxWidth()) { Text("افزودن به برنامه") }
         HorizontalDivider()
