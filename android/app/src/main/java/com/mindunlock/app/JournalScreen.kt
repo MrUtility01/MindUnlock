@@ -11,6 +11,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.IconButton
 import androidx.compose.material.icons.Icons
@@ -21,6 +22,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -34,6 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.mindunlock.app.data.local.JournalEntryEntity
 import com.mindunlock.app.data.local.UserDatabase
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 @Composable
@@ -46,6 +49,13 @@ fun JournalScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
     var tags by rememberSaveable { mutableStateOf("") }
     var query by rememberSaveable { mutableStateOf("") }
     var message by remember { mutableStateOf("") }
+    var isSaving by remember { mutableStateOf(false) }
+    var editingEntry by remember { mutableStateOf<JournalEntryEntity?>(null) }
+    var editTitle by rememberSaveable { mutableStateOf("") }
+    var editBody by rememberSaveable { mutableStateOf("") }
+    var editMood by rememberSaveable { mutableStateOf("") }
+    var editTags by rememberSaveable { mutableStateOf("") }
+    var pendingDeleteEntryId by rememberSaveable { mutableStateOf<Long?>(null) }
     val filtered = entries.filter {
         query.isBlank() || it.title.contains(query, true) || it.body.contains(query, true) || it.tags.contains(query, true)
     }
@@ -73,17 +83,35 @@ fun JournalScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
         Button(
             onClick = {
                 val text = body.trim()
-                if (text.isNotEmpty()) scope.launch {
-                    val now = System.currentTimeMillis()
-                    userDatabase.journalEntryDao().insert(
-                        JournalEntryEntity(title = title.trim(), body = text, mood = mood.ifBlank { null }, tags = tags.trim(), createdAt = now, updatedAt = now)
-                    )
-                    title = ""; body = ""; mood = ""; tags = ""; message = "یادداشت روزانه ذخیره شد."
+                if (text.isNotEmpty() && !isSaving) {
+                    isSaving = true
+                    scope.launch {
+                        try {
+                            val now = System.currentTimeMillis()
+                            userDatabase.journalEntryDao().insert(
+                                JournalEntryEntity(
+                                    title = title.trim(), body = text,
+                                    mood = mood.ifBlank { null }, tags = tags.trim(),
+                                    createdAt = now, updatedAt = now
+                                )
+                            )
+                            if (body.trim() == text) {
+                                title = ""; body = ""; mood = ""; tags = ""
+                            }
+                            message = "یادداشت روزانه ذخیره شد."
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
+                        } catch (_: Exception) {
+                            message = "ذخیره انجام نشد؛ متن پیش‌نویس حفظ شده است."
+                        } finally {
+                            isSaving = false
+                        }
+                    }
                 }
             },
-            enabled = body.isNotBlank(),
+            enabled = body.isNotBlank() && !isSaving,
             modifier = Modifier.fillMaxWidth()
-        ) { Text("ذخیره در دفتر روزانه") }
+        ) { Text(if (isSaving) "در حال ذخیره…" else "ذخیره در دفتر روزانه") }
         if (message.isNotBlank()) Text(message, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
         OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth(), label = { Text("جست‌وجو در دفتر روزانه") }, singleLine = true)
         Text("نوشته‌ها: ${filtered.size}", style = MaterialTheme.typography.titleSmall)
@@ -101,11 +129,110 @@ fun JournalScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
                             OutlinedButton(onClick = { speech.speak((entry.title + ". " + entry.body).trim()) }, modifier = Modifier.fillMaxWidth()) { Text("خواندن نوشته با صدا") }
                             if (entry.mood != null) Text("حال‌وهوا: " + when(entry.mood) { "calm" -> "آرام"; "good" -> "خوب"; "tired" -> "خسته"; "stressed" -> "پرفشار"; else -> entry.mood }, style = MaterialTheme.typography.labelSmall)
                             if (entry.tags.isNotBlank()) Text("برچسب‌ها: ${entry.tags}", style = MaterialTheme.typography.labelSmall)
-                            OutlinedButton(onClick = { scope.launch { userDatabase.journalEntryDao().delete(entry.id); message = "نوشته حذف شد." } }, modifier = Modifier.fillMaxWidth()) { Text("حذف نوشته") }
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                OutlinedButton(
+                                    onClick = {
+                                        editingEntry = entry
+                                        editTitle = entry.title
+                                        editBody = entry.body
+                                        editMood = entry.mood.orEmpty()
+                                        editTags = entry.tags
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                ) { Text("ویرایش") }
+                                OutlinedButton(
+                                    onClick = { pendingDeleteEntryId = entry.id },
+                                    modifier = Modifier.weight(1f)
+                                ) { Text("حذف نوشته") }
+                            }
                         }
                     }
                 }
             }
         }
     }
+    editingEntry?.let { entry ->
+        AlertDialog(
+            onDismissRequest = { editingEntry = null },
+            title = { Text("ویرایش نوشته") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(editTitle, { editTitle = it }, label = { Text("عنوان") }, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(editBody, { editBody = it }, label = { Text("متن نوشته") }, minLines = 4, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(editTags, { editTags = it }, label = { Text("برچسب‌ها") }, modifier = Modifier.fillMaxWidth())
+                    Text("حال‌وهوا", style = MaterialTheme.typography.labelLarge)
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        listOf("" to "بدون ثبت", "calm" to "آرام", "good" to "خوب", "tired" to "خسته", "stressed" to "پرفشار").forEach { (value, label) ->
+                            FilterChip(selected = editMood == value, onClick = { editMood = value }, label = { Text(label) })
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = editBody.isNotBlank() && !isSaving,
+                    onClick = {
+                        if (!isSaving) {
+                            isSaving = true
+                            scope.launch {
+                                try {
+                                    userDatabase.journalEntryDao().update(
+                                        entry.copy(
+                                            title = editTitle.trim(),
+                                            body = editBody.trim(),
+                                            mood = editMood.ifBlank { null },
+                                            tags = editTags.trim(),
+                                            updatedAt = System.currentTimeMillis()
+                                        )
+                                    )
+                                    editingEntry = null
+                                    message = "نوشته به‌روزرسانی شد."
+                                } catch (cancelled: CancellationException) {
+                                    throw cancelled
+                                } catch (_: Exception) {
+                                    message = "ویرایش ذخیره نشد؛ اطلاعات قبلی حفظ شده است."
+                                } finally {
+                                    isSaving = false
+                                }
+                            }
+                        }
+                    }
+                ) { Text(if (isSaving) "در حال ذخیره…" else "ذخیره تغییرات") }
+            },
+            dismissButton = {
+                TextButton(onClick = { editingEntry = null }) { Text("انصراف") }
+            }
+        )
+    }
+    pendingDeleteEntryId?.let { entryId ->
+        val pendingEntry = entries.firstOrNull { it.id == entryId }
+        if (pendingEntry != null) {
+            AlertDialog(
+                onDismissRequest = { pendingDeleteEntryId = null },
+                title = { Text("حذف نوشته؟") },
+                text = { Text(pendingEntry.title.ifBlank { pendingEntry.body.take(160) }) },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            pendingDeleteEntryId = null
+                            scope.launch {
+                                try {
+                                    userDatabase.journalEntryDao().delete(entryId)
+                                    message = "نوشته حذف شد."
+                                } catch (cancelled: CancellationException) {
+                                    throw cancelled
+                                } catch (_: Exception) {
+                                    message = "حذف انجام نشد؛ نوشته حفظ شده است."
+                                }
+                            }
+                        }
+                    ) { Text("حذف") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { pendingDeleteEntryId = null }) { Text("انصراف") }
+                }
+            )
+        }
+    }
+
 }
