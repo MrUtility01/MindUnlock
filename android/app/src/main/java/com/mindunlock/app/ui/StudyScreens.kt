@@ -185,6 +185,7 @@ fun KnowledgeArchiveScreen(db: AppDatabase, onOpenItem: (String) -> Unit) {
     var loadError by remember { mutableStateOf("") }
     var loadAttempt by remember { mutableIntStateOf(0) }
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val pageSize = 30
 
     LaunchedEffect(selectedType, query, loadAttempt) {
@@ -255,7 +256,7 @@ fun KnowledgeArchiveScreen(db: AppDatabase, onOpenItem: (String) -> Unit) {
                             if (!loading) {
                                 loading = true
                                 val offset = loadedItems.size
-                                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
+                                scope.launch {
                                     try {
                                         val next = db.contentItemDao().getArchivePage(selectedType, query.trim(), pageSize, offset)
                                         loadedItems.addAll(next)
@@ -415,6 +416,10 @@ fun DashboardScreen(
         Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
             ActionTile("ثبت فکر سریع", "inbox", onNavigate, Modifier.weight(1f))
             ActionTile("موضوعات برای بعد", "later", onNavigate, Modifier.weight(1f))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+            ActionTile("آرشیو دانش", "archive", onNavigate, Modifier.weight(1f))
+            ActionTile("گزارش پیشرفت", "progress", onNavigate, Modifier.weight(1f))
         }
         Text("ادامهٔ مطالعه", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         if (last != null) {
