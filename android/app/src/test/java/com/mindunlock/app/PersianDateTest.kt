@@ -33,11 +33,9 @@ class PersianDateTest {
 
     @Test
     fun alignsCalendarWeeksWithSaturdayAsFirstDay() {
-        // 1405/01/01 was Saturday; 1405/08/01 was Saturday as well.
+        // 1405/01/01 was Saturday; 1405/08/01 was Friday.
         assertEquals(0, PersianDate.firstWeekdayOffset(1405, 1))
-        assertEquals(0, PersianDate.firstWeekdayOffset(1405, 8))
-        // 1405/08/21 is Thursday, so the month begins on Saturday offset zero.
-        assertEquals(0, PersianDate.firstWeekdayOffset(1405, 8))
+        assertEquals(6, PersianDate.firstWeekdayOffset(1405, 8))
     }
 
     @Test
