@@ -11,6 +11,7 @@ import com.mindunlock.app.data.local.LaterTopicEntity
 import com.mindunlock.app.data.local.LearningSessionEntity
 import com.mindunlock.app.data.local.LearningProfileEntity
 import com.mindunlock.app.data.local.LearningSessionFeedbackEntity
+import com.mindunlock.app.data.local.LearningStageProgressEntity
 import com.mindunlock.app.data.local.MindDumpEntity
 import com.mindunlock.app.data.local.NoteEntity
 import com.mindunlock.app.data.local.ProgressEntity
@@ -37,11 +38,12 @@ data class UserDataBackupPayload(
     val learningSessions: List<LearningSessionEntity> = emptyList(),
     val labQuestionResponses: List<LabQuestionResponseEntity> = emptyList(),
     val learningProfile: List<LearningProfileEntity> = emptyList(),
-    val learningSessionFeedback: List<LearningSessionFeedbackEntity> = emptyList()
+    val learningSessionFeedback: List<LearningSessionFeedbackEntity> = emptyList(),
+    val learningStageProgress: List<LearningStageProgressEntity> = emptyList()
 ) {
     val totalRecords: Int
         get() = progress.size + notes.size + bookmarks.size + tasks.size + mindDump.size +
-            journalEntries.size + laterTopics.size + labStepProgress.size + learningSessions.size + labQuestionResponses.size + learningProfile.size + learningSessionFeedback.size
+            journalEntries.size + laterTopics.size + labStepProgress.size + learningSessions.size + labQuestionResponses.size + learningProfile.size + learningSessionFeedback.size + learningStageProgress.size
 }
 
 data class UserDataBackupDocument(
@@ -56,7 +58,7 @@ object UserDataBackupCodec {
     private val gson = Gson()
     private val requiredCollections = listOf(
         "progress", "notes", "bookmarks", "tasks", "mindDump",
-        "journalEntries", "laterTopics", "labStepProgress", "learningSessions", "labQuestionResponses", "learningProfile", "learningSessionFeedback"
+        "journalEntries", "laterTopics", "labStepProgress", "learningSessions", "labQuestionResponses", "learningProfile", "learningSessionFeedback", "learningStageProgress"
     )
 
     fun encode(payload: UserDataBackupPayload, exportedAt: Long, appVersion: String): String {
@@ -201,6 +203,8 @@ object UserDataBackupCodec {
         require(payload.laterTopics.map { it.id }.distinct().size == payload.laterTopics.size) { "موضوع تکراری است." }
         require(payload.learningSessions.map { it.id }.distinct().size == payload.learningSessions.size) { "جلسه یادگیری تکراری است." }
         require(payload.labQuestionResponses.map { it.itemUid to it.questionIndex }.distinct().size == payload.labQuestionResponses.size) { "پاسخ سؤال آزمایشگاه تکراری است." }
+        require(payload.learningStageProgress.map { it.chapterId to it.stageId }.distinct().size == payload.learningStageProgress.size) { "پیشرفت مرحله آموزشی تکراری است." }
+        require(payload.learningStageProgress.all { it.chapterId.isNotBlank() && it.chapterId.length <= 200 && it.stageId in setOf("why", "overview", "concepts", "explanation", "real_world", "scenario", "practice", "recap", "knowledge") && it.stageIndex in 0..8 && it.completed && it.completedAt > 0 && it.updatedAt > 0 }) { "پیشرفت مرحله آموزشی معتبر نیست." }
         require(payload.learningSessionFeedback.map { it.sessionId }.distinct().size == payload.learningSessionFeedback.size) { "بازخورد جلسه تکراری است." }
         require(payload.learningSessionFeedback.all { it.sessionId > 0 && it.comprehension in 1..5 && it.perceivedDifficulty in 1..5 && it.focus in 1..5 && (it.energyBefore == null || it.energyBefore in 1..5) && (it.energyAfter == null || it.energyAfter in 1..5) && (it.note?.length ?: 0) <= 2000 }) { "بازخورد جلسه یادگیری معتبر نیست." }
         require(payload.learningProfile.map { it.id }.distinct().size == payload.learningProfile.size && payload.learningProfile.all { it.id == 1 }) { "پروفایل یادگیری نامعتبر یا تکراری است." }
