@@ -320,6 +320,30 @@ jobs:
           # Reuse the already imported PlayArrow icon to keep dependencies lean.
           sed -i 's/FlashOn/PlayArrow/g' "$SCREENS_FILE"
 
+      - name: Preserve exact last-item resume in generated dashboard
+        shell: bash
+        run: |
+          set -euo pipefail
+          SCREENS_FILE="$(find android-build/app/src/main/java -type f -name StudyScreens.kt -print -quit)"
+          test -n "$SCREENS_FILE"
+          python3 - "$SCREENS_FILE" <<'PY'
+          from pathlib import Path
+          import sys
+          path = Path(sys.argv[1])
+          source = path.read_text(encoding="utf-8")
+          marker = "    val lastSession = sessions.firstOrNull()"
+          addition = marker + "\\n    val lastReadProgress = progress.filter { it.lastOpenedAt != null }.maxByOrNull { it.lastOpenedAt ?: 0L }"
+          if "val lastReadProgress =" not in source:
+              if marker not in source:
+                  raise SystemExit("Generated dashboard session marker not found; refusing incomplete resume patch")
+              source = source.replace(marker, addition, 1)
+          source = source.replace(
+              "onContinue(last.id)",
+              'onContinue(lastReadProgress?.itemUid?.let { "item:$it" } ?: "chapter:${last.id}")'
+          )
+          path.write_text(source, encoding="utf-8")
+          PY
+
       - name: Apply database split, on-demand voices and sync optimizations
         shell: bash
         run: |
