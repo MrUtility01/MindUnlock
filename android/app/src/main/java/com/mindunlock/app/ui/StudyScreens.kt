@@ -870,6 +870,21 @@ private fun LabScenarioReaderPanel(
     val savedAnswers by userDb.labQuestionResponseDao().observeByItem(item.uid).collectAsState(initial = emptyList())
     val answerValues = remember(savedAnswers) { savedAnswers.associate { it.questionIndex to it.answer } }
     var answerDrafts by remember(item.uid) { mutableStateOf(emptyMap<Int, String>()) }
+    var answerSaveErrors by remember(item.uid) { mutableStateOf(emptySet<Int>()) }
+    fun saveLabAnswer(index: Int, answer: String) {
+        scope.launch {
+            try {
+                userDb.labQuestionResponseDao().upsert(
+                    LabQuestionResponseEntity(item.uid, index, answer)
+                )
+                answerSaveErrors = answerSaveErrors - index
+            } catch (error: kotlinx.coroutines.CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                answerSaveErrors = answerSaveErrors + index
+            }
+        }
+    }
     LaunchedEffect(savedAnswers) {
         answerDrafts = answerValues + answerDrafts
     }
@@ -954,19 +969,32 @@ private fun LabScenarioReaderPanel(
                     OutlinedTextField(
                         value = answerDrafts[index] ?: answerValues[index].orEmpty(),
                         onValueChange = { answer ->
-                            val currentAnswers = answerDrafts ?: answerValues
-                            answerDrafts = currentAnswers + (index to answer)
-                            scope.launch {
-                                userDb.labQuestionResponseDao().upsert(
-                                    LabQuestionResponseEntity(item.uid, index, answer)
-                                )
-                            }
+                            answerDrafts = answerDrafts + (index to answer)
+                            answerSaveErrors = answerSaveErrors - index
+                            saveLabAnswer(index, answer)
                         },
                         modifier = Modifier.fillMaxWidth(),
                         label = { Text("پاسخ من") },
                         minLines = 2,
                         maxLines = 5
                     )
+                    if (index in answerSaveErrors) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                "پاسخ ذخیره نشد؛ دوباره تلاش کن.",
+                                modifier = Modifier.weight(1f),
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                            TextButton(onClick = {
+                                saveLabAnswer(index, answerDrafts[index] ?: answerValues[index].orEmpty())
+                            }) { Text("تلاش دوباره") }
+                        }
+                    }
                     val referenceAnswer = details.questionAnswers.getOrNull(index).orEmpty()
                     if (referenceAnswer.isNotBlank()) {
                         TextButton(onClick = {
