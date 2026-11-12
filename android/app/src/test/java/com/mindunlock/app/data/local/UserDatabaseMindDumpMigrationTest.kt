@@ -106,6 +106,19 @@ class UserDatabaseMindDumpMigrationTest {
             assertEquals(0, labSteps.single().stepIndex)
             assertEquals(true, labSteps.single().completed)
 
+            migrated.labQuestionResponseDao().upsert(
+                LabQuestionResponseEntity(
+                    itemUid = "lab-vlan-01",
+                    questionIndex = 0,
+                    answer = "saved answer after migration",
+                    updatedAt = 12_000L
+                )
+            )
+            val migratedAnswer = migrated.labQuestionResponseDao().observeByItem("lab-vlan-01").first().single()
+            assertEquals(0, migratedAnswer.questionIndex)
+            assertEquals("saved answer after migration", migratedAnswer.answer)
+            assertEquals(12_000L, migratedAnswer.updatedAt)
+
             val sessionId = migrated.learningSessionDao().insert(
                 LearningSessionEntity(
                     chapterId = "network-basics",
