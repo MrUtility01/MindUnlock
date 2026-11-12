@@ -1,0 +1,171 @@
+package com.mindunlock.app
+
+import com.mindunlock.app.data.local.JournalEntryEntity
+import com.mindunlock.app.data.local.LearningSessionEntity
+import com.mindunlock.app.data.local.LabStepProgressEntity
+import com.mindunlock.app.data.local.MindDumpEntity
+import com.mindunlock.app.data.local.ProgressEntity
+import com.mindunlock.app.data.local.StudyTaskEntity
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertThrows
+import org.junit.Test
+
+class UserDataBackupCodecTest {
+    @Test
+    fun encodesAndDecodesAllSupportedPersonalDataCollections() {
+        val payload = UserDataBackupPayload(
+            progress = listOf(ProgressEntity("item-1", "chapter-1", attempts = 4, correct = 3, wrong = 1, intervalDays = 3)),
+            tasks = listOf(StudyTaskEntity(id = 5, title = "مرور DNS")),
+            mindDump = listOf(MindDumpEntity(id = 8, content = "بررسی DHCP")),
+            journalEntries = listOf(JournalEntryEntity(id = 9, body = "یادداشت خصوصی")),
+            labStepProgress = listOf(LabStepProgressEntity("lab-1", 2, true)),
+            learningSessions = listOf(
+                LearningSessionEntity(
+                    id = 12,
+                    chapterId = "chapter-1",
+                    topicTitle = "مرور شبکه",
+                    startedAt = 1_800_000_000_000L,
+                    endedAt = 1_800_001_800_000L,
+                    durationSeconds = 1800
+                )
+            ),
+        )
+        val json = UserDataBackupCodec.encode(payload, 1_800_000_000_000L, "0.6.5")
+        val restored = UserDataBackupCodec.decode(json)
+        assertEquals(1, restored.schemaVersion)
+        assertEquals(1_800_000_000_000L, restored.exportedAt)
+        assertEquals("0.6.5", restored.appVersion)
+        assertEquals(6, restored.payload.totalRecords)
+        assertEquals(3, restored.payload.progress.single().correct)
+        assertEquals("مرور DNS", restored.payload.tasks.single().title)
+        assertEquals("یادداشت خصوصی", restored.payload.journalEntries.single().body)
+        assertEquals(true, restored.payload.labStepProgress.single().completed)
+        val session = restored.payload.learningSessions.single()
+        assertEquals(1_800_000_000_000L, session.startedAt)
+        assertEquals(1_800_001_800_000L, session.endedAt)
+        assertEquals(1800L, session.durationSeconds)
+    }
+
+
+    @Test
+    fun decodesOlderSchemaV1BackupWhenLearningSessionsCollectionIsAbsent() {
+        val root = com.google.gson.JsonParser.parseString(
+            UserDataBackupCodec.encode(
+                UserDataBackupPayload(
+                    mindDump = listOf(MindDumpEntity(content = "یادداشت قدیمی"))
+                ),
+                1_800_000_000_000L,
+                "0.5.8"
+            )
+        ).asJsonObject
+        val payload = root.getAsJsonObject("payload")
+        payload.remove("learningSessions")
+        val digest = java.security.MessageDigest.getInstance("SHA-256")
+            .digest(payload.toString().toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
+        root.addProperty("sha256", digest)
+
+        val restored = UserDataBackupCodec.decode(root.toString())
+
+        assertEquals("یادداشت قدیمی", restored.payload.mindDump.single().content)
+        assertEquals(true, restored.payload.learningSessions.isEmpty())
+    }
+
+    @Test
+    fun rejectsTamperedPayload() {
+        val json = UserDataBackupCodec.encode(
+            UserDataBackupPayload(mindDump = listOf(MindDumpEntity(content = "Original"))),
+            1_800_000_000_000L,
+            "test"
+        ).replace("Original", "Modified")
+        assertThrows(IllegalArgumentException::class.java) {
+            UserDataBackupCodec.decode(json)
+        }
+    }
+
+    @Test
+    fun rejectsUnsupportedSchemaAndMissingCollections() {
+        val json = UserDataBackupCodec.encode(UserDataBackupPayload(), 1_800_000_000_000L, "test")
+        assertThrows(IllegalArgumentException::class.java) {
+            UserDataBackupCodec.decode(json.replace("\"schemaVersion\":1", "\"schemaVersion\":99"))
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            UserDataBackupCodec.decode("""{"schemaVersion":1,"exportedAt":1800000000000,"appVersion":"test","payload":{},"sha256":"x"}""")
+        }
+    }
+
+    @Test
+    fun encryptedBackupRoundTripsAndDoesNotExposePayloadText() {
+        val plain = UserDataBackupCodec.encode(
+            UserDataBackupPayload(mindDump = listOf(MindDumpEntity(content = "private-note-xyz"))),
+            1_800_000_000_000L,
+            "test"
+        )
+        val encrypted = UserDataBackupCodec.encrypt(plain, "correct horse battery".toCharArray())
+        assertEquals(false, encrypted.contains("private-note-xyz"))
+        val decrypted = UserDataBackupCodec.decryptIfEncrypted(encrypted, "correct horse battery".toCharArray())
+        assertEquals("private-note-xyz", UserDataBackupCodec.decode(decrypted).payload.mindDump.single().content)
+    }
+
+    @Test
+    fun encryptedBackupRejectsWrongPasswordAndTamperedCiphertext() {
+        val plain = UserDataBackupCodec.encode(
+            UserDataBackupPayload(mindDump = listOf(MindDumpEntity(content = "private-note"))),
+            1_800_000_000_000L,
+            "test"
+        )
+        val encrypted = UserDataBackupCodec.encrypt(plain, "correct horse battery".toCharArray())
+        assertThrows(IllegalArgumentException::class.java) {
+            UserDataBackupCodec.decryptIfEncrypted(encrypted, "incorrect password".toCharArray())
+        }
+        val root = com.google.gson.JsonParser.parseString(encrypted).asJsonObject
+        val ciphertext = root.get("ciphertext").asString
+        root.addProperty("ciphertext", ciphertext.dropLast(4) + "AAAA")
+        assertThrows(IllegalArgumentException::class.java) {
+            UserDataBackupCodec.decryptIfEncrypted(root.toString(), "correct horse battery".toCharArray())
+        }
+    }
+
+    @Test
+    fun rejectsTooShortEncryptionPasswordAndClearsPasswordBuffer() {
+        val password = "short".toCharArray()
+        assertThrows(IllegalArgumentException::class.java) {
+            UserDataBackupCodec.encrypt("{}", password)
+        }
+        assertEquals(true, password.all { it == Char.MIN_VALUE })
+    }
+
+    @Test
+    fun clearsPasswordBufferWhenEncryptedBackupValidationFails() {
+        val password = "long-enough-password".toCharArray()
+        val malformedEncrypted = """{"format":"mindunlock-encrypted-backup-v1","iterations":1}"""
+
+        assertThrows(IllegalArgumentException::class.java) {
+            UserDataBackupCodec.decryptIfEncrypted(malformedEncrypted, password)
+        }
+        assertEquals(true, password.all { it == Char.MIN_VALUE })
+    }
+
+    @Test
+    fun clearsPasswordBufferWhenInputIsNotEncrypted() {
+        val password = "unused-password".toCharArray()
+        val plainJson = """{"schemaVersion":1}"""
+
+        assertEquals(plainJson, UserDataBackupCodec.decryptIfEncrypted(plainJson, password))
+        assertEquals(true, password.all { it == Char.MIN_VALUE })
+    }
+
+    @Test
+    fun rejectsDuplicatePrimaryKeys() {
+        val payload = UserDataBackupPayload(
+            progress = listOf(
+                ProgressEntity("same", "c"),
+                ProgressEntity("same", "c")
+            )
+        )
+        val json = UserDataBackupCodec.encode(payload, 1_800_000_000_000L, "test")
+        assertThrows(IllegalArgumentException::class.java) {
+            UserDataBackupCodec.decode(json)
+        }
+    }
+}
