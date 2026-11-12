@@ -9,6 +9,7 @@ import androidx.room.Query
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.room.Room
+import androidx.room.Update
 import androidx.room.RoomDatabase
 import kotlinx.coroutines.flow.Flow
 
@@ -190,6 +191,9 @@ interface LaterTopicDao {
 
     @Query("UPDATE later_topics SET status = :status, updatedAt = :updatedAt WHERE id = :id")
     suspend fun updateStatus(id: Long, status: String, updatedAt: Long)
+
+    @Update
+    suspend fun update(topic: LaterTopicEntity)
 
     @Query("DELETE FROM later_topics WHERE id = :id")
     suspend fun delete(id: Long)
