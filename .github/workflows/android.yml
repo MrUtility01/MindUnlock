@@ -3119,6 +3119,7 @@ jobs:
                   }
                   val resumeAction = ResumeActionPolicy.select(
                       dueReviewCount = dueReviewCount,
+                      overdueTaskCount = tasks.count { !it.completed && it.dueAt != null && it.dueAt < todayStart },
                       todayTaskCount = todayTaskCount,
                       activeTopicTitle = activeTopic?.title,
                       lastReadItemUid = lastReadProgress?.itemUid,
@@ -3128,6 +3129,7 @@ jobs:
                   val nextAction = {
                       when (resumeAction.kind) {
                           ResumeActionKind.REVIEW -> onNavigate("review")
+                          ResumeActionKind.OVERDUE_TASKS -> onNavigate("planner")
                           ResumeActionKind.TODAY_TASKS -> onNavigate("planner")
                           ResumeActionKind.ACTIVE_TOPIC -> onNavigate("later")
                           ResumeActionKind.RESUME_ITEM -> resumeAction.targetId?.let { onContinue("item:$it") }
