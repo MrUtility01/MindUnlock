@@ -5,6 +5,9 @@ import com.mindunlock.app.data.local.UserDatabase
 import androidx.room.withTransaction
 import kotlinx.coroutines.Dispatchers
 import java.io.File
+import java.io.FileOutputStream
+import java.io.IOException
+import java.util.UUID
 import kotlinx.coroutines.withContext
 
 object UserDataBackupManager {
@@ -36,11 +39,35 @@ object UserDataBackupManager {
         require(document.schemaVersion == UserDataBackupCodec.CURRENT_SCHEMA_VERSION) {
             "نسخه ساختار پشتیبان پشتیبانی نمی‌شود."
         }
-        val safetyDirectory = File(context.filesDir, "backup-safety").apply { mkdirs() }
+        val safetyDirectory = File(context.filesDir, "backup-safety")
+        if (!safetyDirectory.exists() && !safetyDirectory.mkdirs()) {
+            throw IOException("ایجاد پوشه پشتیبان ایمنی پیش از بازیابی ناموفق بود.")
+        }
+        if (!safetyDirectory.isDirectory) {
+            throw IOException("مسیر پشتیبان ایمنی معتبر نیست.")
+        }
+
+        // Persist a complete safety copy before touching any database table.
         val safetyJson = export(context, userDb)
-        File(safetyDirectory, "before-restore-${System.currentTimeMillis()}.json")
-            .writeText(safetyJson, Charsets.UTF_8)
-        safetyDirectory.listFiles()?.filter { it.isFile }?.sortedByDescending { it.lastModified() }
+        val temporaryFile = File.createTempFile("restore-safety-", ".tmp", safetyDirectory)
+        try {
+            FileOutputStream(temporaryFile).use { output ->
+                output.write(safetyJson.toByteArray(Charsets.UTF_8))
+                output.fd.sync()
+            }
+            val safetyFile = File(
+                safetyDirectory,
+                "before-restore-${System.currentTimeMillis()}-${UUID.randomUUID()}.json"
+            )
+            if (!temporaryFile.renameTo(safetyFile)) {
+                throw IOException("ذخیره اتمیک پشتیبان ایمنی ناموفق بود؛ بازیابی انجام نشد.")
+            }
+        } finally {
+            if (temporaryFile.exists()) temporaryFile.delete()
+        }
+
+        safetyDirectory.listFiles()?.filter { it.isFile && it.name.endsWith(".json") }
+            ?.sortedByDescending { it.lastModified() }
             ?.drop(3)?.forEach { it.delete() }
 
         userDb.withTransaction {
