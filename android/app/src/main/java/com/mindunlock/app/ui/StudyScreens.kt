@@ -118,6 +118,7 @@ import com.mindunlock.app.data.local.BookmarkEntity
 import com.mindunlock.app.data.local.ContentItemEntity
 import com.mindunlock.app.data.local.LabStepProgressEntity
 import com.mindunlock.app.data.local.LabQuestionResponseEntity
+import com.mindunlock.app.data.local.LearningSessionFeedbackEntity
 import com.mindunlock.app.data.local.ContentItemListEntry
 import com.mindunlock.app.data.local.NoteEntity
 import com.mindunlock.app.data.local.ProgressEntity
@@ -1630,6 +1631,16 @@ fun ProgressScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeech)
     val progress by userDb.progressDao().observeAll().collectAsState(initial = emptyList())
     val tasks by userDb.studyTaskDao().observeAll().collectAsState(initial = emptyList())
     val sessions by userDb.learningSessionDao().observeAll().collectAsState(initial = emptyList())
+    val feedbacks by userDb.learningSessionFeedbackDao().observeAll().collectAsState(initial = emptyList())
+    val feedbackBySession = remember(feedbacks) { feedbacks.associateBy { it.sessionId } }
+    val scope = rememberCoroutineScope()
+    var selectedFeedbackSessionId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var feedbackComprehension by rememberSaveable { mutableIntStateOf(3) }
+    var feedbackDifficulty by rememberSaveable { mutableIntStateOf(3) }
+    var feedbackFocus by rememberSaveable { mutableIntStateOf(3) }
+    var feedbackEnergyBefore by rememberSaveable { mutableIntStateOf(3) }
+    var feedbackEnergyAfter by rememberSaveable { mutableIntStateOf(3) }
+    var feedbackNote by rememberSaveable { mutableStateOf("") }
     val snapshot = remember(chapters, items, progress, tasks, sessions) {
         LearningAnalytics.build(chapters, items, progress, tasks, sessions, System.currentTimeMillis())
     }
@@ -1668,6 +1679,32 @@ fun ProgressScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeech)
             MetricCard("جلسه‌های پایان‌یافته", snapshot.completedSessions.toString(), Modifier.weight(1f))
         }
         MetricCard("میانگین هر جلسه", "${snapshot.averageSessionMinutes} دقیقه", Modifier.fillMaxWidth())
+        Text("بازخورد تجربه یادگیری", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Text("این بازخورد خوداظهاری است و از امتیاز آزمون یا سنجش عملکرد جدا نگه داشته می‌شود.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        val completedSessionsForFeedback = sessions.filter { it.endedAt != null }.take(5)
+        if (completedSessionsForFeedback.isEmpty()) {
+            EmptyMessage("پس از پایان اولین جلسه، می‌توانی تجربه یادگیری را ثبت کنی.")
+        } else {
+            completedSessionsForFeedback.forEach { session ->
+                val savedFeedback = feedbackBySession[session.id]
+                Card(Modifier.fillMaxWidth()) {
+                    Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(session.topicTitle, fontWeight = FontWeight.SemiBold)
+                        Text("${PersianDate.format(Instant.ofEpochMilli(session.startedAt).atZone(ZoneId.systemDefault()).toLocalDate())} · ${session.durationSeconds.coerceAtLeast(0L) / 60L} دقیقه", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(if (savedFeedback == null) "بازخوردی ثبت نشده" else "درک: ${savedFeedback.comprehension}/۵ · تمرکز: ${savedFeedback.focus}/۵ · دشواری: ${savedFeedback.perceivedDifficulty}/۵", style = MaterialTheme.typography.bodySmall)
+                        TextButton(onClick = {
+                            feedbackComprehension = savedFeedback?.comprehension ?: 3
+                            feedbackDifficulty = savedFeedback?.perceivedDifficulty ?: 3
+                            feedbackFocus = savedFeedback?.focus ?: 3
+                            feedbackEnergyBefore = savedFeedback?.energyBefore ?: 3
+                            feedbackEnergyAfter = savedFeedback?.energyAfter ?: 3
+                            feedbackNote = savedFeedback?.note.orEmpty()
+                            selectedFeedbackSessionId = session.id
+                        }) { Text(if (savedFeedback == null) "ثبت بازخورد" else "ویرایش بازخورد") }
+                    }
+                }
+            }
+        }
         Text("زمان‌ها با شروع و پایان دستی جلسه در موتور یادگیری محاسبه می‌شوند؛ زمان بیکاری یا توقف دستگاه به‌صورت خودکار تشخیص داده نمی‌شود.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text("فعالیت هفت روز اخیر", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         Card(Modifier.fillMaxWidth()) {
@@ -1714,6 +1751,48 @@ fun ProgressScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeech)
             }
         }
         Text("حریم خصوصی: این گزارش فقط از محتوای آموزشی، پیشرفت و کارهای برنامه‌ریز استفاده می‌کند؛ متن دفتر روزانه و صندوق ورودی وارد گزارش نمی‌شود و داده‌ای به سرور ارسال نمی‌شود.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+    val selectedSession = sessions.firstOrNull { it.id == selectedFeedbackSessionId }
+    if (selectedSession != null) {
+        AlertDialog(
+            onDismissRequest = { selectedFeedbackSessionId = null },
+            title = { Text("بازخورد جلسه یادگیری") },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("درک مطلب: ${feedbackComprehension}/۵")
+                    Slider(value = feedbackComprehension.toFloat(), onValueChange = { feedbackComprehension = it.roundToInt() }, valueRange = 1f..5f, steps = 3)
+                    Text("دشواری ادراک‌شده: ${feedbackDifficulty}/۵")
+                    Slider(value = feedbackDifficulty.toFloat(), onValueChange = { feedbackDifficulty = it.roundToInt() }, valueRange = 1f..5f, steps = 3)
+                    Text("تمرکز: ${feedbackFocus}/۵")
+                    Slider(value = feedbackFocus.toFloat(), onValueChange = { feedbackFocus = it.roundToInt() }, valueRange = 1f..5f, steps = 3)
+                    Text("انرژی پیش از جلسه: ${feedbackEnergyBefore}/۵")
+                    Slider(value = feedbackEnergyBefore.toFloat(), onValueChange = { feedbackEnergyBefore = it.roundToInt() }, valueRange = 1f..5f, steps = 3)
+                    Text("انرژی پس از جلسه: ${feedbackEnergyAfter}/۵")
+                    Slider(value = feedbackEnergyAfter.toFloat(), onValueChange = { feedbackEnergyAfter = it.roundToInt() }, valueRange = 1f..5f, steps = 3)
+                    OutlinedTextField(value = feedbackNote, onValueChange = { if (it.length <= 2000) feedbackNote = it }, label = { Text("یادداشت اختیاری") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val sessionId = selectedSession.id
+                    scope.launch {
+                        userDb.learningSessionFeedbackDao().upsert(
+                            LearningSessionFeedbackEntity(
+                                sessionId = sessionId,
+                                comprehension = feedbackComprehension,
+                                perceivedDifficulty = feedbackDifficulty,
+                                focus = feedbackFocus,
+                                energyBefore = feedbackEnergyBefore,
+                                energyAfter = feedbackEnergyAfter,
+                                note = feedbackNote.trim().ifBlank { null }
+                            )
+                        )
+                    }
+                    selectedFeedbackSessionId = null
+                }) { Text("ذخیره") }
+            },
+            dismissButton = { TextButton(onClick = { selectedFeedbackSessionId = null }) { Text("انصراف") } }
+        )
     }
 }
 
