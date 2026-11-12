@@ -386,6 +386,46 @@ fun DashboardScreen(
                 Icon(Icons.Default.PlayArrow, contentDescription = "رفتن به اقدام بعدی")
             }
         }
+        val lastCompletedSession = sessions.firstOrNull { it.endedAt != null }
+        val lastSessionReflection = lastCompletedSession?.let { session -> sessionFeedback.firstOrNull { it.sessionId == session.id } }
+        if (lastCompletedSession != null) {
+            Text("خلاصه آخرین جلسه", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(lastCompletedSession.topicTitle, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "${PersianDate.format(lastCompletedSession.startedAt)} · مدت ${formatSessionDuration(lastCompletedSession.durationSeconds)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    if (lastSessionReflection != null) {
+                        Text(
+                            "بازخورد شخصی · درک ${lastSessionReflection.comprehension}/۵ · تمرکز ${lastSessionReflection.focus}/۵ · دشواری ${lastSessionReflection.perceivedDifficulty}/۵",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                        val energyDelta = (lastSessionReflection.energyAfter ?: 0) - (lastSessionReflection.energyBefore ?: 0)
+                        if (lastSessionReflection.energyBefore != null && lastSessionReflection.energyAfter != null) {
+                            Text(
+                                "تغییر انرژی: ${if (energyDelta > 0) "+" else ""}${PersianDate.toPersianDigits(energyDelta.toString())}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        lastSessionReflection.note?.takeIf { it.isNotBlank() }?.let {
+                            Text("یادداشت جلسه: $it", style = MaterialTheme.typography.bodySmall)
+                        }
+                    } else {
+                        Text("برای این جلسه هنوز بازخوردی ثبت نشده است.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Text("گام بعدی پیشنهادی", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
+                    Text(nextActionTitle)
+                    Text(nextActionDescription, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    OutlinedButton(onClick = { nextAction() }, modifier = Modifier.fillMaxWidth()) {
+                        Text("ادامه از همین مسیر")
+                    }
+                }
+            }
+        }
         Text("کارهای امروز", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         if (todayTasks.isEmpty()) {
             Text("برای امروز کار زمان‌بندی‌شده‌ای نداری.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
