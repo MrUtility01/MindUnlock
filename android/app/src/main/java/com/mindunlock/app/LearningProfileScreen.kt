@@ -21,6 +21,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
+import com.mindunlock.app.data.local.LearningProfileEntity
+import com.mindunlock.app.data.local.UserDatabase
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -52,7 +55,7 @@ private val profileQuestions = listOf(
 )
 
 @Composable
-fun LearningProfileScreen(preferences: android.content.SharedPreferences) {
+fun LearningProfileScreen(preferences: android.content.SharedPreferences, userDatabase: UserDatabase) {
     val saved = remember(preferences) {
         preferences.getString("learning_profile_answers", "")
             .orEmpty().split(",").mapNotNull { it.toIntOrNull() }
@@ -72,6 +75,22 @@ fun LearningProfileScreen(preferences: android.content.SharedPreferences) {
         mutableStateOf(preferences.getString("learning_mode", "guided") ?: "guided")
     }
     var savedMessage by remember { mutableStateOf("") }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    LaunchedEffect(userDatabase, preferences) {
+        val stored = userDatabase.learningProfileDao().get()
+        if (stored != null) {
+            val values = stored.answersCsv.split(",").mapNotNull { it.toIntOrNull() }
+            if (values.size == 20) values.forEachIndexed { index, value -> answers[index] = value }
+            sessionMinutes = stored.sessionMinutes.toFloat()
+            maxTopics = stored.maxTopics
+            guidedMode = stored.guidedMode
+        } else if (preferences.getBoolean("learning_profile_completed", false)) {
+            userDatabase.learningProfileDao().upsert(LearningProfileEntity(
+                answersCsv = answers.joinToString(","), sessionMinutes = sessionMinutes.toInt(),
+                maxTopics = maxTopics, guidedMode = guidedMode, completed = true
+            ))
+        }
+    }
     val answered = answers.count { it in 1..5 }
     val groupScores = profileQuestions.indices.groupBy { profileQuestions[it].group }
         .mapValues { (_, indices) ->
@@ -154,14 +173,15 @@ fun LearningProfileScreen(preferences: android.content.SharedPreferences) {
         item {
             Button(
                 onClick = {
-                    preferences.edit()
-                        .putString("learning_profile_answers", answers.joinToString(","))
-                        .putInt("learning_session_minutes", sessionMinutes.toInt())
-                        .putInt("learning_max_topics", maxTopics)
-                        .putString("learning_mode", guidedMode)
-                        .putBoolean("learning_profile_completed", true)
-                        .apply()
-                    savedMessage = "پروفایل یادگیری روی همین دستگاه ذخیره شد."
+                    val profile = LearningProfileEntity(answersCsv = answers.joinToString(","), sessionMinutes = sessionMinutes.toInt(), maxTopics = maxTopics, guidedMode = guidedMode, completed = true)
+                    scope.launch {
+                        runCatching { userDatabase.learningProfileDao().upsert(profile) }
+                            .onSuccess {
+                                preferences.edit().putString("learning_profile_answers", profile.answersCsv).putInt("learning_session_minutes", profile.sessionMinutes).putInt("learning_max_topics", profile.maxTopics).putString("learning_mode", profile.guidedMode).putBoolean("learning_profile_completed", true).apply()
+                                savedMessage = "پروفایل در پایگاه داده و پشتیبان برنامه ذخیره شد."
+                            }
+                            .onFailure { savedMessage = "ذخیره پروفایل ناموفق بود: ${it.message ?: "خطای پایگاه داده"}" }
+                    }
                 },
                 enabled = answered == 20,
                 modifier = Modifier.fillMaxWidth()
