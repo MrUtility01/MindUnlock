@@ -282,7 +282,7 @@ fun DashboardScreen(
     userDb: UserDatabase,
     speech: PersianSpeech,
     onNavigate: (String) -> Unit,
-    onContinue: (String, String?) -> Unit
+    onContinue: (String) -> Unit
 ) {
     val chapters by db.chapterDao().observeAll().collectAsState(initial = emptyList())
     val contentItems by db.contentItemDao().observeAll().collectAsState(initial = emptyList())
@@ -338,7 +338,7 @@ fun DashboardScreen(
         dueReviews > 0 -> { { onNavigate("review") } }
         todayTasks.isNotEmpty() -> { { onNavigate("planner") } }
         activeTopic != null -> { { onNavigate("later") } }
-        last != null -> { { onContinue(last.id, lastReadItem?.uid) } }
+        last != null -> { { onContinue(lastReadItem?.let { "item:${it.uid}" } ?: "chapter:${last.id}") } }
         else -> { { onNavigate("courses") } }
     }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
