@@ -345,7 +345,7 @@ private fun MindUnlockRoot(
                 "backup" -> BackupRestoreScreen(userDatabase)
                 "bookmarks" -> BookmarksScreen(repository.database, userDatabase, speech, onOpenItem = { uid -> selectedItem = uid; previousScreen = "bookmarks"; screen = "reader" })
                 "settings" -> SettingsScreen(speech, preferences, initialTheme, onThemeChange, onFontScaleChange, onLockApp, { screen = "sync" })
-                "profile" -> LearningProfileScreen(preferences)
+                "profile" -> LearningProfileScreen(preferences, userDatabase)
                 "learning" -> LearningEngineScreen(repository.database, userDatabase, preferences, onOpenChapter = { id -> selectedChapter = id; screen = "chapter" }, onNavigate = { screen = it })
                 "sync" -> SyncScreen(repository, onDone = { screen = "courses" })
                 else -> MoreScreen(onNavigate = { screen = it })
