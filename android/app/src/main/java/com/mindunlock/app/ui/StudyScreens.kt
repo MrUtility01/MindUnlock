@@ -1224,7 +1224,10 @@ fun ProgressScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeech)
             Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 snapshot.recentActivity.forEach { day ->
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Text(day.label, modifier = Modifier.size(width = 66.dp, height = 24.dp), style = MaterialTheme.typography.labelSmall)
+                        Column(Modifier.width(76.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(day.label, style = MaterialTheme.typography.labelSmall)
+                            Text(day.dateLabel, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                         LinearProgressIndicator(
                             progress = { day.sessionMinutes.toFloat() / maxActivity.toFloat() },
                             modifier = Modifier.weight(1f)
