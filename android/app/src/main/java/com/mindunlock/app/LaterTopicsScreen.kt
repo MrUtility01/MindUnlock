@@ -28,6 +28,11 @@ import androidx.compose.ui.unit.dp
 import com.mindunlock.app.data.local.LaterTopicEntity
 import com.mindunlock.app.data.local.UserDatabase
 import kotlinx.coroutines.launch
+import java.time.Instant
+import java.time.LocalDate
+import java.time.LocalTime
+import java.time.LocalDateTime
+import java.time.ZoneId
 import androidx.compose.runtime.rememberCoroutineScope
 
 @Composable
@@ -37,6 +42,7 @@ fun LaterTopicsScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
     var title by rememberSaveable { mutableStateOf("") }
     var details by rememberSaveable { mutableStateOf("") }
     var revisitDate by rememberSaveable { mutableStateOf("") }
+    var showJalaliPicker by rememberSaveable { mutableStateOf(false) }
     var priority by rememberSaveable { mutableStateOf(2) }
     var filter by rememberSaveable { mutableStateOf("all") }
     var query by rememberSaveable { mutableStateOf("") }
@@ -54,7 +60,25 @@ fun LaterTopicsScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
         PersianVoiceInputButton { spoken -> title = listOf(title, spoken).filter { it.isNotBlank() }.joinToString("\n") }
         OutlinedTextField(details, { details = it }, Modifier.fillMaxWidth(), label = { Text("توضیحات (اختیاری)") }, minLines = 2)
         PersianVoiceInputButton { spoken -> details = listOf(details, spoken).filter { it.isNotBlank() }.joinToString("\n") }
-        OutlinedTextField(revisitDate, { revisitDate = it }, Modifier.fillMaxWidth(), label = { Text("تاریخ یادآوری اختیاری · شمسی: ۱۴۰۵/۰۸/۲۱ یا میلادی: 2026-11-12") }, singleLine = true)
+        OutlinedTextField(revisitDate, { revisitDate = it }, Modifier.fillMaxWidth(), label = { Text("تاریخ یادآوری اختیاری · شمسی یا میلادی") }, singleLine = true)
+        OutlinedButton(onClick = { showJalaliPicker = true }, modifier = Modifier.fillMaxWidth()) {
+            Text("انتخاب تاریخ یادآوری از تقویم شمسی")
+        }
+        if (showJalaliPicker) {
+            val parsedMillis = if (revisitDate.isBlank()) null else PersianDate.parseDateTime(revisitDate)
+            val initialDate = parsedMillis?.let {
+                PersianDate.fromGregorian(Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate())
+            } ?: PersianDate.fromGregorian(LocalDate.now())
+            PersianJalaliDatePicker(
+                initialDate = initialDate,
+                onDismiss = { showJalaliPicker = false },
+                onSelect = { selected ->
+                    val selectedDate = PersianDate.toGregorian(selected)
+                    revisitDate = PersianDate.formatInput(LocalDateTime.of(selectedDate, LocalTime.MIDNIGHT))
+                    showJalaliPicker = false
+                }
+            )
+        }
         Text("اولویت", style = MaterialTheme.typography.labelLarge)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf(1 to "زیاد", 2 to "معمولی", 3 to "کم").forEach { (value, label) ->
