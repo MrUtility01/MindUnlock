@@ -138,7 +138,7 @@ interface LaterTopicDao {
     suspend fun delete(id: Long)
 }
 
-@Database(entities = [ProgressEntity::class, NoteEntity::class, BookmarkEntity::class, StudyTaskEntity::class, MindDumpEntity::class, JournalEntryEntity::class, LaterTopicEntity::class, LabStepProgressEntity::class, LearningSessionEntity::class], version = 6, exportSchema = false)
+@Database(entities = [ProgressEntity::class, NoteEntity::class, BookmarkEntity::class, StudyTaskEntity::class, MindDumpEntity::class, JournalEntryEntity::class, LaterTopicEntity::class, LabStepProgressEntity::class, LearningSessionEntity::class], version = 7, exportSchema = false)
 abstract class UserDatabase : RoomDatabase() {
     abstract fun progressDao(): ProgressDao
     abstract fun noteDao(): NoteDao
@@ -183,9 +183,14 @@ abstract class UserDatabase : RoomDatabase() {
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_learning_sessions_endedAt ON learning_sessions(endedAt)")
             }
         }
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE progress ADD COLUMN lastOpenedAt INTEGER")
+            }
+        }
         @Volatile private var instance: UserDatabase? = null
         fun getInstance(context: Context): UserDatabase = instance ?: synchronized(this) {
-            instance ?: Room.databaseBuilder(context.applicationContext, UserDatabase::class.java, "mindunlock-user.db").addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6).build().also { instance = it }
+            instance ?: Room.databaseBuilder(context.applicationContext, UserDatabase::class.java, "mindunlock-user.db").addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7).build().also { instance = it }
         }
     }
 }
