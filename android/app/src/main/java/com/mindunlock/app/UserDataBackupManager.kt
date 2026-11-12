@@ -27,7 +27,8 @@ object UserDataBackupManager {
                 laterTopics = userDb.laterTopicDao().getAll(),
                 labStepProgress = userDb.labStepProgressDao().getAll(),
                 learningSessions = userDb.learningSessionDao().getAll(),
-                labQuestionResponses = userDb.labQuestionResponseDao().getAll()
+                labQuestionResponses = userDb.labQuestionResponseDao().getAll(),
+                learningProfile = listOfNotNull(userDb.learningProfileDao().get())
             )
         }
         val version = runCatching {
@@ -60,6 +61,7 @@ object UserDataBackupManager {
             userDb.labStepProgressDao().deleteAll()
             userDb.learningSessionDao().deleteAll()
             userDb.labQuestionResponseDao().deleteAll()
+            userDb.learningProfileDao().deleteAll()
 
             document.payload.progress.takeIf { it.isNotEmpty() }?.let { userDb.progressDao().upsertAll(it) }
             document.payload.notes.takeIf { it.isNotEmpty() }?.let { userDb.noteDao().upsertAll(it) }
@@ -71,6 +73,7 @@ object UserDataBackupManager {
             document.payload.labStepProgress.takeIf { it.isNotEmpty() }?.let { userDb.labStepProgressDao().upsertAll(it) }
             document.payload.learningSessions.takeIf { it.isNotEmpty() }?.let { userDb.learningSessionDao().upsertAll(it) }
             document.payload.labQuestionResponses.takeIf { it.isNotEmpty() }?.let { userDb.labQuestionResponseDao().upsertAll(it) }
+            document.payload.learningProfile.singleOrNull()?.let { userDb.learningProfileDao().upsert(it) }
         }
     }
 }
