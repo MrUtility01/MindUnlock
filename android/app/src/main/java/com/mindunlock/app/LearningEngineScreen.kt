@@ -35,6 +35,7 @@ import com.mindunlock.app.PersianDate
 import com.mindunlock.app.data.local.AppDatabase
 import com.mindunlock.app.data.local.UserDatabase
 import com.mindunlock.app.data.local.LearningSessionEntity
+import com.mindunlock.app.data.local.LearningStageProgressEntity
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -92,6 +93,10 @@ fun LearningEngineScreen(
     val overallProgress = if (totalContentItems == 0) 0f else (completedItems.toFloat() / totalContentItems).coerceIn(0f, 1f)
     val selected = chapters.firstOrNull { it.id == selectedId }
     val nextChapter = LearningPathPolicy.nextIncompleteChapter(chapters, progress)
+    val stageChapter = selected ?: nextChapter
+    val stageProgress by userDb.learningStageProgressDao().observeByChapter(stageChapter?.id.orEmpty()).collectAsState(initial = emptyList())
+    val completedStageIds = remember(stageProgress) { stageProgress.filter { it.completed }.mapTo(HashSet()) { it.stageId } }
+    val stageMode = learningProfile?.guidedMode ?: "guided"
     val visibleChapters = chapters.filter {
         search.isBlank() || it.title.contains(search, ignoreCase = true) ||
             (it.groupName?.contains(search, ignoreCase = true) == true)
@@ -231,6 +236,61 @@ fun LearningEngineScreen(
                             selected = false,
                             onClick = { preferences.edit().putString("learning_engine_last_action", "review").apply(); onNavigate("review") },
                             label = { Text("مرحله مرور") }
+                        )
+                    }
+                }
+            }
+        }
+        item {
+            stageChapter?.let { chapter ->
+                val stagePercent = LearningStagePolicy.completionPercent(completedStageIds)
+                Card(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("مسیر ۹ مرحله‌ای یادگیری", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text(chapter.title, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        LinearProgressIndicator(progress = { stagePercent / 100f }, modifier = Modifier.fillMaxWidth())
+                        Text("${completedStageIds.size} از ۹ مرحله · ${stagePercent}٪ · حالت ${if (stageMode == "flexible") "آزاد" else "هدایت‌شده"}", style = MaterialTheme.typography.labelMedium)
+                        LearningStagePolicy.stages.forEach { stage ->
+                            val done = stage.id in completedStageIds
+                            val canStart = LearningStagePolicy.canComplete(stage.id, completedStageIds, stageMode)
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Text("${stage.order + 1}. ${stage.title}", fontWeight = FontWeight.SemiBold)
+                                    Text(stage.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                Button(
+                                    enabled = done || canStart,
+                                    onClick = {
+                                        scope.launch {
+                                            if (done) {
+                                                if (stageMode == "guided") {
+                                                    userDb.learningStageProgressDao().deleteFromIndex(chapter.id, stage.order)
+                                                } else {
+                                                    userDb.learningStageProgressDao().delete(chapter.id, stage.id)
+                                                }
+                                            } else {
+                                                val timestamp = System.currentTimeMillis()
+                                                userDb.learningStageProgressDao().upsert(
+                                                    LearningStageProgressEntity(
+                                                        chapterId = chapter.id,
+                                                        stageId = stage.id,
+                                                        stageIndex = stage.order,
+                                                        completed = true,
+                                                        completedAt = timestamp,
+                                                        updatedAt = timestamp
+                                                    )
+                                                )
+                                            }
+                                        }
+                                    }
+                                ) { Text(if (done) "بازنشانی" else if (canStart) "تکمیل" else "قفل") }
+                            }
+                        }
+                        Text(
+                            if (stageMode == "flexible") "در حالت آزاد، هر مرحله را می‌توانی مستقل انجام بدهی."
+                            else "در حالت هدایت‌شده، هر مرحله پس از تکمیل مرحله‌های قبلی باز می‌شود. بازنشانی یک مرحله، مراحل بعدی را نیز پاک می‌کند.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
