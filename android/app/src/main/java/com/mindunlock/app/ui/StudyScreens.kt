@@ -869,11 +869,9 @@ private fun LabScenarioReaderPanel(
     val savedSteps by userDb.labStepProgressDao().observeByItem(item.uid).collectAsState(initial = emptyList())
     val savedAnswers by userDb.labQuestionResponseDao().observeByItem(item.uid).collectAsState(initial = emptyList())
     val answerValues = remember(savedAnswers) { savedAnswers.associate { it.questionIndex to it.answer } }
-    var answerDrafts by remember(item.uid) { mutableStateOf<Map<Int, String>?>(null) }
+    var answerDrafts by remember(item.uid) { mutableStateOf(emptyMap<Int, String>()) }
     LaunchedEffect(savedAnswers) {
-        if (answerDrafts == null) {
-            answerDrafts = answerValues
-        }
+        answerDrafts = answerValues + answerDrafts
     }
     val completedIndexes = remember(savedSteps) { savedSteps.filter { it.completed }.map { it.stepIndex }.toSet() }
     val progress by userDb.progressDao().observeAll().collectAsState(initial = emptyList())
@@ -954,7 +952,7 @@ private fun LabScenarioReaderPanel(
                         Text("${index + 1}. $question", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
                     }
                     OutlinedTextField(
-                        value = answerDrafts?.get(index) ?: answerValues[index].orEmpty(),
+                        value = answerDrafts[index] ?: answerValues[index].orEmpty(),
                         onValueChange = { answer ->
                             val currentAnswers = answerDrafts ?: answerValues
                             answerDrafts = currentAnswers + (index to answer)
