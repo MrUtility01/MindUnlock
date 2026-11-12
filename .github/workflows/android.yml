@@ -3554,10 +3554,19 @@ jobs:
           echo "APK_SIZE_BYTES=$(stat -c%s "$APK")" | tee -a "$GITHUB_STEP_SUMMARY"
           echo "APK archive integrity and application package verified." | tee -a "$GITHUB_STEP_SUMMARY"
 
+      - name: Resolve Android artifact version
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION_NAME="$(sed -nE 's/.*versionName = "([^"]+)".*/\1/p' android-build/app/build.gradle.kts | head -n1)"
+          test -n "$VERSION_NAME"
+          echo "APK_VERSION_NAME=$VERSION_NAME" >> "$GITHUB_ENV"
+          echo "Android artifact version: $VERSION_NAME" | tee -a "$GITHUB_STEP_SUMMARY"
+
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: MindUnlock-Android-v0.6.16-debug
+          name: MindUnlock-Android-v${{ env.APK_VERSION_NAME }}-debug
           path: android-build/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
