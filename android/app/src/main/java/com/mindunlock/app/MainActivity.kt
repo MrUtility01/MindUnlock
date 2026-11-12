@@ -325,7 +325,7 @@ private fun MindUnlockRoot(
                 "courses" -> SubjectListScreen(repository.database, onSubjectClick = { subject -> selectedSubject = subject; screen = "subject" })
                 "subject" -> ChapterListScreen(repository.database, selectedSubject, onChapterClick = { id -> selectedChapter = id; screen = "chapter" })
                 "chapter" -> ChapterContentScreen(repository.database, selectedChapter, onItemClick = { uid -> selectedItem = uid; previousScreen = "chapter"; screen = "reader" })
-                "archive" -> KnowledgeArchiveScreen(repository.database, onOpenItem = { uid -> selectedItem = uid; previousScreen = "archive"; screen = "reader" })
+                "archive" -> KnowledgeArchiveScreen(repository.database, speech, onOpenItem = { uid -> selectedItem = uid; previousScreen = "archive"; screen = "reader" })
                 "reader" -> ReaderScreen(repository.database, userDatabase, selectedItem, speech, preferences)
                 "flashcards" -> FlashcardsScreen(repository.database, userDatabase, speech, preferences, reviewOnly = false)
                 "review" -> FlashcardsScreen(repository.database, userDatabase, speech, preferences, reviewOnly = true)
