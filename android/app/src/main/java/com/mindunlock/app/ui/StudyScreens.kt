@@ -106,6 +106,11 @@ import android.Manifest
 import android.content.pm.PackageManager
 import com.google.gson.JsonParser
 import com.mindunlock.app.PersianDate
+import androidx.compose.foundation.layout.weight
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import com.mindunlock.app.JalaliDate
 import com.mindunlock.app.PersianSpeech
 import com.mindunlock.app.StudyReminderReceiver
 import com.mindunlock.app.data.local.AppDatabase
@@ -1136,6 +1141,7 @@ fun PlannerScreen(userDb: UserDatabase, speech: PersianSpeech) {
     var dateError by rememberSaveable { mutableStateOf("") }
     var type by rememberSaveable { mutableStateOf("task") }
     var reminder by rememberSaveable { mutableStateOf(true) }
+    var showJalaliPicker by rememberSaveable { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("برنامهٔ روزانه، تکلیف و پروژهٔ شخصی", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         OutlinedTextField(title, { title = it }, Modifier.fillMaxWidth(), label = { Text("عنوان") }, singleLine = true)
@@ -1147,6 +1153,28 @@ fun PlannerScreen(userDb: UserDatabase, speech: PersianSpeech) {
             FilterChip(selected = type == "project", onClick = { type = "project" }, label = { Text("پروژه") })
         }
         OutlinedTextField(whenText, { whenText = it; dateError = "" }, Modifier.fillMaxWidth(), label = { Text("تاریخ و ساعت شمسی: ۱۴۰۵/۰۸/۲۱ ۰۹:۳۰ (میلادی ISO نیز پذیرفته می‌شود)") }, isError = dateError.isNotBlank(), singleLine = true)
+        OutlinedButton(onClick = { showJalaliPicker = true }, modifier = Modifier.fillMaxWidth()) {
+            Text("انتخاب تاریخ از تقویم شمسی")
+        }
+        if (showJalaliPicker) {
+            val parsedMillis = PersianDate.parseDateTime(whenText)
+            val initialDate = parsedMillis?.let {
+                PersianDate.fromGregorian(Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate())
+            } ?: PersianDate.fromGregorian(LocalDate.now())
+            PersianJalaliDatePicker(
+                initialDate = initialDate,
+                onDismiss = { showJalaliPicker = false },
+                onSelect = { selected ->
+                    val currentTime = parsedMillis?.let {
+                        Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalTime()
+                    } ?: java.time.LocalTime.now()
+                    val selectedDate = PersianDate.toGregorian(selected)
+                    whenText = PersianDate.formatInput(LocalDateTime.of(selectedDate, currentTime))
+                    dateError = ""
+                    showJalaliPicker = false
+                }
+            )
+        }
         if (dateError.isNotBlank()) Text(dateError, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
         Row(verticalAlignment = Alignment.CenterVertically) { Switch(checked = reminder, onCheckedChange = { reminder = it }); Text("یادآور اعلان‌دار") }
         Button(enabled = title.isNotBlank(), onClick = {
@@ -1178,6 +1206,76 @@ fun PlannerScreen(userDb: UserDatabase, speech: PersianSpeech) {
             }
         }
     }
+}
+
+
+@Composable
+private fun PersianJalaliDatePicker(
+    initialDate: JalaliDate,
+    onDismiss: () -> Unit,
+    onSelect: (JalaliDate) -> Unit
+) {
+    val monthNames = listOf(
+        "فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور",
+        "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند"
+    )
+    val weekDays = listOf("ش", "ی", "د", "س", "چ", "پ", "ج")
+    var year by rememberSaveable(initialDate.year) { mutableIntStateOf(initialDate.year) }
+    var month by rememberSaveable(initialDate.month) { mutableIntStateOf(initialDate.month) }
+    val monthStart = remember(year, month) {
+        PersianDate.toGregorian(JalaliDate(year, month, 1))
+    }
+    val firstCell = (monthStart.dayOfWeek.value + 1) % 7
+    val monthDays = when (month) {
+        in 1..6 -> 31
+        in 7..11 -> 30
+        else -> try {
+            PersianDate.toGregorian(JalaliDate(year, 12, 30))
+            30
+        } catch (_: IllegalArgumentException) { 29 }
+    }
+    val cellCount = ((firstCell + monthDays + 6) / 7) * 7
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("انتخاب تاریخ شمسی") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                    TextButton(onClick = {
+                        if (month == 1) { month = 12; year-- } else month--
+                    }) { Text("ماه قبل") }
+                    Text("${monthNames[month - 1]} $year", style = MaterialTheme.typography.titleMedium)
+                    TextButton(onClick = {
+                        if (month == 12) { month = 1; year++ } else month++
+                    }) { Text("ماه بعد") }
+                }
+                Row {
+                    weekDays.forEach { day ->
+                        Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                            Text(day, style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
+                }
+                for (week in 0 until (cellCount / 7)) {
+                    Row {
+                        for (column in 0..6) {
+                            val day = week * 7 + column - firstCell + 1
+                            Box(Modifier.weight(1f).height(40.dp), contentAlignment = Alignment.Center) {
+                                if (day in 1..monthDays) {
+                                    TextButton(
+                                        onClick = { onSelect(JalaliDate(year, month, day)) },
+                                        modifier = Modifier.size(40.dp)
+                                    ) { Text(day.toString()) }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("بستن") } }
+    )
 }
 
 @Composable
