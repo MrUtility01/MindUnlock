@@ -136,19 +136,25 @@ fun ActionTile(label: String, destination: String, onNavigate: (String) -> Unit,
     }
     Card(
         onClick = { onNavigate(destination) },
-        modifier = modifier.height(104.dp),
+        modifier = modifier.height(120.dp),
         shape = MaterialTheme.shapes.large,
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp, pressedElevation = 5.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
         Column(
-            Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.SpaceBetween
+            Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp, Alignment.SpaceBetween)
         ) {
             Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.primaryContainer) {
-                Icon(icon, contentDescription = null, modifier = Modifier.padding(9.dp), tint = MaterialTheme.colorScheme.primary)
+                Icon(icon, contentDescription = null, modifier = Modifier.padding(8.dp).size(22.dp), tint = MaterialTheme.colorScheme.primary)
             }
-            Text(label, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium)
+            Text(
+                label,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.labelLarge
+            )
         }
     }
 }
