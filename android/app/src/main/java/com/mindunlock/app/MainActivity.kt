@@ -42,6 +42,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Book
@@ -60,6 +62,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -197,6 +201,7 @@ private fun MindUnlockRoot(
     var selectedSubject by rememberSaveable { mutableStateOf("") }
     var selectedChapter by rememberSaveable { mutableStateOf("") }
     var selectedItem by rememberSaveable { mutableStateOf("") }
+    var showTopMenu by rememberSaveable { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val title = when (screen) {
         "subject" -> "موضوع‌ها"
@@ -244,17 +249,44 @@ private fun MindUnlockRoot(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { speech.speak("صفحه $title") }) { Icon(Icons.Default.VolumeUp, contentDescription = "خواندن عنوان صفحه") }
-                    IconButton(onClick = { speech.stop() }) { Icon(Icons.Default.Stop, contentDescription = "توقف صدا") }
                     PersianVoiceInputButton(compact = true) { spokenText ->
                         scope.launch {
                             userDatabase.mindDumpDao().insert(MindDumpEntity(content = spokenText, category = "thought"))
                             screen = "inbox"
                         }
                     }
-                    if (screen == "home") IconButton(onClick = { screen = "sync" }) { Icon(Icons.Default.CloudDownload, contentDescription = "اتصال به ویندوز") }
-                    IconButton(onClick = onLockApp) { Icon(Icons.Default.Lock, contentDescription = "قفل برنامه") }
-                    IconButton(onClick = { screen = "settings" }) { Icon(Icons.Default.Settings, contentDescription = "تنظیمات") }
+                    Box {
+                        IconButton(onClick = { showTopMenu = true }) {
+                            Icon(Icons.Default.MoreHoriz, contentDescription = "منوی ابزارها")
+                        }
+                        DropdownMenu(expanded = showTopMenu, onDismissRequest = { showTopMenu = false }) {
+                            DropdownMenuItem(
+                                text = { Text("خواندن عنوان صفحه") },
+                                leadingIcon = { Icon(Icons.Default.VolumeUp, contentDescription = null) },
+                                onClick = { showTopMenu = false; speech.speak("صفحه $title") }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("توقف صدا") },
+                                leadingIcon = { Icon(Icons.Default.Stop, contentDescription = null) },
+                                onClick = { showTopMenu = false; speech.stop() }
+                            )
+                            if (screen == "home") DropdownMenuItem(
+                                text = { Text("اتصال به ویندوز") },
+                                leadingIcon = { Icon(Icons.Default.CloudDownload, contentDescription = null) },
+                                onClick = { showTopMenu = false; screen = "sync" }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("تنظیمات") },
+                                leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) },
+                                onClick = { showTopMenu = false; screen = "settings" }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("قفل برنامه") },
+                                leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
+                                onClick = { showTopMenu = false; onLockApp() }
+                            )
+                        }
+                    }
                 }
             )
         },
@@ -301,7 +333,10 @@ private fun MindUnlockRoot(
 
 @Composable
 private fun MoreScreen(onNavigate: (String) -> Unit) {
-    Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
         Text("ابزارهای آموزشی روی گوشی", style = MaterialTheme.typography.titleLarge)
         Text("همهٔ داده‌های این بخش‌ها روی همین گوشی ذخیره می‌شوند و پس از دانلود فصل‌ها بدون اینترنت در دسترس‌اند.", style = MaterialTheme.typography.bodyMedium)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
