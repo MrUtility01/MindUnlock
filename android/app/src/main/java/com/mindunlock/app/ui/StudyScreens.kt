@@ -169,7 +169,7 @@ fun DashboardScreen(
     userDb: UserDatabase,
     speech: PersianSpeech,
     onNavigate: (String) -> Unit,
-    onContinue: (String) -> Unit
+    onContinue: (String, String?) -> Unit
 ) {
     val chapters by db.chapterDao().observeAll().collectAsState(initial = emptyList())
     val contentItems by db.contentItemDao().observeAll().collectAsState(initial = emptyList())
@@ -182,7 +182,13 @@ fun DashboardScreen(
     val laterTopics by userDb.laterTopicDao().observeAll().collectAsState(initial = emptyList())
     val completed = progress.count { it.completed }
     val lastSession = sessions.firstOrNull()
-    val last = lastSession?.chapterId?.let { chapterId -> chapters.firstOrNull { it.id == chapterId } }
+    val lastReadProgress = progress.filter { it.lastOpenedAt != null }
+        .maxByOrNull { it.lastOpenedAt ?: 0L }
+    val lastReadItem = lastReadProgress?.let { saved ->
+        contentItems.firstOrNull { it.uid == saved.itemUid && it.sourceStatus == "verified" }
+    }
+    val last = lastReadItem?.chapterId?.let { chapterId -> chapters.firstOrNull { it.id == chapterId } }
+        ?: lastSession?.chapterId?.let { chapterId -> chapters.firstOrNull { it.id == chapterId } }
         ?: chapters.firstOrNull()
     val now = System.currentTimeMillis()
     val zone = ZoneId.systemDefault()
@@ -212,14 +218,14 @@ fun DashboardScreen(
         dueReviews > 0 -> "${PersianDate.toPersianDigits(dueReviews.toString())} مورد برای مرور آماده است."
         todayTasks.isNotEmpty() -> "${PersianDate.toPersianDigits(todayTasks.size.toString())} کار زمان‌بندی‌شده برای امروز داری."
         activeTopic != null -> "به موضوعی که برای پیگیری انتخاب کرده‌ای برگرد."
-        last != null -> "از آخرین فصل مطالعه‌شده ادامه بده."
+        last != null -> "از آخرین مطلب بازشده ادامه بده."
         else -> "یک موضوع یا فصل برای شروع انتخاب کن."
     }
     val nextAction = when {
         dueReviews > 0 -> { { onNavigate("review") } }
         todayTasks.isNotEmpty() -> { { onNavigate("planner") } }
         activeTopic != null -> { { onNavigate("later") } }
-        last != null -> { { onContinue(last.id) } }
+        last != null -> { { onContinue(last.id, lastReadItem?.uid) } }
         else -> { { onNavigate("courses") } }
     }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -603,6 +609,14 @@ fun ReaderScreen(db: AppDatabase, userDb: UserDatabase, itemUid: String, speech:
         return
     }
     val current = item!!
+    LaunchedEffect(current.uid, current.sourceStatus) {
+        if (current.sourceStatus == "verified") {
+            val openedAt = System.currentTimeMillis()
+            val saved = userDb.progressDao().get(current.uid)
+                ?: ProgressEntity(itemUid = current.uid, chapterId = current.chapterId)
+            userDb.progressDao().upsert(saved.copy(lastOpenedAt = openedAt))
+        }
+    }
     val metadata = runCatching { JsonParser.parseString(current.metadataJson ?: "{}").asJsonObject }.getOrNull()
     val options = readStringArray(current.optionsJson ?: metadata?.get("options")?.toString())
     val correctIndex = metadata?.get("correct_index")?.let { runCatching { it.asInt }.getOrNull() }
