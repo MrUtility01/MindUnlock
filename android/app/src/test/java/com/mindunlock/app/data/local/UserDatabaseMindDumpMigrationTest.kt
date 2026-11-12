@@ -2,6 +2,8 @@ package com.mindunlock.app.data.local
 
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
+import androidx.room.Room
+import androidx.room.withTransaction
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -21,6 +23,67 @@ class UserDatabaseMindDumpMigrationTest {
     @After
     fun cleanUp() {
         context.deleteDatabase(databaseName)
+    }
+
+    @Test
+    fun mindDumpConversionsCommitAtomicallyAndRollbackOnFailure() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(context, UserDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+        try {
+            val rollbackId = db.mindDumpDao().insert(
+                MindDumpEntity(content = "ورودی برای آزمون rollback", category = "thought")
+            )
+
+            runCatching {
+                db.withTransaction {
+                    db.noteDao().upsert(
+                        NoteEntity(title = "یادداشت موقت", body = "نباید بعد از rollback باقی بماند")
+                    )
+                    db.mindDumpDao().updateStatus(
+                        rollbackId, "note", 2_000L, null
+                    )
+                    error("simulate failure between conversion writes")
+                }
+            }
+
+            val rolledBackEntry = db.mindDumpDao().getAll().single()
+            assertEquals("inbox", rolledBackEntry.status)
+            assertEquals(0, db.noteDao().getAll().size)
+
+            val taskId = db.mindDumpDao().insert(
+                MindDumpEntity(content = "ورودی تبدیل‌شده به کار", category = "task")
+            )
+            var linkedTaskId = 0L
+            db.withTransaction {
+                linkedTaskId = db.studyTaskDao().upsert(
+                    StudyTaskEntity(title = "ورودی تبدیل‌شده به کار", details = "جزئیات")
+                )
+                db.mindDumpDao().updateStatus(taskId, "task", 3_000L, linkedTaskId)
+            }
+            val convertedTask = db.mindDumpDao().getAll().first { it.id == taskId }
+            assertEquals("task", convertedTask.status)
+            assertEquals(linkedTaskId, convertedTask.linkedTaskId)
+            assertEquals("ورودی تبدیل‌شده به کار", db.studyTaskDao().getAll().single().title)
+
+            val laterId = db.mindDumpDao().insert(
+                MindDumpEntity(content = "موضوع برای بعد", category = "learning")
+            )
+            db.withTransaction {
+                db.laterTopicDao().insert(
+                    LaterTopicEntity(
+                        title = "موضوع برای بعد",
+                        details = "متن کامل ورودی",
+                        sourceMindDumpId = laterId
+                    )
+                )
+                db.mindDumpDao().updateStatus(laterId, "later", 4_000L, null)
+            }
+            assertEquals("later", db.mindDumpDao().getAll().first { it.id == laterId }.status)
+            assertEquals(laterId, db.laterTopicDao().getAll().single().sourceMindDumpId)
+        } finally {
+            db.close()
+        }
     }
 
     @Test
