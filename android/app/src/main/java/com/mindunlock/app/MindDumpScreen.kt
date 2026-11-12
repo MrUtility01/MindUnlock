@@ -51,6 +51,7 @@ fun MindDumpScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
     var category by rememberSaveable { mutableStateOf("thought") }
     var showArchived by rememberSaveable { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
+    var isSavingDraft by remember { mutableStateOf(false) }
     var processingEntryIds by remember { mutableStateOf(emptySet<Long>()) }
     var pendingDeleteEntryId by rememberSaveable { mutableStateOf<Long?>(null) }
     fun runEntryAction(entryId: Long, successMessage: String, action: suspend () -> Unit) {
@@ -121,16 +122,27 @@ fun MindDumpScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
             onClick = {
                 val value = draft.trim()
                 if (value.isNotEmpty()) {
-                    scope.launch {
-                        userDatabase.mindDumpDao().insert(MindDumpEntity(content = value, category = category))
-                        draft = ""
-                        message = "به صندوق ورودی اضافه شد."
+                    if (!isSavingDraft) {
+                        isSavingDraft = true
+                        scope.launch {
+                            try {
+                                userDatabase.mindDumpDao().insert(MindDumpEntity(content = value, category = category))
+                                if (draft.trim() == value) draft = ""
+                                message = "به صندوق ورودی اضافه شد."
+                            } catch (cancelled: CancellationException) {
+                                throw cancelled
+                            } catch (_: Exception) {
+                                message = "ثبت ورودی انجام نشد؛ متن همچنان در کادر باقی مانده است."
+                            } finally {
+                                isSavingDraft = false
+                            }
+                        }
                     }
                 }
             },
-            enabled = draft.isNotBlank(),
+            enabled = draft.isNotBlank() && !isSavingDraft,
             modifier = Modifier.fillMaxWidth()
-        ) { Text("ثبت در صندوق ورودی") }
+        ) { Text(if (isSavingDraft) "در حال ثبت…" else "ثبت در صندوق ورودی") }
         if (message.isNotBlank()) Text(message, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(selected = !showArchived, onClick = { showArchived = false }, label = { Text("ورودی‌ها (" + entries.count { it.status != "archived" } + ")") })
