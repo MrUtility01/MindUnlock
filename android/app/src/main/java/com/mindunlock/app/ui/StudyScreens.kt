@@ -1685,8 +1685,8 @@ fun ProgressScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeech)
     var feedbackEnergyBefore by rememberSaveable { mutableIntStateOf(3) }
     var feedbackEnergyAfter by rememberSaveable { mutableIntStateOf(3) }
     var feedbackNote by rememberSaveable { mutableStateOf("") }
-    val snapshot = remember(chapters, items, progress, tasks, sessions) {
-        LearningAnalytics.build(chapters, items, progress, tasks, sessions, System.currentTimeMillis())
+    val snapshot = remember(chapters, items, progress, tasks, sessions, feedbacks) {
+        LearningAnalytics.build(chapters, items, progress, tasks, sessions, System.currentTimeMillis(), sessionFeedback = feedbacks)
     }
     val completion = if (snapshot.totalItems == 0) 0f else snapshot.completedItems.toFloat() / snapshot.totalItems
     val maxActivity = snapshot.recentActivity.maxOfOrNull { it.sessionMinutes }?.coerceAtLeast(1L) ?: 1L
@@ -1723,6 +1723,43 @@ fun ProgressScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeech)
             MetricCard("جلسه‌های پایان‌یافته", snapshot.completedSessions.toString(), Modifier.weight(1f))
         }
         MetricCard("میانگین هر جلسه", "${snapshot.averageSessionMinutes} دقیقه", Modifier.fillMaxWidth())
+        val reflection = snapshot.sessionReflection
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("خلاصه بازخوردهای ثبت‌شده", fontWeight = FontWeight.SemiBold)
+                if (reflection.feedbackCount == 0) {
+                    Text("هنوز بازخوردی ثبت نشده است؛ پس از چند جلسه می‌توان روند تجربه یادگیری را بررسی کرد.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } else {
+                    Text("${reflection.feedbackCount} بازخورد از جلسه‌های پایان‌یافته")
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        MetricCard("میانگین درک", "${reflection.averageComprehensionTenths?.let { "%.1f".format(java.util.Locale.ROOT, it / 10.0) } ?: "—"}/۵", Modifier.weight(1f))
+                        MetricCard("میانگین تمرکز", "${reflection.averageFocusTenths?.let { "%.1f".format(java.util.Locale.ROOT, it / 10.0) } ?: "—"}/۵", Modifier.weight(1f))
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        MetricCard("سختی ادراک‌شده", "${reflection.averageDifficultyTenths?.let { "%.1f".format(java.util.Locale.ROOT, it / 10.0) } ?: "—"}/۵", Modifier.weight(1f))
+                        MetricCard("تمرکز پایین", reflection.lowFocusSessions.toString(), Modifier.weight(1f))
+                    }
+                    val energyChange = reflection.averageEnergyChangeTenths
+                    Text(
+                        "میانگین تغییر انرژی: ${energyChange?.let { (if (it > 0) "+" else "") + "%.1f".format(java.util.Locale.ROOT, it / 10.0) } ?: "داده کافی نیست"}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text("روند هفت‌روزه بازخورد", fontWeight = FontWeight.Medium)
+                    reflection.recentDays.forEach { day ->
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("${PersianDate.format(day.date)} · ${day.feedbackCount} جلسه", style = MaterialTheme.typography.bodySmall)
+                            Text(
+                                day.averageFocusTenths?.let { "تمرکز ${"%.1f".format(java.util.Locale.ROOT, it / 10.0)}/۵" } ?: "بدون بازخورد",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+                Text("این شاخص‌ها خوداظهاری‌اند؛ آن‌ها را با دقت آزمون یا کیفیت اجرای آزمایشگاه یکی ندان.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
         Text("بازخورد تجربه یادگیری", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         Text("این بازخورد خوداظهاری است و از امتیاز آزمون یا سنجش عملکرد جدا نگه داشته می‌شود.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         val completedSessionsForFeedback = sessions.filter { it.endedAt != null }.take(5)
