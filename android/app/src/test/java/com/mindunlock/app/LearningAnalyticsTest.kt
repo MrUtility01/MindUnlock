@@ -50,6 +50,44 @@ class LearningAnalyticsTest {
     }
 
     @Test
+    fun derivesStudyTimeFromStartAndEndTimestampsInsteadOfCachedDuration() {
+        val accurate = LearningSessionEntity(
+            id = 31,
+            topicTitle = "Timestamp source",
+            startedAt = now - 60_000L,
+            endedAt = now,
+            durationSeconds = 99_999L
+        )
+        val invalidReversed = LearningSessionEntity(
+            id = 32,
+            topicTitle = "Invalid clock range",
+            startedAt = now,
+            endedAt = now - 1_000L,
+            durationSeconds = 50_000L
+        )
+        val active = LearningSessionEntity(
+            id = 33,
+            topicTitle = "Still active",
+            startedAt = now - 120_000L
+        )
+
+        val result = LearningAnalytics.build(
+            chapters = emptyList(),
+            items = emptyList(),
+            progress = emptyList(),
+            tasks = emptyList(),
+            sessions = listOf(accurate, invalidReversed, active),
+            now = now,
+            zone = ZoneOffset.UTC
+        )
+
+        assertEquals(1, result.completedSessions)
+        assertEquals(1L, result.totalStudyMinutes)
+        assertEquals(1L, result.averageSessionMinutes)
+        assertEquals(1L, result.recentActivity.last().sessionMinutes)
+    }
+
+    @Test
     fun reportsOverdueAndCompletedTasksWithoutReadingPrivateJournalOrInbox() {
         val tasks = listOf(
             StudyTaskEntity(id = 1, title = "Overdue", dueAt = now - 1),
