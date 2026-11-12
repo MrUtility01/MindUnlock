@@ -127,10 +127,32 @@ class UserDataBackupCodecTest {
     }
 
     @Test
-    fun rejectsTooShortEncryptionPassword() {
+    fun rejectsTooShortEncryptionPasswordAndClearsPasswordBuffer() {
+        val password = "short".toCharArray()
         assertThrows(IllegalArgumentException::class.java) {
-            UserDataBackupCodec.encrypt("{}", "short".toCharArray())
+            UserDataBackupCodec.encrypt("{}", password)
         }
+        assertEquals(true, password.all { it == Char.MIN_VALUE })
+    }
+
+    @Test
+    fun clearsPasswordBufferWhenEncryptedBackupValidationFails() {
+        val password = "long-enough-password".toCharArray()
+        val malformedEncrypted = """{"format":"mindunlock-encrypted-backup-v1","iterations":1}"""
+
+        assertThrows(IllegalArgumentException::class.java) {
+            UserDataBackupCodec.decryptIfEncrypted(malformedEncrypted, password)
+        }
+        assertEquals(true, password.all { it == Char.MIN_VALUE })
+    }
+
+    @Test
+    fun clearsPasswordBufferWhenInputIsNotEncrypted() {
+        val password = "unused-password".toCharArray()
+        val plainJson = """{"schemaVersion":1}"""
+
+        assertEquals(plainJson, UserDataBackupCodec.decryptIfEncrypted(plainJson, password))
+        assertEquals(true, password.all { it == Char.MIN_VALUE })
     }
 
     @Test
