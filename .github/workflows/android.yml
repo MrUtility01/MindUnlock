@@ -332,7 +332,7 @@ jobs:
           path = Path(sys.argv[1])
           source = path.read_text(encoding="utf-8")
           marker = "    val lastSession = sessions.firstOrNull()"
-          addition = marker + "\\n    val lastReadProgress = progress.filter { it.lastOpenedAt != null }.maxByOrNull { it.lastOpenedAt ?: 0L }"
+          addition = marker + "\n    val lastReadProgress = progress.filter { it.lastOpenedAt != null }.maxByOrNull { it.lastOpenedAt ?: 0L }"
           if "val lastReadProgress =" not in source:
               if marker not in source:
                   raise SystemExit("Generated dashboard session marker not found; refusing incomplete resume patch")
