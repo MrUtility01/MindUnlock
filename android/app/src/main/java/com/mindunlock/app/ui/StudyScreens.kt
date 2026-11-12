@@ -580,6 +580,7 @@ fun SubjectListScreen(db: AppDatabase, onSubjectClick: (String) -> Unit) {
         .filter { it.key.contains(query, true) }
     Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth(), label = { Text("جست‌وجوی موضوع") }, singleLine = true)
+        PersianVoiceInputButton(compact = true) { spoken -> query = listOf(query, spoken).filter { it.isNotBlank() }.joinToString(" ") }
         Text("${subjects.size} موضوع · ${chapters.size} فصل · ${allItemsCount} مطلب", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         LazyColumn(verticalArrangement = Arrangement.spacedBy(9.dp)) {
             items(subjects, key = { it.key }) { entry ->
@@ -611,6 +612,7 @@ fun ChapterListScreen(db: AppDatabase, subject: String, onChapterClick: (String)
     Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(subject, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth(), label = { Text("جست‌وجو در فصل‌ها") }, singleLine = true)
+        PersianVoiceInputButton(compact = true) { spoken -> query = listOf(query, spoken).filter { it.isNotBlank() }.joinToString(" ") }
         LazyColumn(verticalArrangement = Arrangement.spacedBy(9.dp)) {
             items(filtered, key = { it.id }) { chapter ->
                 Card(onClick = { onChapterClick(chapter.id) }, modifier = Modifier.fillMaxWidth()) {
@@ -681,6 +683,7 @@ fun ChapterContentScreen(db: AppDatabase, chapterId: String, onItemClick: (Strin
         if (!chapter?.description.isNullOrBlank()) Text(chapter?.description.orEmpty(), style = MaterialTheme.typography.bodySmall)
         Spacer(Modifier.height(8.dp))
         OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth(), label = { Text("جست‌وجو در مطالب") }, singleLine = true)
+        PersianVoiceInputButton(compact = true) { spoken -> query = listOf(query, spoken).filter { it.isNotBlank() }.joinToString(" ") }
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             kindOptions.forEach { option -> FilterChip(selected = kind == option, onClick = { kind = option }, label = { Text(option) }) }
         }
@@ -1419,6 +1422,7 @@ fun NotesScreen(userDb: UserDatabase, speech: PersianSpeech) {
             ) { Icon(Icons.Default.Download, null); Text("خروجی همه") }
         }
         OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth(), label = { Text("جست‌وجو در یادداشت‌ها") }, singleLine = true)
+        PersianVoiceInputButton(compact = true) { spoken -> query = listOf(query, spoken).filter { it.isNotBlank() }.joinToString(" ") }
         if (exportMessage.isNotBlank()) Text(exportMessage, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
             if (visible.isEmpty()) {
@@ -1498,6 +1502,7 @@ fun LabsScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeech, onO
             MetricCard("پروژه‌ها", projectTasks.size.toString(), Modifier.weight(1f))
         }
         OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth(), label = { Text("جست‌وجوی سناریو، دستور یا موضوع") }, singleLine = true)
+        PersianVoiceInputButton(compact = true) { spoken -> query = listOf(query, spoken).filter { it.isNotBlank() }.joinToString(" ") }
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             listOf("همه", "آزمایشگاه", "تمرین", "دستور", "مثال", "پروژه").forEach { label ->
                 FilterChip(selected = selected == label, onClick = { selected = label }, label = { Text(label) })
@@ -1949,6 +1954,7 @@ fun BookmarksScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeech
     Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("نشانک‌ها · " + bookmarks.size, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth(), label = { Text("جست‌وجو در نشانک‌ها") }, singleLine = true)
+        PersianVoiceInputButton(compact = true) { spoken -> query = listOf(query, spoken).filter { it.isNotBlank() }.joinToString(" ") }
         LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (visible.isEmpty()) {
                 item { EmptyMessage(if (saved.isEmpty()) "هنوز نشانکی ذخیره نشده است." else "نشانکی با این عبارت پیدا نشد.") }
