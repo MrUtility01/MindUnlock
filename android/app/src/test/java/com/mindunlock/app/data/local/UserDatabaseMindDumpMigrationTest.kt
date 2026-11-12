@@ -119,6 +119,38 @@ class UserDatabaseMindDumpMigrationTest {
             assertEquals("saved answer after migration", migratedAnswer.answer)
             assertEquals(12_000L, migratedAnswer.updatedAt)
 
+            // The composite key must update one answer without overwriting another question.
+            migrated.labQuestionResponseDao().upsert(
+                LabQuestionResponseEntity(
+                    itemUid = "lab-vlan-01",
+                    questionIndex = 0,
+                    answer = "edited answer",
+                    updatedAt = 13_000L
+                )
+            )
+            migrated.labQuestionResponseDao().upsert(
+                LabQuestionResponseEntity(
+                    itemUid = "lab-vlan-01",
+                    questionIndex = 1,
+                    answer = "second answer",
+                    updatedAt = 14_000L
+                )
+            )
+            val savedLabAnswers = migrated.labQuestionResponseDao().getAll()
+                .filter { it.itemUid == "lab-vlan-01" }
+                .sortedBy { it.questionIndex }
+            assertEquals(2, savedLabAnswers.size)
+            assertEquals("edited answer", savedLabAnswers[0].answer)
+            assertEquals(13_000L, savedLabAnswers[0].updatedAt)
+            assertEquals("second answer", savedLabAnswers[1].answer)
+
+            migrated.labQuestionResponseDao().delete("lab-vlan-01", 0)
+            val remainingLabAnswers = migrated.labQuestionResponseDao()
+                .observeByItem("lab-vlan-01").first()
+            assertEquals(1, remainingLabAnswers.size)
+            assertEquals(1, remainingLabAnswers.single().questionIndex)
+            assertEquals("second answer", remainingLabAnswers.single().answer)
+
             val sessionId = migrated.learningSessionDao().insert(
                 LearningSessionEntity(
                     chapterId = "network-basics",
