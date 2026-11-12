@@ -33,8 +33,6 @@ import com.mindunlock.app.data.local.UserDatabase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.text.DateFormat
-import java.util.Date
 
 @Composable
 fun BackupRestoreScreen(userDb: UserDatabase) {
@@ -184,7 +182,7 @@ fun BackupRestoreScreen(userDb: UserDatabase) {
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("این عملیات داده‌های فعلی را با محتوای فایل جایگزین می‌کند.")
-                    Text("تاریخ پشتیبان: ${DateFormat.getDateTimeInstance().format(Date(document.exportedAt))}")
+                    Text("تاریخ پشتیبان: ${PersianDate.format(document.exportedAt)}")
                     Text("نسخه برنامه هنگام ساخت: ${document.appVersion.ifBlank { "نامشخص" }}")
                     Text("مجموع رکوردها: ${payload.totalRecords}")
                     Text("پیشرفت: ${payload.progress.size} · یادداشت: ${payload.notes.size} · نشانک: ${payload.bookmarks.size}")
