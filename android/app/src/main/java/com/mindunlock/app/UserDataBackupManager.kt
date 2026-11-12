@@ -29,7 +29,8 @@ object UserDataBackupManager {
                 learningSessions = userDb.learningSessionDao().getAll(),
                 labQuestionResponses = userDb.labQuestionResponseDao().getAll(),
                 learningProfile = listOfNotNull(userDb.learningProfileDao().get()),
-                learningSessionFeedback = userDb.learningSessionFeedbackDao().getAll()
+                learningSessionFeedback = userDb.learningSessionFeedbackDao().getAll(),
+                learningStageProgress = userDb.learningStageProgressDao().getAll()
             )
         }
         val version = runCatching {
@@ -64,6 +65,7 @@ object UserDataBackupManager {
             userDb.labQuestionResponseDao().deleteAll()
             userDb.learningProfileDao().deleteAll()
             userDb.learningSessionFeedbackDao().deleteAll()
+            userDb.learningStageProgressDao().deleteAll()
 
             document.payload.progress.takeIf { it.isNotEmpty() }?.let { userDb.progressDao().upsertAll(it) }
             document.payload.notes.takeIf { it.isNotEmpty() }?.let { userDb.noteDao().upsertAll(it) }
@@ -77,6 +79,7 @@ object UserDataBackupManager {
             document.payload.labQuestionResponses.takeIf { it.isNotEmpty() }?.let { userDb.labQuestionResponseDao().upsertAll(it) }
             document.payload.learningProfile.singleOrNull()?.let { userDb.learningProfileDao().upsert(it) }
             document.payload.learningSessionFeedback.takeIf { it.isNotEmpty() }?.let { userDb.learningSessionFeedbackDao().upsertAll(it) }
+            document.payload.learningStageProgress.takeIf { it.isNotEmpty() }?.let { userDb.learningStageProgressDao().upsertAll(it) }
         }
     }
 }
