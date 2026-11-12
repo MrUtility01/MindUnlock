@@ -131,6 +131,38 @@ class UserDatabaseMindDumpMigrationTest {
             assertEquals(2, db.mindDumpDao().getAll().size)
             assertEquals("موضوع مستقل\n\nبدون منبع قبلی", db.mindDumpDao().getAll().last().content)
             assertEquals(0, db.laterTopicDao().getAll().size)
+
+            // A stale source ID must not cause the topic text to be lost.
+            val staleSourceTopicId = db.laterTopicDao().insert(
+                LaterTopicEntity(
+                    title = "بازیابی پیوند خراب",
+                    details = "این متن باید بازیابی شود",
+                    sourceMindDumpId = 999_999L
+                )
+            )
+            db.withTransaction {
+                val topic = db.laterTopicDao().getAll().first { it.id == staleSourceTopicId }
+                val sourceExists = topic.sourceMindDumpId != null &&
+                    db.mindDumpDao().getAll().any { it.id == topic.sourceMindDumpId }
+                if (sourceExists) {
+                    db.mindDumpDao().updateStatus(
+                        topic.sourceMindDumpId!!, "inbox", 12_000L, null
+                    )
+                } else {
+                    db.mindDumpDao().insert(
+                        MindDumpEntity(
+                            content = listOf(topic.title, topic.details)
+                                .filter { it.isNotBlank() }.joinToString("\\n\\n"),
+                            category = "learning"
+                        )
+                    )
+                }
+                db.laterTopicDao().delete(staleSourceTopicId)
+            }
+            val recovered = db.mindDumpDao().getAll().last()
+            assertEquals("بازیابی پیوند خراب\\n\\nاین متن باید بازیابی شود", recovered.content)
+            assertEquals(3, db.mindDumpDao().getAll().size)
+            assertEquals(0, db.laterTopicDao().getAll().size)
         } finally {
             db.close()
         }
