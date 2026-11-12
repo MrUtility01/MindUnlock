@@ -244,6 +244,7 @@ fun KnowledgeArchiveScreen(db: AppDatabase, speech: PersianSpeech, onOpenItem: (
                 Card(onClick = { onOpenItem(item.uid) }, modifier = Modifier.fillMaxWidth()) {
                     Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(item.title ?: "بدون عنوان", fontWeight = FontWeight.SemiBold)
+                        OutlinedButton(onClick = { speech.speak(cleanHtml(listOfNotNull(item.title, item.summary).joinToString(". "))) }, enabled = speech.ready.value) { Text("خواندن خلاصه") }
                         Text("${kindLabel(item.type)} · $chapterTitle", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                         if (!item.summary.isNullOrBlank()) {
                             Text(cleanHtml(item.summary), maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
@@ -1439,6 +1440,7 @@ fun NotesScreen(userDb: UserDatabase, speech: PersianSpeech) {
                             }
                         }
                         Text(note.body, maxLines = 4, overflow = TextOverflow.Ellipsis)
+                        OutlinedButton(onClick = { speech.speak(note.title + ". " + note.body) }, enabled = speech.ready.value) { Text("خواندن یادداشت") }
                         if (!note.chapterId.isNullOrBlank()) Text("متصل به فصل", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                     }
                 }
@@ -1524,6 +1526,7 @@ fun LabsScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeech, onO
                         Text("پروژه شخصی", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                         Text(task.title, fontWeight = FontWeight.SemiBold)
                         if (task.details.isNotBlank()) Text(task.details, style = MaterialTheme.typography.bodySmall)
+                        IconButton(onClick = { speech.speak(task.title + ". " + task.details) }, enabled = speech.ready.value) { Icon(Icons.Default.VolumeUp, contentDescription = "خواندن کار") }
                         Text(if (task.completed) "تکمیل‌شده" else "در حال انجام", style = MaterialTheme.typography.labelSmall)
                     }
                 }
