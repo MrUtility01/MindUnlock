@@ -423,11 +423,20 @@ fun DashboardScreen(
         }
         Text("ادامهٔ مطالعه", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         if (last != null) {
-            Card(onClick = { onContinue(last.id) }, modifier = Modifier.fillMaxWidth()) {
+            Card(
+                onClick = {
+                    onContinue(lastReadItem?.let { "item:${it.uid}" } ?: "chapter:${last.id}")
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
                 Row(Modifier.fillMaxWidth().padding(15.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Text(last.title, fontWeight = FontWeight.SemiBold)
-                        Text(last.groupName ?: "بدون موضوع", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                        Text(lastReadItem?.title ?: last.title, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            if (lastReadItem != null) "آخرین مطلب بازشده · ${last.title}" else (last.groupName ?: "بدون موضوع"),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
                         if (lastChapterItems.isNotEmpty()) {
                             val percent = (completedLastChapterItems * 100) / lastChapterItems.size
                             Text(
