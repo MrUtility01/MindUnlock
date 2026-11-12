@@ -977,11 +977,18 @@ fun FlashcardsScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeec
             options.isNotEmpty() && correct != null && correct in options.indices
     }
     val now = System.currentTimeMillis()
-    val dueCandidates = reviewCandidates.filter { item ->
-        progress.firstOrNull { it.itemUid == item.uid }?.dueAt?.let { it <= now } ?: true
+    val progressByItem = remember(progress) { progress.associateBy { it.itemUid } }
+    val dueCandidates = remember(reviewCandidates, progressByItem, now) {
+        reviewCandidates.filter { item ->
+            progressByItem[item.uid]?.dueAt?.let { it <= now } ?: true
+        }.sortedWith(
+            compareBy<ContentItemEntity> { progressByItem[it.uid]?.dueAt ?: 0L }
+                .thenBy { progressByItem[it.uid]?.quality ?: -1 }
+                .thenBy { it.title.orEmpty() }
+        )
     }
     val weakCount = reviewCandidates.count { item ->
-        val record = progress.firstOrNull { it.itemUid == item.uid }
+        val record = progressByItem[item.uid]
         record != null && (record.wrong > record.correct || record.quality < 3)
     }
     val deck = if (reviewOnly) dueCandidates else flashcards
