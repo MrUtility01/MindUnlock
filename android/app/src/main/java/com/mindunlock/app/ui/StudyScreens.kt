@@ -1127,7 +1127,7 @@ fun PlannerScreen(userDb: UserDatabase, speech: PersianSpeech) {
     val context = LocalContext.current
     var title by rememberSaveable { mutableStateOf("") }
     var details by rememberSaveable { mutableStateOf("") }
-    var whenText by rememberSaveable { mutableStateOf(LocalDateTime.now().plusHours(2).format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))) }
+    var whenText by rememberSaveable { mutableStateOf(PersianDate.formatInput(LocalDateTime.now().plusHours(2))) }
     var type by rememberSaveable { mutableStateOf("task") }
     var reminder by rememberSaveable { mutableStateOf(true) }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -1140,11 +1140,10 @@ fun PlannerScreen(userDb: UserDatabase, speech: PersianSpeech) {
             FilterChip(selected = type == "task", onClick = { type = "task" }, label = { Text("کار مطالعاتی") })
             FilterChip(selected = type == "project", onClick = { type = "project" }, label = { Text("پروژه") })
         }
-        OutlinedTextField(whenText, { whenText = it }, Modifier.fillMaxWidth(), label = { Text("تاریخ و ساعت: yyyy-MM-dd HH:mm") }, singleLine = true)
+        OutlinedTextField(whenText, { whenText = it }, Modifier.fillMaxWidth(), label = { Text("تاریخ و ساعت شمسی: ۱۴۰۵/۰۸/۲۱ ۰۹:۳۰ (میلادی ISO نیز پذیرفته می‌شود)") }, singleLine = true)
         Row(verticalAlignment = Alignment.CenterVertically) { Switch(checked = reminder, onCheckedChange = { reminder = it }); Text("یادآور اعلان‌دار") }
         Button(enabled = title.isNotBlank(), onClick = {
-            val date = runCatching { LocalDateTime.parse(whenText, DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")) }.getOrNull()
-            val due = date?.atZone(ZoneId.systemDefault())?.toInstant()?.toEpochMilli()
+            val due = PersianDate.parseDateTime(whenText)
             scope.launch {
                 val id = userDb.studyTaskDao().upsert(StudyTaskEntity(title = title.trim(), details = details.trim(), taskType = type, dueAt = due, remindAt = if (reminder) due else null))
                 if (reminder && due != null) scheduleReminder(context, id, title.trim(), due)
@@ -1159,7 +1158,7 @@ fun PlannerScreen(userDb: UserDatabase, speech: PersianSpeech) {
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                         Text(task.title, fontWeight = FontWeight.SemiBold)
                         Text(if (task.taskType == "project") "پروژه" else "کار مطالعاتی", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall)
-                        if (task.dueAt != null) Text(java.text.SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.getDefault()).format(java.util.Date(task.dueAt)), style = MaterialTheme.typography.bodySmall)
+                        if (task.dueAt != null) Text(PersianDate.format(task.dueAt), style = MaterialTheme.typography.bodySmall)
                         if (task.details.isNotBlank()) Text(task.details, style = MaterialTheme.typography.bodySmall)
                     }
                     Checkbox(task.completed, onCheckedChange = { checked -> scope.launch { userDb.studyTaskDao().upsert(task.copy(completed = checked)) } })
