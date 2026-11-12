@@ -37,6 +37,7 @@ object LearningPathPolicy {
 
 enum class ResumeActionKind {
     REVIEW,
+    OVERDUE_TASKS,
     TODAY_TASKS,
     ACTIVE_TOPIC,
     RESUME_ITEM,
@@ -55,6 +56,7 @@ data class ResumeAction(
 object ResumeActionPolicy {
     fun select(
         dueReviewCount: Int,
+        overdueTaskCount: Int,
         todayTaskCount: Int,
         activeTopicTitle: String?,
         lastReadItemUid: String?,
@@ -65,6 +67,11 @@ object ResumeActionPolicy {
             ResumeActionKind.REVIEW,
             "مرور مطالب سررسیدشده",
             "$dueReviewCount مورد برای مرور آماده است."
+        )
+        overdueTaskCount > 0 -> ResumeAction(
+            ResumeActionKind.OVERDUE_TASKS,
+            "رسیدگی به کارهای عقب‌افتاده",
+            "$overdueTaskCount کار از موعد خود گذشته است."
         )
         todayTaskCount > 0 -> ResumeAction(
             ResumeActionKind.TODAY_TASKS,
