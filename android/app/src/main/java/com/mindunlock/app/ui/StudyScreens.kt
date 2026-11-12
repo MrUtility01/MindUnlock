@@ -376,18 +376,20 @@ fun DashboardScreen(
             MetricCard("کارهای امروز", todayTasks.size.toString(), Modifier.weight(1f))
             MetricCard("مرورهای سررسید", dueReviews.toString(), Modifier.weight(1f))
         }
-        Text("اولویت بعدی", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-        Card(onClick = { nextAction() }, modifier = Modifier.fillMaxWidth()) {
-            Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(nextActionTitle, fontWeight = FontWeight.SemiBold)
-                    Text(nextActionDescription, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                Icon(Icons.Default.PlayArrow, contentDescription = "رفتن به اقدام بعدی")
-            }
-        }
         val lastCompletedSession = sessions.firstOrNull { it.endedAt != null }
         val lastSessionReflection = lastCompletedSession?.let { session -> sessionFeedback.firstOrNull { it.sessionId == session.id } }
+        if (lastCompletedSession == null) {
+            Text("اولویت بعدی", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Card(onClick = { nextAction() }, modifier = Modifier.fillMaxWidth()) {
+                Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(nextActionTitle, fontWeight = FontWeight.SemiBold)
+                        Text(nextActionDescription, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Icon(Icons.Default.PlayArrow, contentDescription = "رفتن به اقدام بعدی")
+                }
+            }
+        }
         if (lastCompletedSession != null) {
             Text("خلاصه آخرین جلسه", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Card(Modifier.fillMaxWidth()) {
