@@ -495,7 +495,6 @@ fun DashboardScreen(
                     Slider(value = feedbackEnergyAfter.toFloat(), onValueChange = { feedbackEnergyAfter = it.roundToInt().coerceIn(1, 5) }, valueRange = 1f..5f, steps = 3)
                     OutlinedTextField(value = feedbackNote, onValueChange = { if (it.length <= 2000) feedbackNote = it }, label = { Text("یادداشت اختیاری") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
                     PersianVoiceInputButton { spoken -> feedbackNote = listOf(feedbackNote, spoken).filter { it.isNotBlank() }.joinToString("\n").take(2000) }
-                    PersianVoiceInputButton { spoken -> feedbackNote = listOf(feedbackNote, spoken).filter { it.isNotBlank() }.joinToString("\n").take(2000) }
                     Button(onClick = {
                         feedbackScope.launch {
                             userDb.learningSessionFeedbackDao().upsert(
@@ -1903,6 +1902,7 @@ fun ProgressScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeech)
                     Text("انرژی پس از جلسه: ${feedbackEnergyAfter}/۵")
                     Slider(value = feedbackEnergyAfter.toFloat(), onValueChange = { feedbackEnergyAfter = it.roundToInt() }, valueRange = 1f..5f, steps = 3)
                     OutlinedTextField(value = feedbackNote, onValueChange = { if (it.length <= 2000) feedbackNote = it }, label = { Text("یادداشت اختیاری") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
+                    PersianVoiceInputButton { spoken -> feedbackNote = listOf(feedbackNote, spoken).filter { it.isNotBlank() }.joinToString("\n").take(2000) }
                 }
             },
             confirmButton = {
