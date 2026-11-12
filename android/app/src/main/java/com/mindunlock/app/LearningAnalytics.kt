@@ -5,6 +5,7 @@ import com.mindunlock.app.data.local.ContentItemEntity
 import com.mindunlock.app.data.local.ProgressEntity
 import com.mindunlock.app.data.local.StudyTaskEntity
 import com.mindunlock.app.data.local.LearningSessionEntity
+import com.mindunlock.app.data.local.LearningSessionFeedbackEntity
 import com.google.gson.JsonParser
 import java.time.Instant
 import java.time.LocalDate
@@ -32,6 +33,23 @@ data class RecentLearningDay(
     val sessions: Int
 )
 
+data class DailySessionReflection(
+    val date: LocalDate,
+    val feedbackCount: Int,
+    val averageComprehensionTenths: Int?,
+    val averageFocusTenths: Int?
+)
+
+data class SessionReflectionStats(
+    val feedbackCount: Int,
+    val averageComprehensionTenths: Int?,
+    val averageDifficultyTenths: Int?,
+    val averageFocusTenths: Int?,
+    val averageEnergyChangeTenths: Int?,
+    val lowFocusSessions: Int,
+    val recentDays: List<DailySessionReflection>
+)
+
 data class LearningAnalyticsSnapshot(
     val totalItems: Int,
     val completedItems: Int,
@@ -47,6 +65,7 @@ data class LearningAnalyticsSnapshot(
     val totalStudyMinutes: Long,
     val completedSessions: Int,
     val averageSessionMinutes: Long,
+    val sessionReflection: SessionReflectionStats,
     val chapters: List<ChapterLearningStats>,
     val recentActivity: List<RecentLearningDay>
 )
@@ -61,7 +80,8 @@ object LearningAnalytics {
         tasks: List<StudyTaskEntity>,
         sessions: List<LearningSessionEntity>,
         now: Long,
-        zone: ZoneId = ZoneId.systemDefault()
+        zone: ZoneId = ZoneId.systemDefault(),
+        sessionFeedback: List<LearningSessionFeedbackEntity> = emptyList()
     ): LearningAnalyticsSnapshot {
         val verified = items.filter { it.sourceStatus == "verified" }
         val validIds = verified.mapTo(HashSet()) { it.uid }
@@ -101,6 +121,42 @@ object LearningAnalytics {
         val today = Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
         val completedSessions = sessions.filter { it.endedAt != null }
         val totalStudyMinutes = completedSessions.sumOf { it.durationSeconds.coerceAtLeast(0L) } / 60L
+        val completedSessionIds = completedSessions.mapTo(HashSet()) { it.id }
+        val validFeedback = sessionFeedback.filter { feedback ->
+            feedback.sessionId in completedSessionIds &&
+                feedback.comprehension in 1..5 &&
+                feedback.perceivedDifficulty in 1..5 &&
+                feedback.focus in 1..5 &&
+                (feedback.energyBefore == null || feedback.energyBefore in 1..5) &&
+                (feedback.energyAfter == null || feedback.energyAfter in 1..5) &&
+                (feedback.note?.length ?: 0) <= 2000
+        }
+        fun averageTenths(values: List<Int>): Int? =
+            values.takeIf { it.isNotEmpty() }?.average()?.let { (it * 10.0).roundToInt() }
+        val feedbackBySession = validFeedback.associateBy { it.sessionId }
+        val reflectionDays = (6 downTo 0).map { offset ->
+            val date = today.minusDays(offset.toLong())
+            val dayFeedback = completedSessions
+                .filter { Instant.ofEpochMilli(it.startedAt).atZone(zone).toLocalDate() == date }
+                .mapNotNull { feedbackBySession[it.id] }
+            DailySessionReflection(
+                date = date,
+                feedbackCount = dayFeedback.size,
+                averageComprehensionTenths = averageTenths(dayFeedback.map { it.comprehension }),
+                averageFocusTenths = averageTenths(dayFeedback.map { it.focus })
+            )
+        }
+        val reflectionStats = SessionReflectionStats(
+            feedbackCount = validFeedback.size,
+            averageComprehensionTenths = averageTenths(validFeedback.map { it.comprehension }),
+            averageDifficultyTenths = averageTenths(validFeedback.map { it.perceivedDifficulty }),
+            averageFocusTenths = averageTenths(validFeedback.map { it.focus }),
+            averageEnergyChangeTenths = averageTenths(validFeedback.mapNotNull { feedback ->
+                if (feedback.energyBefore != null && feedback.energyAfter != null) feedback.energyAfter - feedback.energyBefore else null
+            }),
+            lowFocusSessions = validFeedback.count { it.focus <= 2 },
+            recentDays = reflectionDays
+        )
         val recent = (6 downTo 0).map { offset ->
             val date = today.minusDays(offset.toLong())
             val count = records.count { record ->
@@ -134,6 +190,7 @@ object LearningAnalytics {
             totalStudyMinutes = totalStudyMinutes,
             completedSessions = completedSessions.size,
             averageSessionMinutes = if (completedSessions.isEmpty()) 0L else totalStudyMinutes / completedSessions.size,
+            sessionReflection = reflectionStats,
             chapters = chapterStats,
             recentActivity = recent
         )
