@@ -179,6 +179,11 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onPause() {
+        if (::speech.isInitialized) speech.stop()
+        super.onPause()
+    }
+
     override fun onDestroy() {
         if (::speech.isInitialized) speech.close()
         super.onDestroy()
@@ -351,10 +356,6 @@ private fun MindUnlockRoot(
                 else -> MoreScreen(onNavigate = { screen = it })
             }
         }
-    }
-    override fun onPause() {
-        speech.stop()
-        super.onPause()
     }
 }
 
