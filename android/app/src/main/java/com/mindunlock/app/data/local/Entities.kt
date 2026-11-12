@@ -155,3 +155,15 @@ data class LearningSessionEntity(
     val endedAt: Long? = null,
     val durationSeconds: Long = 0
 )
+
+
+@Entity(tableName = "learning_profile")
+data class LearningProfileEntity(
+    @PrimaryKey val id: Int = 1,
+    val answersCsv: String,
+    val sessionMinutes: Int = 30,
+    val maxTopics: Int = 2,
+    val guidedMode: String = "guided",
+    val completed: Boolean = false,
+    val updatedAt: Long = System.currentTimeMillis()
+)
