@@ -60,6 +60,12 @@ interface ContentItemDao {
     @Query("SELECT COUNT(*) FROM content_items WHERE chapterId = :chapterId AND (:type = '' OR lower(type) = :type) AND (:query = '' OR COALESCE(title, '') LIKE '%' || :query || '%' OR COALESCE(summary, '') LIKE '%' || :query || '%' OR COALESCE(content, '') LIKE '%' || :query || '%')")
     suspend fun getChapterFilteredCount(chapterId: String, type: String, query: String): Int
 
+    @Query("SELECT COUNT(*) FROM content_items WHERE sourceStatus = 'verified' AND (:type = '' OR lower(type) = :type) AND (:query = '' OR COALESCE(title, '') LIKE '%' || :query || '%' OR COALESCE(summary, '') LIKE '%' || :query || '%' OR COALESCE(content, '') LIKE '%' || :query || '%' OR chapterId LIKE '%' || :query || '%')")
+    suspend fun getArchiveFilteredCount(type: String, query: String): Int
+
+    @Query("SELECT uid, chapterId, type, title, summary, orderIndex, sourceStatus FROM content_items WHERE sourceStatus = 'verified' AND (:type = '' OR lower(type) = :type) AND (:query = '' OR COALESCE(title, '') LIKE '%' || :query || '%' OR COALESCE(summary, '') LIKE '%' || :query || '%' OR COALESCE(content, '') LIKE '%' || :query || '%' OR chapterId LIKE '%' || :query || '%') ORDER BY chapterId, orderIndex, title COLLATE NOCASE LIMIT :limit OFFSET :offset")
+    suspend fun getArchivePage(type: String, query: String, limit: Int, offset: Int): List<ContentItemListEntry>
+
     @Query("SELECT uid, chapterId, type, title, summary, orderIndex, sourceStatus FROM content_items WHERE chapterId = :chapterId AND (:type = '' OR lower(type) = :type) AND (:query = '' OR COALESCE(title, '') LIKE '%' || :query || '%' OR COALESCE(summary, '') LIKE '%' || :query || '%' OR COALESCE(content, '') LIKE '%' || :query || '%') ORDER BY orderIndex, title LIMIT :limit OFFSET :offset")
     suspend fun getChapterPage(chapterId: String, type: String, query: String, limit: Int, offset: Int): List<ContentItemListEntry>
 
