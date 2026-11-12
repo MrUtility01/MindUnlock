@@ -99,6 +99,8 @@ fun LearningProfileScreen(preferences: android.content.SharedPreferences, userDa
             if (values.isEmpty()) null else values.average()
         }
 
+    val strategy = LearningPersonalization.build(answers.toList(), sessionMinutes.toInt(), maxTopics, guidedMode)
+
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -168,6 +170,22 @@ fun LearningProfileScreen(preferences: android.content.SharedPreferences, userDa
                         if (score != null) Text("$group: ${"%.1f".format(java.util.Locale.ROOT, score)} از ۵")
                     }
                     Text("این خلاصه فقط از پاسخ‌های تو محاسبه می‌شود. عملکرد واقعی در آزمون‌ها، تمرین‌ها و مرورها جداگانه ثبت خواهد شد و با این ترجیحات یکی فرض نمی‌شود.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+        item {
+            strategy?.let { plan ->
+                Card(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("روش پیشنهادی آموزش بر اساس ترجیحات", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text("گرایش پررنگ‌تر: ${plan.dominantPreference} (میانگین ${"%.1f".format(java.util.Locale.ROOT, plan.score)} از ۵)")
+                        Text(plan.teachingEmphasis)
+                        Text("ساختار پیشنهادی جلسه", fontWeight = FontWeight.SemiBold)
+                        plan.sessionStructure.forEachIndexed { index, step -> Text("${index + 1}. $step") }
+                        Text("مدت جلسه: ${plan.recommendedSessionMinutes} دقیقه؛ حداکثر موضوع فعال: ${plan.maxActiveTopics}")
+                        Text(plan.modeDescription, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("این پیشنهاد فقط از ترجیحات خوداظهاری ساخته شده است؛ عملکرد واقعی جداگانه سنجیده می‌شود.", style = MaterialTheme.typography.bodySmall)
+                    }
                 }
             }
         }
