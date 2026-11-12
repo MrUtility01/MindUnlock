@@ -2989,7 +2989,8 @@ jobs:
             app/src/test/java/com/mindunlock/app/ReviewSchedulerTest.kt \
             app/src/test/java/com/mindunlock/app/LabScenarioParserTest.kt \
             app/src/test/java/com/mindunlock/app/LearningAnalyticsTest.kt \
-            app/src/test/java/com/mindunlock/app/UserDataBackupCodecTest.kt
+            app/src/test/java/com/mindunlock/app/UserDataBackupCodecTest.kt \\
+            app/src/test/java/com/mindunlock/app/UserDataBackupRestoreTransactionTest.kt
           do
             test -f "android/$relative"
             mkdir -p "android-build/$(dirname "$relative")"
