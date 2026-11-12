@@ -117,6 +117,7 @@ import com.mindunlock.app.data.local.UserDatabase
 import com.mindunlock.app.data.local.BookmarkEntity
 import com.mindunlock.app.data.local.ContentItemEntity
 import com.mindunlock.app.data.local.LabStepProgressEntity
+import com.mindunlock.app.data.local.LabQuestionResponseEntity
 import com.mindunlock.app.data.local.ContentItemListEntry
 import com.mindunlock.app.data.local.NoteEntity
 import com.mindunlock.app.data.local.ProgressEntity
@@ -866,6 +867,8 @@ private fun LabScenarioReaderPanel(
 ) {
     val scope = rememberCoroutineScope()
     val savedSteps by userDb.labStepProgressDao().observeByItem(item.uid).collectAsState(initial = emptyList())
+    val savedAnswers by userDb.labQuestionResponseDao().observeByItem(item.uid).collectAsState(initial = emptyList())
+    val answerValues = remember(savedAnswers) { savedAnswers.associate { it.questionIndex to it.answer } }
     val completedIndexes = remember(savedSteps) { savedSteps.filter { it.completed }.map { it.stepIndex }.toSet() }
     val progress by userDb.progressDao().observeAll().collectAsState(initial = emptyList())
     val saved = progress.firstOrNull { it.itemUid == item.uid }
@@ -944,6 +947,14 @@ private fun LabScenarioReaderPanel(
                         )
                         Text("${index + 1}. $question", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
                     }
+                    OutlinedTextField(
+                        value = answerValues[index].orEmpty(),
+                        onValueChange = { answer -> scope.launch { userDb.labQuestionResponseDao().upsert(LabQuestionResponseEntity(item.uid, index, answer)) } },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("پاسخ من") },
+                        minLines = 2,
+                        maxLines = 5
+                    )
                     val referenceAnswer = details.questionAnswers.getOrNull(index).orEmpty()
                     if (referenceAnswer.isNotBlank()) {
                         TextButton(onClick = {
