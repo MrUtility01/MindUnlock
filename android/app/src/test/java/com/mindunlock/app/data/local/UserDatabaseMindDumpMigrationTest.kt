@@ -200,6 +200,19 @@ class UserDatabaseMindDumpMigrationTest {
             assertEquals("ثبت یک روز جدید", journal.body)
 
             assertEquals("calm", journal.mood)
+            migrated.journalEntryDao().update(
+                journal.copy(
+                    title = "عنوان ویرایش‌شده",
+                    body = "متن اصلاح‌شده",
+                    tags = "روزانه,ویرایش",
+                    updatedAt = 20_000L
+                )
+            )
+            val editedJournal = migrated.journalEntryDao().getAll().single()
+            assertEquals("عنوان ویرایش‌شده", editedJournal.title)
+            assertEquals("متن اصلاح‌شده", editedJournal.body)
+            assertEquals("روزانه,ویرایش", editedJournal.tags)
+            assertEquals(20_000L, editedJournal.updatedAt)
 
             val laterId = migrated.laterTopicDao().insert(
                 LaterTopicEntity(
