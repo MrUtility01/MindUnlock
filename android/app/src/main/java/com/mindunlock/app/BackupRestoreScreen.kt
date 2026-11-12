@@ -187,7 +187,7 @@ fun BackupRestoreScreen(userDb: UserDatabase) {
                     Text("مجموع رکوردها: ${payload.totalRecords}")
                     Text("پیشرفت: ${payload.progress.size} · یادداشت: ${payload.notes.size} · نشانک: ${payload.bookmarks.size}")
                     Text("کارها: ${payload.tasks.size} · صندوق ورودی: ${payload.mindDump.size} · دفتر روزانه: ${payload.journalEntries.size}")
-                    Text("موضوعات بعدی: ${payload.laterTopics.size} · مراحل آزمایشگاه: ${payload.labStepProgress.size} · جلسه‌ها: ${payload.learningSessions.size}")
+                    Text("موضوعات بعدی: ${payload.laterTopics.size} · مراحل آزمایشگاه: ${payload.labStepProgress.size} · جلسه‌ها: ${payload.learningSessions.size} · پاسخ‌های آزمایشگاه: ${payload.labQuestionResponses.size}")
                     Text("پیش از جایگزینی، یک نسخه اضطراری از اطلاعات فعلی در فضای خصوصی برنامه ذخیره می‌شود.")
                 }
             },
