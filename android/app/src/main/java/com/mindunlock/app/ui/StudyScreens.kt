@@ -175,11 +175,14 @@ fun DashboardScreen(
     val itemCount by db.contentItemDao().observeItemCount().collectAsState(initial = 0)
     val flashcardCount by db.contentItemDao().observeFlashcardCount().collectAsState(initial = 0)
     val progress by userDb.progressDao().observeAll().collectAsState(initial = emptyList())
+    val sessions by userDb.learningSessionDao().observeAll().collectAsState(initial = emptyList())
     val tasks by userDb.studyTaskDao().observeAll().collectAsState(initial = emptyList())
     val inboxItems by userDb.mindDumpDao().observeAll().collectAsState(initial = emptyList())
     val laterTopics by userDb.laterTopicDao().observeAll().collectAsState(initial = emptyList())
     val completed = progress.count { it.completed }
-    val last = chapters.firstOrNull()
+    val lastSession = sessions.firstOrNull()
+    val last = lastSession?.chapterId?.let { chapterId -> chapters.firstOrNull { it.id == chapterId } }
+        ?: chapters.firstOrNull()
     val now = System.currentTimeMillis()
     val zone = ZoneId.systemDefault()
     val today = LocalDate.now(zone)
