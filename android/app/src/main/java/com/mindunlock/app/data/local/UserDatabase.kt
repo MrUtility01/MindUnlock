@@ -169,6 +169,9 @@ interface JournalEntryDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(entry: JournalEntryEntity): Long
 
+    @androidx.room.Update
+    suspend fun update(entry: JournalEntryEntity)
+
     @Query("DELETE FROM journal_entries WHERE id = :id")
     suspend fun delete(id: Long)
 }
