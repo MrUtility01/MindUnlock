@@ -106,7 +106,6 @@ import android.Manifest
 import android.content.pm.PackageManager
 import com.google.gson.JsonParser
 import com.mindunlock.app.PersianDate
-import androidx.compose.foundation.layout.weight
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
