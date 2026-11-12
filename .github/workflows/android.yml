@@ -2995,7 +2995,7 @@ jobs:
             mkdir -p "android-build/$(dirname "$relative")"
             cp "android/$relative" "android-build/$relative"
           done
-          echo "Mind Dump source and its Room migration test are now part of the effective APK build."
+          echo "Mind Dump, Jalali calendar source and all registered JVM tests are included in the effective APK build."
 
       - name: Expand dashboard into the complete app control center
         shell: bash
