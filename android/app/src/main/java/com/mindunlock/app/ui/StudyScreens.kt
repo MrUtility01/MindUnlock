@@ -175,13 +175,26 @@ fun DashboardScreen(
     val itemCount by db.contentItemDao().observeItemCount().collectAsState(initial = 0)
     val flashcardCount by db.contentItemDao().observeFlashcardCount().collectAsState(initial = 0)
     val progress by userDb.progressDao().observeAll().collectAsState(initial = emptyList())
+    val tasks by userDb.studyTaskDao().observeAll().collectAsState(initial = emptyList())
+    val inboxItems by userDb.mindDumpDao().observeAll().collectAsState(initial = emptyList())
+    val laterTopics by userDb.laterTopicDao().observeAll().collectAsState(initial = emptyList())
     val completed = progress.count { it.completed }
     val last = chapters.firstOrNull()
+    val now = System.currentTimeMillis()
+    val zone = ZoneId.systemDefault()
+    val today = LocalDate.now(zone)
+    val todayStart = today.atStartOfDay(zone).toInstant().toEpochMilli()
+    val tomorrowStart = today.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+    val todayTasks = tasks.filter { !it.completed && it.dueAt != null && it.dueAt >= todayStart && it.dueAt < tomorrowStart }
+    val inboxCount = inboxItems.count { it.status == "inbox" }
+    val dueReviews = progress.count { it.dueAt != null && it.dueAt <= now }
+    val activeTopic = laterTopics.firstOrNull { it.status == "active" }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
             Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text("MindUnlock", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                 Text("ادامه بده؛ یادگیری پیوسته نتیجه می‌دهد", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(PersianDate.format(today), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
             }
             Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.primaryContainer) {
                 Icon(Icons.Default.Bookmark, contentDescription = null, modifier = Modifier.padding(12.dp), tint = MaterialTheme.colorScheme.primary)
@@ -191,6 +204,35 @@ fun DashboardScreen(
             MetricCard("فصل‌ها", chapters.size.toString(), Modifier.weight(1f))
             MetricCard("مطالب", itemCount.toString(), Modifier.weight(1f))
             MetricCard("تکمیل‌شده", completed.toString(), Modifier.weight(1f))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            MetricCard("صندوق ورودی", inboxCount.toString(), Modifier.weight(1f))
+            MetricCard("کارهای امروز", todayTasks.size.toString(), Modifier.weight(1f))
+            MetricCard("مرورهای سررسید", dueReviews.toString(), Modifier.weight(1f))
+        }
+        Text("کارهای امروز", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        if (todayTasks.isEmpty()) {
+            Text("برای امروز کار زمان‌بندی‌شده‌ای نداری.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        } else {
+            todayTasks.take(3).forEach { task ->
+                Card(Modifier.fillMaxWidth()) {
+                    Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Text(task.title, fontWeight = FontWeight.SemiBold)
+                        task.dueAt?.let { Text(PersianDate.format(it), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    }
+                }
+            }
+        }
+        Text("موضوع در حال پیگیری", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        if (activeTopic != null) {
+            Card(onClick = { onNavigate("later") }, modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(activeTopic.title, fontWeight = FontWeight.SemiBold)
+                    if (activeTopic.details.isNotBlank()) Text(activeTopic.details, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
+            }
+        } else {
+            Text("موضوع فعالی برای پیگیری انتخاب نشده است.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Text("شروع یادگیری", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
