@@ -5,6 +5,7 @@ import com.mindunlock.app.data.local.ContentItemEntity
 import com.mindunlock.app.data.local.ProgressEntity
 import com.mindunlock.app.data.local.StudyTaskEntity
 import com.mindunlock.app.data.local.LearningSessionEntity
+import com.mindunlock.app.data.local.LearningSessionFeedbackEntity
 import java.time.ZoneOffset
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -60,6 +61,83 @@ class LearningAnalyticsTest {
         assertEquals(1, result.overdueTasks)
         assertEquals(1, result.completedTasks)
         assertEquals(7, result.recentActivity.size)
+    }
+
+
+    @Test
+    fun summarizesOnlyValidFeedbackForCompletedSessionsAndRecentDays() {
+        val completed = LearningSessionEntity(
+            id = 21,
+            topicTitle = "Subnetting",
+            startedAt = now - 3_600_000L,
+            endedAt = now,
+            durationSeconds = 3600L
+        )
+        val active = LearningSessionEntity(id = 22, topicTitle = "Active", startedAt = now - 600_000L)
+        val feedback = listOf(
+            LearningSessionFeedbackEntity(
+                sessionId = 21,
+                comprehension = 4,
+                perceivedDifficulty = 3,
+                focus = 5,
+                energyBefore = 2,
+                energyAfter = 4
+            ),
+            LearningSessionFeedbackEntity(
+                sessionId = 22,
+                comprehension = 1,
+                perceivedDifficulty = 5,
+                focus = 1
+            ),
+            LearningSessionFeedbackEntity(
+                sessionId = 999,
+                comprehension = 5,
+                perceivedDifficulty = 1,
+                focus = 5
+            ),
+            LearningSessionFeedbackEntity(
+                sessionId = 21,
+                comprehension = 6,
+                perceivedDifficulty = 3,
+                focus = 3
+            )
+        )
+
+        val result = LearningAnalytics.build(
+            chapters = emptyList(),
+            items = emptyList(),
+            progress = emptyList(),
+            tasks = emptyList(),
+            sessions = listOf(completed, active),
+            now = now,
+            zone = ZoneOffset.UTC,
+            sessionFeedback = feedback
+        )
+
+        assertEquals(1, result.sessionReflection.feedbackCount)
+        assertEquals(40, result.sessionReflection.averageComprehensionTenths)
+        assertEquals(30, result.sessionReflection.averageDifficultyTenths)
+        assertEquals(50, result.sessionReflection.averageFocusTenths)
+        assertEquals(20, result.sessionReflection.averageEnergyChangeTenths)
+        assertEquals(0, result.sessionReflection.lowFocusSessions)
+        assertEquals(1, result.sessionReflection.recentDays.last().feedbackCount)
+        assertEquals(40, result.sessionReflection.recentDays.last().averageComprehensionTenths)
+        assertEquals(50, result.sessionReflection.recentDays.last().averageFocusTenths)
+    }
+
+    @Test
+    fun reportsEmptyReflectionStatsWithoutInventingScores() {
+        val result = LearningAnalytics.build(
+            emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), now, ZoneOffset.UTC
+        )
+        assertEquals(0, result.sessionReflection.feedbackCount)
+        assertEquals(null, result.sessionReflection.averageComprehensionTenths)
+        assertEquals(null, result.sessionReflection.averageDifficultyTenths)
+        assertEquals(null, result.sessionReflection.averageFocusTenths)
+        assertEquals(null, result.sessionReflection.averageEnergyChangeTenths)
+        assertEquals(0, result.sessionReflection.lowFocusSessions)
+        assertEquals(7, result.sessionReflection.recentDays.size)
+        assertTrue(result.sessionReflection.recentDays.all { it.feedbackCount == 0 })
     }
 
     @Test
