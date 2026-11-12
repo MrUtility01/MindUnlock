@@ -1,45 +1,7 @@
-# MindUnlock — Android (Native Kotlin + Compose)
+# MindUnlock Android 0.2.0
 
-نسخه موبایل آفلاین برنامه **دانشنامه جامع یادگیری** (Network Learning).
+Native learner companion for MindUnlock Windows. Built with Kotlin, Jetpack Compose, Room and OkHttp.
 
-## هدف این نسخه (0.1.0-foundation)
+The Android client downloads approved chapters from the Windows sync API, stores them in a private Room database and provides offline reading, flashcards, quizzes, notes, bookmarks, labs, projects, planner reminders, progress tracking and Android system TTS. Content authoring, import and approval remain Windows-only.
 
-- اتصال به سرور ویندوز از طریق IP و پورت (پیش‌فرض ۸۲)
-- دریافت Manifest و دانلود فصل‌ها طبق `ANDROID_SYNC_PROTOCOL_FA.md`
-- ذخیره محلی با Room (آفلاین کامل پس از همگام‌سازی)
-- نمایش لیست فصل‌ها و خواندن محتوای درس / نکته / سؤال / آزمون و ...
-- **بدون** قابلیت تولید محتوا، پرامپت یا ساخت موضوع/فصل
-
-## نیازمندی‌ها
-
-- Android Studio Ladybug یا جدیدتر
-- JDK 17
-- حداقل Android 8.0 (API 26) — هدف‌گذاری‌شده برای Android 15 (API 35)
-- گوشی و کامپیوتر روی یک شبکه Wi-Fi
-
-## ساخت و نصب
-
-```bash
-# در ریشه پوشه android
-./gradlew assembleDebug
-# APK در:
-# app/build/outputs/apk/debug/app-debug.apk
-```
-
-یا در Android Studio: Open → پوشه `android` → Run.
-
-## نحوه استفاده
-
-1. برنامه ویندوز را اجرا کنید (`run_windows.bat`) — پورت پیش‌فرض ۸۲.
-2. IP کامپیوتر را در شبکه محلی پیدا کنید.
-3. در اپ MindUnlock دکمه همگام‌سازی را بزنید، IP و پورت را وارد کنید.
-4. پس از اتمام دانلود، فصل‌ها آفلاین در دسترس هستند.
-
-## مراحل بعدی (پیشنهادی)
-
-- [ ] دانلود و اعتبارسنجی فایل‌های رسانه (SHA-256)
-- [ ] آزمون تعاملی و ثبت پیشرفت
-- [ ] پخش صوتی (TTS یا فایل‌های صوتی همگام‌شده)
-- [ ] یادداشت و نشانک محلی
-- [ ] تم‌های مطالعه و تنظیمات تایپوگرافی
-- [ ] همگام‌سازی دوطرفه پیشرفت (طبق بخش ۵ پروتکل)
+See [README_FA.md](README_FA.md) for Persian setup, install and protocol limitations.
