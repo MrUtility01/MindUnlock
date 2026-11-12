@@ -336,6 +336,7 @@ fun DashboardScreen(
     }
     val resumeAction = ResumeActionPolicy.select(
         dueReviewCount = dueReviews,
+        overdueTaskCount = tasks.count { !it.completed && it.dueAt != null && it.dueAt < todayStart },
         todayTaskCount = todayTasks.size,
         activeTopicTitle = activeTopic?.title,
         lastReadItemUid = lastReadItem?.uid,
@@ -347,6 +348,7 @@ fun DashboardScreen(
     val nextAction = {
         when (resumeAction.kind) {
             ResumeActionKind.REVIEW -> onNavigate("review")
+            ResumeActionKind.OVERDUE_TASKS -> onNavigate("planner")
             ResumeActionKind.TODAY_TASKS -> onNavigate("planner")
             ResumeActionKind.ACTIVE_TOPIC -> onNavigate("later")
             ResumeActionKind.RESUME_ITEM -> resumeAction.targetId?.let { onContinue("item:$it") }
