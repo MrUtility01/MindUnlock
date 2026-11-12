@@ -31,6 +31,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.mindunlock.app.PersianDate
 import com.mindunlock.app.data.local.AppDatabase
 import com.mindunlock.app.data.local.UserDatabase
 import com.mindunlock.app.data.local.LearningSessionEntity
@@ -48,6 +49,7 @@ fun LearningEngineScreen(
     val chapters by db.chapterDao().observeAll().collectAsState(initial = emptyList())
     val progress by userDb.progressDao().observeAll().collectAsState(initial = emptyList())
     val activeSession by userDb.learningSessionDao().observeActive().collectAsState(initial = null)
+    val sessions by userDb.learningSessionDao().observeAll().collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
     var elapsedSeconds by remember(activeSession?.id, activeSession?.startedAt) {
         mutableLongStateOf(activeSession?.let { ((System.currentTimeMillis() - it.startedAt).coerceAtLeast(0L) / 1000L) } ?: 0L)
@@ -130,6 +132,26 @@ fun LearningEngineScreen(
                             },
                             modifier = Modifier.fillMaxWidth()
                         ) { Text("پایان جلسه و ثبت زمان") }
+                    }
+                }
+            }
+        }
+        item {
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("تاریخچه جلسات یادگیری", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    val recentSessions = sessions.filter { it.endedAt != null }.take(5)
+                    if (recentSessions.isEmpty()) {
+                        Text("پس از پایان اولین جلسه، تاریخچه آن در این بخش نمایش داده می‌شود.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    } else {
+                        recentSessions.forEach { session ->
+                            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                Text(session.topicTitle, fontWeight = FontWeight.SemiBold)
+                                Text("شروع: " + PersianDate.format(session.startedAt), style = MaterialTheme.typography.bodySmall)
+                                Text("پایان: " + PersianDate.format(session.endedAt ?: session.startedAt), style = MaterialTheme.typography.bodySmall)
+                                Text("مدت: " + formatSessionDuration(session.durationSeconds), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                            }
+                        }
                     }
                 }
             }
