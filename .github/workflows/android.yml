@@ -3076,7 +3076,8 @@ jobs:
               val todayTaskCount = tasks.count { !it.completed && it.dueAt != null && it.dueAt >= todayStart && it.dueAt < tomorrowStart }
               val dueReviewCount = progress.count { !it.completed && it.dueAt != null && it.dueAt <= now }
               val activeTopic = laterTopics.firstOrNull { it.status == "active" }
-              val lastCompletedSession = sessions.firstOrNull { it.endedAt != null && it.durationSeconds > 0 }
+              val lastCompletedSession = sessions.firstOrNull { session -> session.endedAt != null && session.endedAt > session.startedAt }
+              val lastCompletedSessionDurationSeconds = lastCompletedSession?.let { ((it.endedAt ?: it.startedAt) - it.startedAt).coerceAtLeast(0L) / 1000L } ?: 0L
               val lastSessionReflection = lastCompletedSession?.let { session -> sessionFeedback.firstOrNull { it.sessionId == session.id } }
               val last = chapters.firstOrNull()
               Column(
@@ -3144,8 +3145,8 @@ jobs:
                               Text(lastCompletedSession.topicTitle, fontWeight = FontWeight.SemiBold)
                               Text(
                                   PersianDate.format(lastCompletedSession.startedAt) + " · مدت " +
-                                      (lastCompletedSession.durationSeconds / 60) + " دقیقه و " +
-                                      (lastCompletedSession.durationSeconds % 60) + " ثانیه",
+                                      (lastCompletedSessionDurationSeconds / 60) + " دقیقه و " +
+                                      (lastCompletedSessionDurationSeconds % 60) + " ثانیه",
                                   style = MaterialTheme.typography.bodySmall,
                                   color = MaterialTheme.colorScheme.onSurfaceVariant
                               )
