@@ -209,6 +209,7 @@ private fun MindUnlockRoot(
         "chapter" -> "فصل‌ها"
         "reader" -> "مطالعه"
         "courses" -> "موضوع‌ها"
+        "archive" -> "آرشیو دانش"
         "flashcards" -> "فلش‌کارت و مرور فاصله‌دار"
         "notes" -> "دفتر یادداشت"
         "inbox" -> "تخلیه ذهن / صندوق ورودی"
@@ -234,7 +235,7 @@ private fun MindUnlockRoot(
             "reader" -> previousScreen
             "chapter" -> "subject"
             "subject" -> "courses"
-            "sync", "settings", "profile", "learning", "more", "quiz", "exam", "review", "labs", "planner", "progress", "bookmarks", "inbox", "journal", "later", "backup" -> "home"
+            "sync", "settings", "profile", "learning", "more", "quiz", "exam", "review", "labs", "planner", "progress", "bookmarks", "inbox", "journal", "later", "backup", "archive" -> "home"
             else -> "home"
         }
     }
@@ -317,6 +318,7 @@ private fun MindUnlockRoot(
                 "courses" -> SubjectListScreen(repository.database, onSubjectClick = { subject -> selectedSubject = subject; screen = "subject" })
                 "subject" -> ChapterListScreen(repository.database, selectedSubject, onChapterClick = { id -> selectedChapter = id; screen = "chapter" })
                 "chapter" -> ChapterContentScreen(repository.database, selectedChapter, onItemClick = { uid -> selectedItem = uid; previousScreen = "chapter"; screen = "reader" })
+                "archive" -> KnowledgeArchiveScreen(repository.database, onOpenItem = { uid -> selectedItem = uid; previousScreen = "archive"; screen = "reader" })
                 "reader" -> ReaderScreen(repository.database, userDatabase, selectedItem, speech, preferences)
                 "flashcards" -> FlashcardsScreen(repository.database, userDatabase, speech, preferences, reviewOnly = false)
                 "review" -> FlashcardsScreen(repository.database, userDatabase, speech, preferences, reviewOnly = true)
@@ -363,7 +365,7 @@ private fun MoreScreen(onNavigate: (String) -> Unit) {
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ActionTile("موضوع‌ها", "courses", onNavigate, Modifier.weight(1f))
-            ActionTile("مرور امروز", "review", onNavigate, Modifier.weight(1f))
+            ActionTile("آرشیو دانش", "archive", onNavigate, Modifier.weight(1f))
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ActionTile("تخلیه ذهن / صندوق ورودی", "inbox", onNavigate, Modifier.weight(1f))
