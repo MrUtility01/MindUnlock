@@ -394,7 +394,7 @@ fun DashboardScreen(
                 Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(lastCompletedSession.topicTitle, fontWeight = FontWeight.SemiBold)
                     Text(
-                        "${PersianDate.format(lastCompletedSession.startedAt)} · مدت ${formatSessionDuration(lastCompletedSession.durationSeconds)}",
+                        "${PersianDate.format(lastCompletedSession.startedAt)} · مدت ${lastCompletedSession.durationSeconds / 60} دقیقه و ${lastCompletedSession.durationSeconds % 60} ثانیه",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
