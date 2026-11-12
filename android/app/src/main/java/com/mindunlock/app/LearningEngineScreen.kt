@@ -184,7 +184,8 @@ fun LearningEngineScreen(
                                 Text(session.topicTitle, fontWeight = FontWeight.SemiBold)
                                 Text("شروع: " + PersianDate.format(session.startedAt), style = MaterialTheme.typography.bodySmall)
                                 Text("پایان: " + PersianDate.format(session.endedAt ?: session.startedAt), style = MaterialTheme.typography.bodySmall)
-                                Text("مدت: " + formatSessionDuration(session.durationSeconds), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                                val elapsedSeconds = ((session.endedAt ?: session.startedAt) - session.startedAt).coerceAtLeast(0L) / 1000L
+                                Text("مدت: " + formatSessionDuration(elapsedSeconds), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                             }
                         }
                     }
