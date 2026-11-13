@@ -196,3 +196,32 @@ data class LearningStageProgressEntity(
     val completedAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )
+
+
+/** User-authored concept or knowledge item in the personal knowledge graph. */
+@Entity(tableName = "mind_map_nodes", indices = [Index("updatedAt"), Index("nodeType")])
+data class MindMapNodeEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val title: String,
+    val description: String = "",
+    val nodeType: String = "ایده",
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis()
+)
+
+/** Directed semantic relationship between two graph nodes. */
+@Entity(
+    tableName = "mind_map_edges",
+    indices = [Index("sourceNodeId"), Index("targetNodeId"), Index(value = ["sourceNodeId", "targetNodeId"], unique = true)],
+    foreignKeys = [
+        androidx.room.ForeignKey(entity = MindMapNodeEntity::class, parentColumns = ["id"], childColumns = ["sourceNodeId"], onDelete = androidx.room.ForeignKey.CASCADE),
+        androidx.room.ForeignKey(entity = MindMapNodeEntity::class, parentColumns = ["id"], childColumns = ["targetNodeId"], onDelete = androidx.room.ForeignKey.CASCADE)
+    ]
+)
+data class MindMapEdgeEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val sourceNodeId: Long,
+    val targetNodeId: Long,
+    val relationType: String = "مرتبط با",
+    val createdAt: Long = System.currentTimeMillis()
+)
