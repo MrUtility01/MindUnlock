@@ -30,7 +30,9 @@ object UserDataBackupManager {
                 labQuestionResponses = userDb.labQuestionResponseDao().getAll(),
                 learningProfile = listOfNotNull(userDb.learningProfileDao().get()),
                 learningSessionFeedback = userDb.learningSessionFeedbackDao().getAll(),
-                learningStageProgress = userDb.learningStageProgressDao().getAll()
+                learningStageProgress = userDb.learningStageProgressDao().getAll(),
+                mindMapNodes = userDb.mindMapDao().getAllNodes(),
+                mindMapEdges = userDb.mindMapDao().getAllEdges()
             )
         }
         val version = runCatching {
@@ -40,7 +42,7 @@ object UserDataBackupManager {
     }
 
     suspend fun restore(context: Context, userDb: UserDatabase, document: UserDataBackupDocument) = withContext(Dispatchers.IO) {
-        require(document.schemaVersion == UserDataBackupCodec.CURRENT_SCHEMA_VERSION) {
+        require(document.schemaVersion in 1..UserDataBackupCodec.CURRENT_SCHEMA_VERSION) {
             "نسخه ساختار پشتیبان پشتیبانی نمی‌شود."
         }
         val safetyDirectory = File(context.filesDir, "backup-safety")
@@ -66,6 +68,8 @@ object UserDataBackupManager {
             userDb.learningProfileDao().deleteAll()
             userDb.learningSessionFeedbackDao().deleteAll()
             userDb.learningStageProgressDao().deleteAll()
+            userDb.mindMapDao().getAllEdges().forEach { userDb.mindMapDao().deleteEdge(it.id) }
+            userDb.mindMapDao().getAllNodes().forEach { userDb.mindMapDao().deleteNode(it.id) }
 
             document.payload.progress.takeIf { it.isNotEmpty() }?.let { userDb.progressDao().upsertAll(it) }
             document.payload.notes.takeIf { it.isNotEmpty() }?.let { userDb.noteDao().upsertAll(it) }
@@ -80,6 +84,8 @@ object UserDataBackupManager {
             document.payload.learningProfile.singleOrNull()?.let { userDb.learningProfileDao().upsert(it) }
             document.payload.learningSessionFeedback.takeIf { it.isNotEmpty() }?.let { userDb.learningSessionFeedbackDao().upsertAll(it) }
             document.payload.learningStageProgress.takeIf { it.isNotEmpty() }?.let { userDb.learningStageProgressDao().upsertAll(it) }
+            document.payload.mindMapNodes.forEach { userDb.mindMapDao().insertNode(it) }
+            document.payload.mindMapEdges.forEach { userDb.mindMapDao().insertEdge(it) }
         }
     }
 }
