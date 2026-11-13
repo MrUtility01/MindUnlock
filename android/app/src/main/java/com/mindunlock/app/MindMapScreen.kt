@@ -105,6 +105,7 @@ fun MindMapScreen(userDb: UserDatabase) {
             sourceChoices = emptyList()
             return@LaunchedEffect
         }
+        sourceChoices = emptyList()
         if (sourceSearch.isNotBlank()) delay(250)
         val term = sourceSearch.trim().take(120)
         sourceChoices = try {
@@ -285,13 +286,13 @@ fun MindMapScreen(userDb: UserDatabase) {
                             "later_topic" to "موضوع بعدی",
                             "journal" to "ژورنال"
                         ).forEach { (kind, label) ->
-                            DropdownMenuItem(text = { Text(label) }, onClick = { sourceKind = kind; sourceKindMenu = false })
+                            DropdownMenuItem(text = { Text(label) }, onClick = { sourceKind = kind; sourceChoices = emptyList(); sourceKindMenu = false })
                         }
                     }
                 }
                 OutlinedTextField(
                     value = sourceSearch,
-                    onValueChange = { sourceSearch = it },
+                    onValueChange = { sourceSearch = it; sourceChoices = emptyList() },
                     modifier = Modifier.fillMaxWidth(),
                     label = { Text("جست‌وجو در منابع") },
                     singleLine = true
