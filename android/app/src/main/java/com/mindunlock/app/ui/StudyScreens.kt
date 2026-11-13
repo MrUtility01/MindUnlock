@@ -1628,8 +1628,58 @@ fun PlannerScreen(userDb: UserDatabase, speech: PersianSpeech) {
     var type by rememberSaveable { mutableStateOf("task") }
     var reminder by rememberSaveable { mutableStateOf(true) }
     var showJalaliPicker by rememberSaveable { mutableStateOf(false) }
+    var isSaving by remember { mutableStateOf(false) }
+    var message by remember { mutableStateOf("") }
+    var query by rememberSaveable { mutableStateOf("") }
+    var filter by rememberSaveable { mutableStateOf("pending") }
+    var editingTask by remember { mutableStateOf<StudyTaskEntity?>(null) }
+    var editTitle by rememberSaveable { mutableStateOf("") }
+    var editDetails by rememberSaveable { mutableStateOf("") }
+    var editWhen by rememberSaveable { mutableStateOf("") }
+    var editType by rememberSaveable { mutableStateOf("task") }
+    var editReminder by rememberSaveable { mutableStateOf(true) }
+    var editError by rememberSaveable { mutableStateOf("") }
+    var pendingDeleteTask by remember { mutableStateOf<StudyTaskEntity?>(null) }
+    var busyTaskIds by remember { mutableStateOf(emptySet<Long>()) }
+
+    fun cancelTaskReminder(taskId: Long) {
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val intent = Intent(context, StudyReminderReceiver::class.java)
+            .putExtra("task_id", taskId)
+        val pending = PendingIntent.getBroadcast(
+            context, taskId.toInt(), intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        alarmManager.cancel(pending)
+        pending.cancel()
+    }
+
+    fun runTaskAction(taskId: Long, action: suspend () -> Unit) {
+        if (taskId in busyTaskIds) return
+        busyTaskIds = busyTaskIds + taskId
+        scope.launch {
+            try {
+                action()
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                message = "عملیات انجام نشد؛ اطلاعات قبلی حفظ شده است."
+            } finally {
+                busyTaskIds = busyTaskIds - taskId
+            }
+        }
+    }
+
+    val now = System.currentTimeMillis()
+    val overdueCount = tasks.count { !it.completed && it.dueAt != null && it.dueAt < now }
+    val visibleTasks = tasks.filter { task ->
+        (filter == "all" || (filter == "pending" && !task.completed) || (filter == "completed" && task.completed)) &&
+            (query.isBlank() || task.title.contains(query, true) || task.details.contains(query, true))
+    }
+
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("برنامهٔ روزانه، تکلیف و پروژهٔ شخصی", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Text("کارهای عقب‌افتاده: $overdueCount · کل کارها: ${tasks.size}", style = MaterialTheme.typography.bodySmall, color = if (overdueCount > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
         OutlinedTextField(title, { title = it }, Modifier.fillMaxWidth(), label = { Text("عنوان") }, singleLine = true)
         PersianVoiceInputButton { spoken -> title = listOf(title, spoken).filter { it.isNotBlank() }.joinToString(" ") }
         OutlinedTextField(details, { details = it }, Modifier.fillMaxWidth(), label = { Text("توضیحات") }, minLines = 2)
@@ -1638,7 +1688,7 @@ fun PlannerScreen(userDb: UserDatabase, speech: PersianSpeech) {
             FilterChip(selected = type == "task", onClick = { type = "task" }, label = { Text("کار مطالعاتی") })
             FilterChip(selected = type == "project", onClick = { type = "project" }, label = { Text("پروژه") })
         }
-        OutlinedTextField(whenText, { whenText = it; dateError = "" }, Modifier.fillMaxWidth(), label = { Text("تاریخ و ساعت شمسی: ۱۴۰۵/۰۸/۲۱ ۰۹:۳۰ (میلادی ISO نیز پذیرفته می‌شود)") }, isError = dateError.isNotBlank(), singleLine = true)
+        OutlinedTextField(whenText, { whenText = it; dateError = "" }, Modifier.fillMaxWidth(), label = { Text("تاریخ و ساعت شمسی یا میلادی") }, isError = dateError.isNotBlank(), singleLine = true)
         OutlinedButton(onClick = { showJalaliPicker = true }, modifier = Modifier.fillMaxWidth()) {
             Text("انتخاب تاریخ از تقویم شمسی")
         }
@@ -1654,46 +1704,190 @@ fun PlannerScreen(userDb: UserDatabase, speech: PersianSpeech) {
                     val currentTime = parsedMillis?.let {
                         Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalTime()
                     } ?: java.time.LocalTime.now()
-                    val selectedDate = PersianDate.toGregorian(selected)
-                    whenText = PersianDate.formatInput(LocalDateTime.of(selectedDate, currentTime))
+                    whenText = PersianDate.formatInput(LocalDateTime.of(PersianDate.toGregorian(selected), currentTime))
                     dateError = ""
                     showJalaliPicker = false
                 }
             )
         }
         if (dateError.isNotBlank()) Text(dateError, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-        Row(verticalAlignment = Alignment.CenterVertically) { Switch(checked = reminder, onCheckedChange = { reminder = it }); Text("یادآور اعلان‌دار") }
-        Button(enabled = title.isNotBlank(), onClick = {
-            val due = PersianDate.parseDateTime(whenText)
-            if (due == null) {
-                dateError = "تاریخ یا ساعت معتبر نیست؛ نمونه: ۱۴۰۵/۰۸/۲۱ ۰۹:۳۰"
-            } else {
-                scope.launch {
-                    val id = userDb.studyTaskDao().upsert(StudyTaskEntity(title = title.trim(), details = details.trim(), taskType = type, dueAt = due, remindAt = if (reminder) due else null))
-                    if (reminder) scheduleReminder(context, id, title.trim(), due)
-                    title = ""; details = ""; dateError = ""
-                }
-            }
-        }, modifier = Modifier.fillMaxWidth()) { Text("افزودن به برنامه") }
-        HorizontalDivider()
-        Text("برنامه‌های ثبت‌شده (${tasks.size})", style = MaterialTheme.typography.titleMedium)
-        tasks.forEach { task ->
-            Card {
-                Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Text(task.title, fontWeight = FontWeight.SemiBold)
-                        Text(if (task.taskType == "project") "پروژه" else "کار مطالعاتی", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall)
-                        if (task.dueAt != null) Text(PersianDate.format(task.dueAt), style = MaterialTheme.typography.bodySmall)
-                        if (task.details.isNotBlank()) Text(task.details, style = MaterialTheme.typography.bodySmall)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Switch(checked = reminder, onCheckedChange = { reminder = it })
+            Text("یادآور اعلان‌دار")
+        }
+        Button(
+            enabled = title.isNotBlank() && !isSaving,
+            onClick = {
+                val cleanTitle = title.trim()
+                val due = PersianDate.parseDateTime(whenText)
+                if (due == null) {
+                    dateError = "تاریخ یا ساعت معتبر نیست؛ نمونه: ۱۴۰۵/۰۸/۲۱ ۰۹:۳۰"
+                } else if (!isSaving) {
+                    isSaving = true
+                    scope.launch {
+                        try {
+                            val id = userDb.studyTaskDao().upsert(
+                                StudyTaskEntity(
+                                    title = cleanTitle, details = details.trim(),
+                                    taskType = type, dueAt = due,
+                                    remindAt = if (reminder) due else null
+                                )
+                            )
+                            if (reminder) scheduleReminder(context, id, cleanTitle, due)
+                            title = ""; details = ""; dateError = ""; message = "کار به برنامه اضافه شد."
+                        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                            throw cancelled
+                        } catch (_: Exception) {
+                            message = "ثبت کار انجام نشد؛ اطلاعات واردشده حفظ شد."
+                        } finally {
+                            isSaving = false
+                        }
                     }
-                    Checkbox(task.completed, onCheckedChange = { checked -> scope.launch { userDb.studyTaskDao().upsert(task.copy(completed = checked)) } })
-                    IconButton(onClick = { scope.launch { userDb.studyTaskDao().delete(task.id) } }) { Icon(Icons.Default.Delete, null) }
+                }
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) { Text(if (isSaving) "در حال ذخیره…" else "افزودن به برنامه") }
+        if (message.isNotBlank()) Text(message, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
+
+        HorizontalDivider()
+        Text("برنامه‌های ثبت‌شده (${visibleTasks.size})", style = MaterialTheme.typography.titleMedium)
+        OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth(), label = { Text("جست‌وجوی کارها") }, singleLine = true)
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            listOf("pending" to "در انتظار", "completed" to "انجام‌شده", "all" to "همه").forEach { (value, label) ->
+                FilterChip(selected = filter == value, onClick = { filter = value }, label = { Text(label) })
+            }
+        }
+        if (visibleTasks.isEmpty()) {
+            Text("موردی مطابق فیلتر و جست‌وجو پیدا نشد.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        visibleTasks.forEach { task ->
+            val isOverdue = !task.completed && task.dueAt != null && task.dueAt < now
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(
+                            checked = task.completed,
+                            enabled = task.id !in busyTaskIds,
+                            onCheckedChange = { checked ->
+                                runTaskAction(task.id) {
+                                    userDb.studyTaskDao().upsert(task.copy(completed = checked))
+                                    if (checked) cancelTaskReminder(task.id)
+                                    else if (task.remindAt != null && task.dueAt != null) {
+                                        scheduleReminder(context, task.id, task.title, task.remindAt)
+                                    }
+                                    message = if (checked) "کار تکمیل شد." else "کار دوباره فعال شد."
+                                }
+                            }
+                        )
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(task.title, fontWeight = FontWeight.SemiBold, color = if (task.completed) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface)
+                            Text(if (task.taskType == "project") "پروژه" else "کار مطالعاتی", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                    if (task.dueAt != null) {
+                        Text("موعد: ${PersianDate.format(task.dueAt)}", color = if (isOverdue) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                    }
+                    if (task.details.isNotBlank()) Text(task.details, style = MaterialTheme.typography.bodySmall)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(
+                            enabled = task.id !in busyTaskIds,
+                            onClick = {
+                                editingTask = task
+                                editTitle = task.title
+                                editDetails = task.details
+                                editWhen = task.dueAt?.let { PersianDate.formatInput(Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDateTime()) }.orEmpty()
+                                editType = task.taskType
+                                editReminder = task.remindAt != null
+                                editError = ""
+                            },
+                            modifier = Modifier.weight(1f)
+                        ) { Text("ویرایش") }
+                        OutlinedButton(
+                            enabled = task.id !in busyTaskIds,
+                            onClick = { pendingDeleteTask = task },
+                            modifier = Modifier.weight(1f)
+                        ) { Text("حذف") }
+                    }
                 }
             }
         }
     }
-}
 
+    editingTask?.let { task ->
+        AlertDialog(
+            onDismissRequest = { editingTask = null },
+            title = { Text("ویرایش کار") },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(editTitle, { editTitle = it }, label = { Text("عنوان") }, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(editDetails, { editDetails = it }, label = { Text("توضیحات") }, minLines = 3, modifier = Modifier.fillMaxWidth())
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(selected = editType == "task", onClick = { editType = "task" }, label = { Text("کار مطالعاتی") })
+                        FilterChip(selected = editType == "project", onClick = { editType = "project" }, label = { Text("پروژه") })
+                    }
+                    OutlinedTextField(editWhen, { editWhen = it; editError = "" }, label = { Text("موعد شمسی یا میلادی") }, modifier = Modifier.fillMaxWidth(), isError = editError.isNotBlank())
+                    if (editError.isNotBlank()) Text(editError, color = MaterialTheme.colorScheme.error)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Switch(checked = editReminder, onCheckedChange = { editReminder = it })
+                        Text("یادآور اعلان‌دار")
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = editTitle.isNotBlank() && task.id !in busyTaskIds,
+                    onClick = {
+                        val due = if (editWhen.isBlank()) null else PersianDate.parseDateTime(editWhen)
+                        if (editWhen.isNotBlank() && due == null) {
+                            editError = "تاریخ یا ساعت معتبر نیست."
+                        } else {
+                            runTaskAction(task.id) {
+                                val updated = task.copy(
+                                    title = editTitle.trim(),
+                                    details = editDetails.trim(),
+                                    taskType = editType,
+                                    dueAt = due,
+                                    remindAt = if (editReminder) due else null
+                                )
+                                userDb.studyTaskDao().upsert(updated)
+                                if (editReminder && due != null && !task.completed) {
+                                    scheduleReminder(context, task.id, updated.title, due)
+                                } else {
+                                    cancelTaskReminder(task.id)
+                                }
+                                editingTask = null
+                                message = "کار به‌روزرسانی شد."
+                            }
+                        }
+                    }
+                ) { Text("ذخیره تغییرات") }
+            },
+            dismissButton = { TextButton(onClick = { editingTask = null }) { Text("انصراف") } }
+        )
+    }
+
+    pendingDeleteTask?.let { task ->
+        AlertDialog(
+            onDismissRequest = { pendingDeleteTask = null },
+            title = { Text("حذف کار؟") },
+            text = { Text(task.title + "\nاین عملیات قابل بازگشت نیست.") },
+            confirmButton = {
+                TextButton(
+                    enabled = task.id !in busyTaskIds,
+                    onClick = {
+                        pendingDeleteTask = null
+                        runTaskAction(task.id) {
+                            userDb.studyTaskDao().delete(task.id)
+                            cancelTaskReminder(task.id)
+                            message = "کار و یادآور آن حذف شدند."
+                        }
+                    }
+                ) { Text("حذف") }
+            },
+            dismissButton = { TextButton(onClick = { pendingDeleteTask = null }) { Text("انصراف") } }
+        )
+    }
+}
 
 @Composable
 fun PersianJalaliDatePicker(
