@@ -359,7 +359,7 @@ private fun MindUnlockRoot(
                 "progress" -> ProgressScreen(repository.database, userDatabase, speech)
                 "backup" -> BackupRestoreScreen(userDatabase)
                 "bookmarks" -> BookmarksScreen(repository.database, userDatabase, speech, onOpenItem = { uid -> selectedItem = uid; previousScreen = "bookmarks"; screen = "reader" })
-                "settings" -> SettingsScreen(speech, preferences, initialTheme, onThemeChange, onFontScaleChange, onLockApp, { screen = "sync" })
+                "settings" -> SettingsScreen(speech, userDatabase, preferences, initialTheme, onThemeChange, onFontScaleChange, onLockApp, { screen = "sync" })
                 "about" -> AboutScreen()
                 "profile" -> LearningProfileScreen(preferences, userDatabase)
                 "learning" -> LearningEngineScreen(repository.database, userDatabase, preferences, onOpenChapter = { id -> selectedChapter = id; screen = "chapter" }, onNavigate = { screen = it })
