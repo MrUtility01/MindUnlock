@@ -258,14 +258,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat > /tmp/disable-wrapper-url-validation.gradle <<'GRADLE'
+          if [[ -x gradlew && -s gradle/wrapper/gradle-wrapper.jar ]] && grep -Fq 'gradle-8.9-bin.zip' gradle/wrapper/gradle-wrapper.properties; then
+            echo "Verified existing Gradle 8.9 wrapper; skipping unnecessary wrapper regeneration."
+          else
+            cat > /tmp/disable-wrapper-url-validation.gradle <<'GRADLE'
           allprojects {
               tasks.withType(org.gradle.api.tasks.wrapper.Wrapper).configureEach {
                   validateDistributionUrl = false
               }
           }
           GRADLE
-          gradle -I /tmp/disable-wrapper-url-validation.gradle wrapper --gradle-version 8.9 --distribution-type bin
+            gradle -I /tmp/disable-wrapper-url-validation.gradle wrapper --gradle-version 8.9 --distribution-type bin
+          fi
           chmod +x gradlew
 
       - name: Replace Android system TTS controls with in-app Piper manager
