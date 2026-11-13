@@ -381,14 +381,14 @@ private fun MoreScreen(onNavigate: (String) -> Unit) {
             ActionTile("تمرین", "quiz", onNavigate, Modifier.weight(1f))
             ActionTile("آزمون", "exam", onNavigate, Modifier.weight(1f))
         }
+        Text("مدیریت ذهن و برنامه‌ریزی", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ActionTile("برنامه‌ریز", "planner", onNavigate, Modifier.weight(1f))
             ActionTile("گزارش پیشرفت", "progress", onNavigate, Modifier.weight(1f))
         }
-        Text("مدیریت ذهن و برنامه‌ریزی", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ActionTile("نشانک‌ها", "bookmarks", onNavigate, Modifier.weight(1f))
-            ActionTile("تنظیمات", "settings", onNavigate, Modifier.weight(1f))
+            ActionTile("فلش‌کارت‌ها", "flashcards", onNavigate, Modifier.weight(1f))
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ActionTile("موضوع‌ها", "courses", onNavigate, Modifier.weight(1f))
