@@ -1995,7 +1995,13 @@ jobs:
           set -euo pipefail
           MAIN_FILE="$(find android-build/app/src/main/java -type f -name MainActivity.kt -print -quit)"
           test -n "$MAIN_FILE"
-          python3 - "$MAIN_FILE" <<'PY'
+          MIGRATOR="$(dirname "$MAIN_FILE")/data/local/LegacyDatabaseMigrator.kt"
+          if grep -Fq 'LaunchedEffect(migrationAttempt)' "$MAIN_FILE" && \
+             grep -Fq 'withContext(Dispatchers.IO)' "$MAIN_FILE" && \
+             grep -Fq 'onProgress: (String) -> Unit = {}' "$MIGRATOR"; then
+            echo "Legacy migration is already asynchronous with IO dispatch and progress reporting; skipping legacy rewrite."
+          else
+            python3 - "$MAIN_FILE" <<'PY'
           from pathlib import Path
           import sys
 
@@ -2147,6 +2153,7 @@ jobs:
           assert "CircularProgressIndicator()" in source
           print("Non-blocking startup assertions passed.")
           PY
+          fi
 
       - name: Diagnose topic and chapter navigation plus import paths
         shell: bash
