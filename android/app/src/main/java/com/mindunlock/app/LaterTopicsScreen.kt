@@ -54,6 +54,7 @@ fun LaterTopicsScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
     var showJalaliPicker by rememberSaveable { mutableStateOf(false) }
     var priority by rememberSaveable { mutableStateOf(2) }
     var filter by rememberSaveable { mutableStateOf("all") }
+    var classificationFilter by rememberSaveable { mutableIntStateOf(0) }
     var query by rememberSaveable { mutableStateOf("") }
     var message by remember { mutableStateOf("") }
     var isSavingTopic by remember { mutableStateOf(false) }
@@ -84,6 +85,7 @@ fun LaterTopicsScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
 
     val visible = topics.filter { topic ->
         (filter == "all" || topic.status == filter) &&
+            (classificationFilter == 0 || topic.priority == classificationFilter) &&
             (query.isBlank() || topic.title.contains(query, true) || topic.details.contains(query, true))
     }
 
@@ -114,9 +116,9 @@ fun LaterTopicsScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
                 }
             )
         }
-        Text("اولویت", style = MaterialTheme.typography.labelLarge)
+        Text("دسته‌بندی سؤال یا موضوع", style = MaterialTheme.typography.labelLarge)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf(1 to "زیاد", 2 to "معمولی", 3 to "کم").forEach { (value, label) ->
+            listOf(1 to "ضروری", 2 to "موکول‌شده", 3 to "کنجکاوی").forEach { (value, label) ->
                 FilterChip(selected = priority == value, onClick = { priority = value }, label = { Text(label) })
             }
         }
@@ -162,8 +164,14 @@ fun LaterTopicsScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
         if (message.isNotBlank()) Text(message, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
         OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth(), label = { Text("جست‌وجو در موضوعات") }, singleLine = true)
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            listOf("all" to "همه", "parked" to "در انتظار", "active" to "در حال پیگیری", "done" to "انجام‌شده").forEach { (value, label) ->
+            listOf("all" to "همه وضعیت‌ها", "parked" to "در انتظار", "active" to "در حال پیگیری", "done" to "انجام‌شده").forEach { (value, label) ->
                 FilterChip(selected = filter == value, onClick = { filter = value }, label = { Text(label) })
+            }
+        }
+        Text("فیلتر دسته‌بندی", style = MaterialTheme.typography.labelLarge)
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            listOf(0 to "همه", 1 to "ضروری", 2 to "موکول‌شده", 3 to "کنجکاوی").forEach { (value, label) ->
+                FilterChip(selected = classificationFilter == value, onClick = { classificationFilter = value }, label = { Text(label) })
             }
         }
         }
@@ -235,9 +243,9 @@ fun LaterTopicsScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
                         minLines = 3,
                         modifier = Modifier.fillMaxWidth()
                     )
-                    Text("اولویت", style = MaterialTheme.typography.labelLarge)
+                    Text("دسته‌بندی سؤال یا موضوع", style = MaterialTheme.typography.labelLarge)
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        listOf(1 to "زیاد", 2 to "معمولی", 3 to "کم").forEach { (value, label) ->
+                        listOf(1 to "ضروری", 2 to "موکول‌شده", 3 to "کنجکاوی").forEach { (value, label) ->
                             FilterChip(
                                 selected = editPriority == value,
                                 onClick = { editPriority = value },
@@ -332,6 +340,12 @@ fun LaterTopicsScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
     }
 }
 
+private fun sideQuestionClassificationLabel(value: Int): String = when (value) {
+    1 -> "ضروری"
+    3 -> "کنجکاوی"
+    else -> "موکول‌شده"
+}
+
 @Composable
 private fun LaterTopicCard(
     topic: LaterTopicEntity,
@@ -352,7 +366,7 @@ private fun LaterTopicCard(
         Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
             Text(topic.title, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleMedium)
             if (topic.details.isNotBlank()) Text(topic.details, style = MaterialTheme.typography.bodyMedium)
-            Text("اولویت: " + when (topic.priority) { 1 -> "زیاد"; 3 -> "کم"; else -> "معمولی" } + " · " + dateLabel, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("دسته: " + sideQuestionClassificationLabel(topic.priority) + " · " + dateLabel, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(statusLabel, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
             OutlinedButton(onClick = onSpeak, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("خواندن با صدا") }
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
