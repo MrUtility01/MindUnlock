@@ -3501,6 +3501,27 @@ jobs:
           git push origin "$BRANCH"
           echo "Review branch created: $BRANCH" | tee -a "$GITHUB_STEP_SUMMARY"
 
+      - name: Route essential side questions in generated dashboard
+        shell: bash
+        run: |
+          set -euo pipefail
+          SCREENS_FILE="$(find android-build/app/src/main/java -type f -name StudyScreens.kt -print -quit)"
+          test -n "$SCREENS_FILE"
+          python3 - "$SCREENS_FILE" <<'PY'
+          from pathlib import Path
+          import sys
+          path = Path(sys.argv[1])
+          source = path.read_text(encoding="utf-8")
+          branch = '                          ResumeActionKind.ESSENTIAL_TOPICS -> onNavigate("later")\\n'
+          anchor = '                          ResumeActionKind.ACTIVE_TOPIC -> onNavigate("later")'
+          if branch.strip() not in source:
+              if source.count(anchor) != 1:
+                  raise SystemExit("Generated dashboard active-topic branch was not found exactly once.")
+              source = source.replace(anchor, branch + anchor, 1)
+              path.write_text(source, encoding="utf-8")
+          print("Generated dashboard now handles essential side-question resume actions.")
+          PY
+
       - name: Run JVM unit tests
         working-directory: android-build
         run: ./gradlew testDebugUnitTest --stacktrace
