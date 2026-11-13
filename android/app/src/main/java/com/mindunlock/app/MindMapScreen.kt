@@ -7,8 +7,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -76,38 +76,48 @@ fun MindMapScreen(userDb: UserDatabase) {
         showNodeDialog = true
     }
 
-    Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+    LazyColumn(
+        Modifier.fillMaxSize().padding(horizontal = 16.dp),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text("نقشه ذهنی و گراف دانش", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-        Text("ایده‌ها، یادداشت‌ها، پروژه‌ها و موضوعات یادگیری را به گره تبدیل کن و ارتباط معنایی میان آن‌ها بساز. داده‌ها به‌صورت محلی ذخیره می‌شوند.")
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = { edit() }, modifier = Modifier.weight(1f)) { Text("گره جدید") }
-            OutlinedButton(
-                onClick = {
-                    selectedSource = nodes.first().id
-                    selectedTarget = nodes[1].id
-                    relationType = "مرتبط با"
-                    showEdgeDialog = true
-                },
-                enabled = nodes.size >= 2,
-                modifier = Modifier.weight(1f)
-            ) { Text("ایجاد ارتباط") }
+        item {
+            Text("نقشه ذهنی و گراف دانش", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Text("ایده‌ها، یادداشت‌ها، پروژه‌ها و موضوعات یادگیری را به گره تبدیل کن و ارتباط معنایی میان آن‌ها بساز. داده‌ها به‌صورت محلی ذخیره می‌شوند.")
         }
-        OutlinedTextField(query, { query = it }, modifier = Modifier.fillMaxWidth(), label = { Text("جست‌وجوی گره‌ها") }, singleLine = true)
-        Text("گره‌ها: ${nodes.size}  ·  ارتباط‌ها: ${edges.size}", style = MaterialTheme.typography.labelLarge)
-        if (status.isNotBlank()) Text(status, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
+        item {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = { edit() }, modifier = Modifier.weight(1f)) { Text("گره جدید") }
+                OutlinedButton(
+                    onClick = {
+                        selectedSource = nodes.first().id
+                        selectedTarget = nodes[1].id
+                        relationType = "مرتبط با"
+                        showEdgeDialog = true
+                    },
+                    enabled = nodes.size >= 2,
+                    modifier = Modifier.weight(1f)
+                ) { Text("ایجاد ارتباط") }
+            }
+        }
+        item {
+            OutlinedTextField(query, { query = it }, modifier = Modifier.fillMaxWidth(), label = { Text("جست‌وجوی گره‌ها") }, singleLine = true)
+            Text("گره‌ها: ${nodes.size}  ·  ارتباط‌ها: ${edges.size}", style = MaterialTheme.typography.labelLarge)
+            if (status.isNotBlank()) Text(status, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
+        }
         if (nodes.isEmpty()) {
-            Card(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("نقشه هنوز خالی است.", fontWeight = FontWeight.SemiBold)
-                    Text("با ساخت چند گره و اتصال آن‌ها، شبکه دانش شخصی خودت را شکل بده.")
+            item {
+                Card(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text("نقشه هنوز خالی است.", fontWeight = FontWeight.SemiBold)
+                        Text("با ساخت چند گره و اتصال آن‌ها، شبکه دانش شخصی خودت را شکل بده.")
+                    }
                 }
             }
-        } else if (visibleNodes.isEmpty()) Text("گرهی با این عبارت پیدا نشد.")
-
-        visibleNodes.forEach { node ->
+        } else if (visibleNodes.isEmpty()) {
+            item { Text("گرهی با این عبارت پیدا نشد.") }
+        }
+        items(visibleNodes, key = { it.id }) { node ->
             val related = relatedByNode[node.id].orEmpty()
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
