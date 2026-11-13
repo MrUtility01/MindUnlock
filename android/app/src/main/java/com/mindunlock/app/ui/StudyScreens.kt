@@ -411,7 +411,8 @@ fun DashboardScreen(
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(lastCompletedSession.topicTitle, fontWeight = FontWeight.SemiBold)
-                    val elapsedSeconds = ((lastCompletedSession.endedAt ?: lastCompletedSession.startedAt) - lastCompletedSession.startedAt).coerceAtLeast(0L) / 1000L
+                    // durationSeconds stores only active study time; wall-clock elapsed time incorrectly includes pauses.
+                    val elapsedSeconds = lastCompletedSession.durationSeconds.coerceAtLeast(0L)
                     Text(
                         "${PersianDate.format(lastCompletedSession.startedAt)} · مدت ${elapsedSeconds / 60} دقیقه و ${elapsedSeconds % 60} ثانیه",
                         style = MaterialTheme.typography.bodySmall,
