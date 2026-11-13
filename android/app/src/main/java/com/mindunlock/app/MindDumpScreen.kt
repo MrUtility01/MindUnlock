@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.room.withTransaction
 import com.mindunlock.app.data.local.LaterTopicEntity
 import com.mindunlock.app.data.local.MindDumpEntity
+import com.mindunlock.app.data.local.MindDumpTaskMapper
 import com.mindunlock.app.data.local.NoteEntity
 import com.mindunlock.app.data.local.StudyTaskEntity
 import com.mindunlock.app.data.local.UserDatabase
@@ -218,11 +219,7 @@ fun MindDumpScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
                             runEntryAction(entry.id, "به برنامه‌ریز منتقل شد.") {
                                 userDatabase.withTransaction {
                                     val taskId = userDatabase.studyTaskDao().upsert(
-                                        StudyTaskEntity(
-                                            title = entry.content.lineSequence().first().take(80),
-                                            details = entry.content,
-                                            taskType = "task"
-                                        )
+                                        MindDumpTaskMapper.toStudyTask(entry)
                                     )
                                     userDatabase.mindDumpDao().updateStatus(
                                         entry.id, "task", System.currentTimeMillis(), taskId
