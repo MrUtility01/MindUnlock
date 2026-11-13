@@ -412,9 +412,7 @@ private fun MoreScreen(onNavigate: (String) -> Unit) {
             ActionTile("پشتیبان‌گیری و بازیابی", "backup", onNavigate, Modifier.weight(1f))
             ActionTile("تنظیمات", "settings", onNavigate, Modifier.weight(1f))
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            ActionTile("درباره سازنده و برنامه", "about", onNavigate, Modifier.weight(1f))
-        }
+        ActionTile("درباره ما و مشخصات سازنده", "about", onNavigate, Modifier.fillMaxWidth())
     }
 }
 
