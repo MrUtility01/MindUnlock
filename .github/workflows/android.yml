@@ -783,8 +783,16 @@ jobs:
               raise SystemExit("StudyScreens.kt not found")
           path = matches[0]
           source = path.read_text(encoding="utf-8")
-          if "مدیریت حافظه و فضای ذخیره‌سازی" in source:
-              print("Storage settings already present; no duplicate patch applied.")
+          if (
+              "مدیریت حافظه و فضای ذخیره‌سازی" in source
+              or (
+                  "storageBytes" in source
+                  and "cacheBytes" in source
+                  and "پاک‌سازی امن حافظه موقت" in source
+                  and "به‌روزرسانی اطلاعات حافظه" in source
+              )
+          ):
+              print("Functional storage reporting and safe cache cleanup already exist; no duplicate patch applied.")
               raise SystemExit(0)
           marker = '        Text("امنیت برنامه", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)'
           if source.count(marker) != 1:
