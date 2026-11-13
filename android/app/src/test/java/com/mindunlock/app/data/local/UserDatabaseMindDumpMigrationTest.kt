@@ -162,7 +162,7 @@ class UserDatabaseMindDumpMigrationTest {
                 MindDumpEntity(content = sourceText, category = "idea")
             )
 
-            val firstTopicId = db.convertMindDumpToLaterTopic(sourceId)
+            val firstTopicId = db.mindDumpDao().convertToLaterTopic(sourceId)
             val secondTopicId = db.convertMindDumpToLaterTopic(sourceId)
 
             assertEquals(firstTopicId, secondTopicId)

@@ -168,8 +168,37 @@ interface MindDumpDao {
     @Query("SELECT * FROM study_tasks WHERE id = :id LIMIT 1")
     suspend fun getLinkedTask(id: Long): StudyTaskEntity?
 
+    @Query("SELECT * FROM later_topics WHERE sourceMindDumpId = :sourceId ORDER BY updatedAt DESC, id DESC LIMIT 1")
+    suspend fun getLaterTopicBySourceMindDumpId(sourceId: Long): LaterTopicEntity?
+
+    @Insert
+    suspend fun insertLaterTopic(topic: LaterTopicEntity): Long
+
     @Insert
     suspend fun insertTask(task: StudyTaskEntity): Long
+
+    /**
+     * Creates a Later Topic and updates its source in the same Room transaction.
+     * Retries reuse the existing linked topic instead of overwriting user edits.
+     */
+    @Transaction
+    suspend fun convertToLaterTopic(entryId: Long): Long? {
+        val entry = getById(entryId) ?: return null
+        val existing = getLaterTopicBySourceMindDumpId(entryId)
+        val topicId = existing?.id ?: insertLaterTopic(
+            LaterTopicEntity(
+                title = entry.content.lineSequence()
+                    .map { it.trim() }
+                    .firstOrNull { it.isNotEmpty() }
+                    ?.take(120)
+                    ?: "موضوع جدید",
+                details = entry.content,
+                sourceMindDumpId = entry.id
+            )
+        )
+        updateStatus(entry.id, "later", System.currentTimeMillis(), entry.linkedTaskId)
+        return topicId
+    }
 
     /**
      * Idempotently creates the Planner task and persists its source link in one Room transaction.
@@ -219,8 +248,6 @@ interface LaterTopicDao {
     @Query("SELECT * FROM later_topics ORDER BY CASE status WHEN 'active' THEN 0 WHEN 'parked' THEN 1 ELSE 2 END, priority ASC, COALESCE(revisitAt, 9223372036854775807) ASC, updatedAt DESC")
     fun observeAll(): Flow<List<LaterTopicEntity>>
     @Query("SELECT * FROM later_topics") suspend fun getAll(): List<LaterTopicEntity>
-    @Query("SELECT * FROM later_topics WHERE sourceMindDumpId = :sourceId ORDER BY updatedAt DESC, id DESC LIMIT 1")
-    suspend fun getBySourceMindDumpId(sourceId: Long): LaterTopicEntity?
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertAll(items: List<LaterTopicEntity>)
     @Query("DELETE FROM later_topics") suspend fun deleteAll()
 
@@ -252,34 +279,6 @@ abstract class UserDatabase : RoomDatabase() {
     abstract fun learningProfileDao(): LearningProfileDao
     abstract fun learningSessionFeedbackDao(): LearningSessionFeedbackDao
     abstract fun learningStageProgressDao(): LearningStageProgressDao
-
-    /**
-     * Idempotently promotes a Mind Dump entry to Later Topics.
-     * The source link is the stable identity, so retries reuse the existing topic.
-     */
-    @Transaction
-    open suspend fun convertMindDumpToLaterTopic(entryId: Long): Long? {
-        val entry = mindDumpDao().getById(entryId) ?: return null
-        val existing = laterTopicDao().getBySourceMindDumpId(entryId)
-        val topicId = existing?.id ?: laterTopicDao().insert(
-            LaterTopicEntity(
-                title = entry.content.lineSequence()
-                    .map { it.trim() }
-                    .firstOrNull { it.isNotEmpty() }
-                    ?.take(120)
-                    ?: "موضوع جدید",
-                details = entry.content,
-                sourceMindDumpId = entry.id
-            )
-        )
-        mindDumpDao().updateStatus(
-            entry.id,
-            "later",
-            System.currentTimeMillis(),
-            entry.linkedTaskId
-        )
-        return topicId
-    }
 
     companion object {
         val MIGRATION_1_2 = object : Migration(1, 2) {

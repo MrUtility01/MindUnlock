@@ -198,7 +198,7 @@ fun MindDumpScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
                         },
                         onConvertToLater = {
                             runEntryAction(entry.id, "به موضوعات برای بعد منتقل شد؛ متن اصلی حفظ شده است.") {
-                                check(userDatabase.convertMindDumpToLaterTopic(entry.id) != null) {
+                                check(userDatabase.mindDumpDao().convertToLaterTopic(entry.id) != null) {
                                     "Mind Dump entry no longer exists"
                                 }
                             }
