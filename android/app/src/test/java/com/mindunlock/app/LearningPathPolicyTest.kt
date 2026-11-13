@@ -4,6 +4,7 @@ import com.mindunlock.app.data.local.ChapterEntity
 import com.mindunlock.app.data.local.ProgressEntity
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class LearningPathPolicyTest {
@@ -37,6 +38,31 @@ class LearningPathPolicyTest {
         val next = LearningPathPolicy.nextIncompleteChapter(listOf(second, first), progress)
         assertNotNull(next)
         assertEquals("two", next?.id)
+    }
+
+    @Test
+    fun completedCurriculumHasNoIncompleteResumeTarget() {
+        val chapter = ChapterEntity(id = "done", title = "تمام‌شده", orderIndex = 1, itemCount = 2)
+        val progress = listOf(
+            ProgressEntity(itemUid = "a", chapterId = "done", completed = true),
+            ProgressEntity(itemUid = "b", chapterId = "done", completed = true)
+        )
+        assertNull(LearningPathPolicy.nextIncompleteChapter(listOf(chapter), progress))
+    }
+
+    @Test
+    fun emptyCurriculumHasNoResumeTarget() {
+        assertNull(LearningPathPolicy.nextIncompleteChapter(emptyList(), emptyList()))
+    }
+
+    @Test
+    fun unknownProgressDoesNotMarkAChapterComplete() {
+        val chapter = ChapterEntity(id = "one", title = "اول", orderIndex = 1, itemCount = 2)
+        val progress = listOf(
+            ProgressEntity(itemUid = "legacy", chapterId = "removed-chapter", completed = true),
+            ProgressEntity(itemUid = "a", chapterId = "one", completed = true)
+        )
+        assertEquals("one", LearningPathPolicy.nextIncompleteChapter(listOf(chapter), progress)?.id)
     }
 
     @Test
