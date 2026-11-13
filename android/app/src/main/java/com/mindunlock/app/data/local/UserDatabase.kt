@@ -290,6 +290,9 @@ interface MindDumpDao {
     @Query("UPDATE mind_dump SET content = :content, category = :category, updatedAt = :updatedAt WHERE id = :id")
     suspend fun updateContentAndCategory(id: Long, content: String, category: String, updatedAt: Long)
 
+    @Query("UPDATE mind_dump SET content = :content, updatedAt = :updatedAt WHERE id = :id")
+    suspend fun updateContent(id: Long, content: String, updatedAt: Long)
+
     @Query("DELETE FROM mind_dump WHERE id = :id")
     suspend fun delete(id: Long)
 }
