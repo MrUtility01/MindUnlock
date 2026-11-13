@@ -471,10 +471,7 @@ fun DashboardScreen(
             Text("موضوع فعالی برای پیگیری انتخاب نشده است.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Text("شروع یادگیری", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-        Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-            ActionTile("نقشه ذهنی و گراف دانش", "mindmap", onNavigate, Modifier.weight(1f))
-            ActionTile("موتور یادگیری", "learning", onNavigate, Modifier.weight(1f))
-        }
+        ActionTile("نقشه ذهنی و گراف دانش", "mindmap", onNavigate, Modifier.fillMaxWidth())
         Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
             ActionTile("موضوع‌ها و فصل‌ها", "courses", onNavigate, Modifier.weight(1f))
             ActionTile("فلش‌کارت‌ها", "flashcards", onNavigate, Modifier.weight(1f))
