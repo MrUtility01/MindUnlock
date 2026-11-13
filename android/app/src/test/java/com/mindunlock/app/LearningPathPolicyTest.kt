@@ -66,6 +66,22 @@ class LearningPathPolicyTest {
     }
 
     @Test
+    fun essentialSideQuestionsTakePriorityOverActiveTopicAndReadingResume() {
+        val action = ResumeActionPolicy.select(
+            dueReviewCount = 0,
+            overdueTaskCount = 0,
+            todayTaskCount = 0,
+            activeTopicTitle = "موضوع فعال",
+            lastReadItemUid = "item-1",
+            lastReadChapterId = "chapter-1",
+            fallbackChapterId = "chapter-0",
+            essentialTopicCount = 2
+        )
+        assertEquals(ResumeActionKind.ESSENTIAL_TOPICS, action.kind)
+        assertEquals("رسیدگی به سؤال‌های ضروری", action.title)
+    }
+
+    @Test
     fun activeTopicTakesPriorityOverReadingResume() {
         val action = ResumeActionPolicy.select(0, 0, 0, "موضوع فعال", "item-1", "chapter-1", "chapter-0")
         assertEquals(ResumeActionKind.ACTIVE_TOPIC, action.kind)
