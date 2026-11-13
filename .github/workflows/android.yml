@@ -2603,12 +2603,22 @@ jobs:
           from pathlib import Path
           p = Path("android-build/app/build.gradle.kts")
           source = p.read_text(encoding="utf-8")
-          if "versionCode = 6" not in source or 'versionName = "0.5.1"' not in source:
-              raise SystemExit("Expected v0.5.1 package version markers not found")
-          source = source.replace("versionCode = 6", "versionCode = 24", 1)
-          source = source.replace('versionName = "0.5.1"', 'versionName = "0.6.9"', 1)
-          p.write_text(source, encoding="utf-8")
-          print("Package version bumped to 0.6.9 (versionCode 24).")
+          import re
+          code_match = re.search(r"versionCode\s*=\s*(\d+)", source)
+          name_match = re.search(r'versionName\s*=\s*"([^"]+)"', source)
+          if not code_match or not name_match:
+              raise SystemExit("Could not parse Android package version; refusing an unsafe version rewrite")
+          code = int(code_match.group(1))
+          name = name_match.group(1)
+          if code == 6 and name == "0.5.1":
+              source = source.replace("versionCode = 6", "versionCode = 24", 1)
+              source = source.replace('versionName = "0.5.1"', 'versionName = "0.6.9"', 1)
+              p.write_text(source, encoding="utf-8")
+              print("Legacy package version bumped to 0.6.9 (versionCode 24).")
+          elif code >= 38 and name == "0.6.23":
+              print("Preserving newer tracked package version 0.6.23 (versionCode 38); no downgrade or conflicting rewrite.")
+          else:
+              raise SystemExit(f"Unexpected package version {name} ({code}); refusing to guess a release version.")
           PY
 
       - name: Fix Room projections to include required sourceStatus column
