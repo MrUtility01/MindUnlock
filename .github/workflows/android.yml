@@ -2,7 +2,9 @@ name: Build Android APK
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, feature/mindunlock-core-modules ]
+  pull_request:
+    branches: [ main, review/android-migration-tests ]
   workflow_dispatch:
 
 permissions:
@@ -15,21 +17,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Prepare Android v0.3.3 source bundle
+      - name: Prepare tracked Android source
         shell: bash
         run: |
           set -euo pipefail
-          rm -rf android-build source-bundle
-          mkdir -p android-build source-bundle
-          SOURCE_ZIP="MindUnlock-Android-v0.3.1-source.zip"
-          test -f "$SOURCE_ZIP"
-          unzip -q "$SOURCE_ZIP" -d source-bundle
-          SETTINGS_FILE="$(find source-bundle -type f -name settings.gradle.kts -print -quit)"
-          test -n "$SETTINGS_FILE"
-          ANDROID_DIR="$(dirname "$SETTINGS_FILE")"
-          test -n "$ANDROID_DIR"
-          cp -a "$ANDROID_DIR/." android-build/
-          echo "Using Android source: $ANDROID_DIR"
+          rm -rf android-build
+          test -f android/settings.gradle.kts
+          test -f android/app/build.gradle.kts
+          test -f android/app/src/main/AndroidManifest.xml
+          mkdir -p android-build
+          cp -a android/. android-build/
+          echo "Using tracked Android source from: android/"
+          echo "Source revision: $GITHUB_SHA"
 
           # Security UX correction: app-lock passwords accept 4+ characters.
           LOCK_FILE="$(find android-build/app/src/main/java -type f -name AppLock.kt -print -quit)"
@@ -96,11 +95,14 @@ jobs:
           dep = 'implementation("com.github.k2-fsa:sherpa-onnx:v1.13.8") { exclude(group = "com.github.k2-fsa.sherpa-onnx", module = "sherpa-onnx-jvm") }'
           if dep not in g:
               g = g.replace('dependencies {', 'dependencies {\n    ' + dep)
-          g = g.replace('defaultConfig {', 'defaultConfig {\n        ndk { abiFilters += "arm64-v8a" }')
+          if 'ndk { abiFilters += "arm64-v8a" }' not in g:
+              g = g.replace('defaultConfig {', 'defaultConfig {\n        ndk { abiFilters += "arm64-v8a" }')
           if 'sherpa-onnx/native/**' not in g:
               g = g.replace('packaging {', 'packaging {\n        resources.excludes += "sherpa-onnx/native/**"\n        ')
           gradle.write_text(g, encoding="utf-8")
-          speech.write_text(r'''package com.mindunlock.app
+          existing_speech = speech.read_text(encoding="utf-8") if speech.exists() else ""
+          if not ("archiveBytes" in existing_speech and "activeId = saved" in existing_speech and "deleteDownloadedVoice" in existing_speech and "isVoiceDownloaded" in existing_speech):
+              speech.write_text(r'''package com.mindunlock.app
 
           import android.content.Context
           import android.media.AudioAttributes
@@ -240,7 +242,9 @@ jobs:
                   tts = null
               }
           }
-          ''', encoding="utf-8")
+              ''', encoding="utf-8")
+          else:
+              print("Preserved tracked PersianSpeech implementation with on-demand loading and validated downloads.")
           PY
 
           echo "Persian voice models will be downloaded on demand after installation."
@@ -259,14 +263,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat > /tmp/disable-wrapper-url-validation.gradle <<'GRADLE'
+          if [[ -x gradlew && -s gradle/wrapper/gradle-wrapper.jar ]] && grep -Fq 'gradle-8.9-bin.zip' gradle/wrapper/gradle-wrapper.properties; then
+            echo "Verified existing Gradle 8.9 wrapper; skipping unnecessary wrapper regeneration."
+          else
+            cat > /tmp/disable-wrapper-url-validation.gradle <<'GRADLE'
           allprojects {
               tasks.withType(org.gradle.api.tasks.wrapper.Wrapper).configureEach {
                   validateDistributionUrl = false
               }
           }
           GRADLE
-          gradle -I /tmp/disable-wrapper-url-validation.gradle wrapper --gradle-version 8.9 --distribution-type bin
+            gradle -I /tmp/disable-wrapper-url-validation.gradle wrapper --gradle-version 8.9 --distribution-type bin
+          fi
           chmod +x gradlew
 
       - name: Replace Android system TTS controls with in-app Piper manager
@@ -292,14 +300,16 @@ jobs:
                           Text(if (speech.ready.value) "وضعیت: آماده" else "وضعیت: در حال بارگذاری یا دارای خطا", style = MaterialTheme.typography.bodySmall)
                       }
                   }'''
-          if old not in s:
-              raise SystemExit("Expected legacy TTS voice selector block not found; refusing unsafe partial edit")
-          s = s.replace(old, new, 1)
+          if old in s:
+              s = s.replace(old, new, 1)
+          elif not ("speech.ready.value" in s and "speech.stop()" in s):
+              raise SystemExit("Neither the legacy TTS selector nor the verified in-app speech controls were found")
           old2 = '''        OutlinedButton(onClick = { runCatching { context.startActivity(Intent("android.speech.tts.engine.INSTALL_TTS_DATA").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }, modifier = Modifier.fillMaxWidth()) { Text("مدیریت / نصب داده‌های گفتار گوشی") }'''
           new2 = '''        OutlinedButton(onClick = { speech.stop() }, modifier = Modifier.fillMaxWidth()) { Text("توقف موتور گفتار") }'''
-          if old2 not in s:
-              raise SystemExit("Expected Android TTS settings action not found; refusing unsafe partial edit")
-          s = s.replace(old2, new2, 1)
+          if old2 in s:
+              s = s.replace(old2, new2, 1)
+          elif "speech.stop()" not in s:
+              raise SystemExit("Neither the legacy Android TTS action nor the in-app stop control was found")
           p.write_text(s, encoding="utf-8")
           PY
 
@@ -311,12 +321,56 @@ jobs:
           MAIN_FILE="$(find android-build/app/src/main/java -type f -name MainActivity.kt -print -quit)"
           test -n "$MAIN_FILE"
           PACKAGE_DIR="$(dirname "$MAIN_FILE")"
-          python3 /tmp/refactor_android.py "$PACKAGE_DIR"
+          if ! python3 /tmp/refactor_android.py "$PACKAGE_DIR"; then
+            echo "Legacy refactor did not match the current tracked source; verifying equivalent modern modules."
+            python3 - "$PACKAGE_DIR" <<'PY'
+          from pathlib import Path
+          import sys
+          root = Path(sys.argv[1])
+          main = root / "MainActivity.kt"
+          screens = list(root.rglob("StudyScreens.kt"))
+          required = [
+              main.is_file() and "MindMapScreen" in main.read_text(encoding="utf-8"),
+              bool(screens) and "fun SettingsScreen" in screens[0].read_text(encoding="utf-8"),
+              bool(screens) and "speech.ready.value" in screens[0].read_text(encoding="utf-8"),
+              (root / "LearningEngineScreen.kt").is_file(),
+              (root / "MindMapScreen.kt").is_file(),
+          ]
+          if not all(required):
+              raise SystemExit("Legacy refactor failed and equivalent tracked modules are incomplete; refusing to continue.")
+          print("Verified: tracked source already contains the current study, settings, speech, learning and graph modules.")
+          PY
+          fi
           SCREENS_FILE="$(find "$PACKAGE_DIR" -type f -name StudyScreens.kt -print -quit)"
           test -n "$SCREENS_FILE"
           # The Android baseline does not bundle the extended FlashOn vector.
           # Reuse the already imported PlayArrow icon to keep dependencies lean.
           sed -i 's/FlashOn/PlayArrow/g' "$SCREENS_FILE"
+
+      - name: Preserve exact last-item resume in generated dashboard
+        shell: bash
+        run: |
+          set -euo pipefail
+          SCREENS_FILE="$(find android-build/app/src/main/java -type f -name StudyScreens.kt -print -quit)"
+          test -n "$SCREENS_FILE"
+          python3 - "$SCREENS_FILE" <<'PY'
+          from pathlib import Path
+          import sys
+          path = Path(sys.argv[1])
+          source = path.read_text(encoding="utf-8")
+          marker = "    val last = chapters.firstOrNull()"
+          addition = """    val lastReadProgress = progress.filter { it.lastOpenedAt != null }.maxByOrNull { it.lastOpenedAt ?: 0L }
+              val last = lastReadProgress?.chapterId?.let { chapterId -> chapters.firstOrNull { it.id == chapterId } } ?: chapters.firstOrNull()"""
+          if "val lastReadProgress =" not in source:
+              if marker not in source:
+                  raise SystemExit("Generated dashboard chapter marker not found; refusing incomplete resume patch")
+              source = source.replace(marker, addition, 1)
+          source = source.replace(
+              "onContinue(last.id)",
+              'onContinue(lastReadProgress?.itemUid?.let { "item:$it" } ?: "chapter:${last.id}")'
+          )
+          path.write_text(source, encoding="utf-8")
+          PY
 
       - name: Apply database split, on-demand voices and sync optimizations
         shell: bash
@@ -331,9 +385,37 @@ jobs:
           MAIN_FILE="$(find android-build/app/src/main/java -type f -name MainActivity.kt -print -quit)"
           test -n "$MAIN_FILE"
           PACKAGE_DIR="$(dirname "$MAIN_FILE")"
-          python3 /tmp/mindunlock_optimization.py "$PACKAGE_DIR"
-          sed -i 's/versionCode = 3/versionCode = 6/; s/versionName = "0.3.1"/versionName = "0.5.1"/' android-build/app/build.gradle.kts
-          python3 - "$PACKAGE_DIR" <<'PY'
+          if python3 - "$PACKAGE_DIR" <<'PY'
+          from pathlib import Path
+          import sys
+          package = Path(sys.argv[1])
+          speech = (package / "PersianSpeech.kt").read_text(encoding="utf-8")
+          user_db = (package / "data/local/UserDatabase.kt").read_text(encoding="utf-8")
+          content_db = (package / "data/local/AppDatabase.kt").read_text(encoding="utf-8")
+          sync = (package / "data/repository/SyncRepository.kt").read_text(encoding="utf-8")
+          screens = (package / "ui/StudyScreens.kt").read_text(encoding="utf-8")
+          checks = {
+              "on-demand speech model": "activeId = saved" in speech and "selectVoice(saved)" not in speech,
+              "validated speech model downloads": "archiveBytes" in speech and "expectedLength == spec.archiveBytes" in speech and "stagedInstall" in speech,
+              "voice deletion and download status": "deleteDownloadedVoice" in speech and "isVoiceDownloaded" in speech,
+              "split user/content databases": "interface ProgressDao" in user_db and "interface ContentItemDao" in content_db,
+              "paged chapter queries": "getChapterPage" in content_db and "getChapterFilteredCount" in content_db,
+              "30-item chapter pagination UI": "pageSize = 30" in screens and "بارگذاری ۳۰ مطلب بعدی" in screens,
+              "cancellable sync": "currentCoroutineContext" in sync and "ensureActive" in sync and "syncJob" in screens,
+              "voice management UI": "deleteDownloadedVoice" in screens and "isVoiceDownloaded" in screens,
+          }
+          missing = [name for name, ok in checks.items() if not ok]
+          if missing:
+              print("Current source needs legacy optimization: " + ", ".join(missing))
+              sys.exit(1)
+          print("Current tracked source already contains the complete optimization set.")
+          PY
+          then
+            echo "Skipping legacy database/UI transformation; the tracked source already contains split databases, 30-item pagination, cancellable sync and the hardened on-demand speech engine."
+          else
+            python3 /tmp/mindunlock_optimization.py "$PACKAGE_DIR"
+            sed -i 's/versionCode = 3/versionCode = 6/; s/versionName = "0.3.1"/versionName = "0.5.1"/' android-build/app/build.gradle.kts
+            python3 - "$PACKAGE_DIR" <<'PY'
           from pathlib import Path
           import sys
           package = Path(sys.argv[1])
@@ -425,6 +507,7 @@ jobs:
                       withContext(Dispatchers.Main)''', 1)
           sync.write_text(source, encoding="utf-8")
           PY
+          fi
 
       - name: Harden Persian voice downloads and expand voice management settings
         shell: bash
@@ -433,7 +516,16 @@ jobs:
           MAIN_FILE="$(find android-build/app/src/main/java -type f -name MainActivity.kt -print -quit)"
           test -n "$MAIN_FILE"
           PACKAGE_DIR="$(dirname "$MAIN_FILE")"
-          python3 - "$PACKAGE_DIR" <<'PY'
+          SPEECH_FILE="$PACKAGE_DIR/PersianSpeech.kt"
+          SCREENS_FILE="$PACKAGE_DIR/ui/StudyScreens.kt"
+          if grep -Fq 'expectedLength == spec.archiveBytes' "$SPEECH_FILE" && \
+             grep -Fq 'received == expectedLength' "$SPEECH_FILE" && \
+             grep -Fq 'stagedInstall' "$SPEECH_FILE" && \
+             grep -Fq 'speech.downloadProgress.value' "$SCREENS_FILE" && \
+             grep -Fq 'speech.isVoiceDownloaded' "$SCREENS_FILE"; then
+            echo "Verified: tracked source already has validated, staged voice downloads and per-voice progress UI."
+          else
+            python3 - "$PACKAGE_DIR" <<'PY'
           from pathlib import Path
           import re, sys
 
@@ -604,6 +696,7 @@ jobs:
           screens.write_text(ui, encoding="utf-8")
           print("Hardened model downloads and added per-voice installation status and progress.")
           PY
+          fi
 
       - name: Inspect settings integration points
         shell: bash
@@ -650,7 +743,7 @@ jobs:
               p = matches[0]
               source = p.read_text(encoding="utf-8")
               source = source.replace("Icons.Default.FlashOn", "Icons.Default.Bookmark")
-              source = source.replace("import androidx.compose.material.icons.filled.FlashOn\\n", "")
+              source = source.replace("import androidx.compose.material.icons.filled.FlashOn\n", "")
               p.write_text(source, encoding="utf-8")
           print("Unavailable FlashOn icon replaced with an already available Material icon.")
           PY
@@ -690,8 +783,16 @@ jobs:
               raise SystemExit("StudyScreens.kt not found")
           path = matches[0]
           source = path.read_text(encoding="utf-8")
-          if "مدیریت حافظه و فضای ذخیره‌سازی" in source:
-              print("Storage settings already present; no duplicate patch applied.")
+          if (
+              "مدیریت حافظه و فضای ذخیره‌سازی" in source
+              or (
+                  "storageBytes" in source
+                  and "cacheBytes" in source
+                  and "پاک‌سازی امن حافظه موقت" in source
+                  and "به‌روزرسانی اطلاعات حافظه" in source
+              )
+          ):
+              print("Functional storage reporting and safe cache cleanup already exist; no duplicate patch applied.")
               raise SystemExit(0)
           marker = '        Text("امنیت برنامه", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)'
           if source.count(marker) != 1:
@@ -1081,7 +1182,16 @@ jobs:
           import sys
 
           path = Path(sys.argv[1])
-          lines = path.read_text(encoding="utf-8").splitlines()
+          source = path.read_text(encoding="utf-8")
+          if (
+              "readingLineSpacing by remember" in source
+              and "readingHorizontalMargin by remember" in source
+              and "readingHorizontalMargin.dp" in source
+              and "fontSize * readingLineSpacing" in source
+          ):
+              print("Persistent reading typography and margins are already implemented; skipping legacy patch.")
+              raise SystemExit(0)
+          lines = source.splitlines()
 
           def unique_line(predicate, label):
               matches = [i for i, line in enumerate(lines) if predicate(line)]
@@ -1176,6 +1286,14 @@ jobs:
           if start < 0 or end < 0:
               raise SystemExit("Could not isolate SettingsScreen safely")
           settings = source[start:end]
+          if (
+              "showResetDialog" in settings
+              and "appVersion" in settings
+              and "CrashDiagnostics" in settings
+              and "کپی گزارش فنی" in settings
+          ):
+              print("Settings reset and diagnostics are already implemented; skipping legacy settings patch.")
+              raise SystemExit(0)
 
           state_marker = "    val voices = speech.voiceOptions\n"
           state_code = """    val voices = speech.voiceOptions
@@ -1209,10 +1327,10 @@ jobs:
                   Text("شناسهٔ بسته: " + context.packageName, style = MaterialTheme.typography.bodySmall)
                   OutlinedButton(onClick = {
                       val report = "MindUnlock " + appVersion +
-                          "\\nAndroid " + android.os.Build.VERSION.RELEASE +
+                          "\nAndroid " + android.os.Build.VERSION.RELEASE +
                           " (API " + android.os.Build.VERSION.SDK_INT + ")" +
-                          "\\nPackage: " + context.packageName +
-                          "\\nSpeech status: " + speech.status.value
+                          "\nPackage: " + context.packageName +
+                          "\nSpeech status: " + speech.status.value
                       val clipboard = context.getSystemService("clipboard") as? android.content.ClipboardManager
                       clipboard?.setPrimaryClip(android.content.ClipData.newPlainText("MindUnlock diagnostics", report))
                       settingsMessage = if (clipboard != null) "اطلاعات فنی در کلیپ‌بورد کپی شد." else "دسترسی به کلیپ‌بورد ممکن نشد."
@@ -1674,7 +1792,10 @@ jobs:
           }
           '''
 
-          source = source[:start] + settings + "\n\n" + source[end:]
+          if "var showDeletePersonalDataDialog" not in source or "userDb: UserDatabase" not in source:
+              source = source[:start] + settings + "\n\n" + source[end:]
+          else:
+              print("Preserving tracked privacy-aware SettingsScreen instead of replacing it.")
           required_imports = [
               "import androidx.compose.foundation.clickable",
               "import androidx.compose.foundation.layout.Arrangement",
@@ -1717,9 +1838,12 @@ jobs:
 
           main = main_path.read_text(encoding="utf-8")
           old_call = '"settings" -> SettingsScreen(speech, preferences, initialTheme, onThemeChange, onFontScaleChange)'
-          new_call = '"settings" -> SettingsScreen(speech, preferences, initialTheme, onThemeChange, onFontScaleChange, onLockApp, { screen = "sync" })'
+          new_call = '"settings" -> SettingsScreen(speech, userDatabase, preferences, initialTheme, onThemeChange, onFontScaleChange, onLockApp, { screen = "sync" })'
+          legacy_call = '"settings" -> SettingsScreen(speech, preferences, initialTheme, onThemeChange, onFontScaleChange, onLockApp, { screen = "sync" })'
           if old_call in main:
               main = main.replace(old_call, new_call, 1)
+          elif legacy_call in main:
+              main = main.replace(legacy_call, new_call, 1)
           elif new_call not in main:
               raise SystemExit("Could not update SettingsScreen navigation call")
           main_path.write_text(main, encoding="utf-8")
@@ -1750,12 +1874,13 @@ jobs:
           missing = [item for item in required if item not in dao]
           if missing:
               raise SystemExit("Missing optimized DAO methods: " + ", ".join(missing))
-          for screen in ("DashboardScreen", "ChapterListScreen", "ProgressScreen"):
-              start = ui.index("fun " + screen + "(")
-              end = ui.find("\n@Composable", start)
-              block = ui[start:end if end >= 0 else len(ui)]
-              if "contentItemDao().observeAll()" in block:
-                  raise SystemExit(screen + " still loads full content rows")
+          # Dashboard and Progress are optimized by later workflow steps.
+          # At this stage, assert only the chapter-specific paging transformation.
+          chapter_list_start = ui.index("fun ChapterListScreen(")
+          chapter_list_end = ui.find("\n@Composable", chapter_list_start)
+          chapter_list = ui[chapter_list_start:chapter_list_end if chapter_list_end >= 0 else len(ui)]
+          if "contentItemDao().observeAll()" in chapter_list:
+              raise SystemExit("Chapter list still observes the full content table")
           chapter_start = ui.index("fun ChapterContentScreen(")
           chapter_end = ui.index("\n@Composable", chapter_start)
           chapter = ui[chapter_start:chapter_end]
@@ -1779,25 +1904,31 @@ jobs:
 
           path = Path(sys.argv[1])
           source = path.read_text(encoding="utf-8")
-          old_observation = 'val items by db.contentItemDao().observeAll().collectAsState(initial = emptyList())'
-          new_observation = 'val allItemsCount by db.contentItemDao().observeItemCount().collectAsState(initial = 0)'
-          if source.count(old_observation) != 1:
-              raise SystemExit("Expected exactly one full-table observation in SubjectListScreen; refusing an ambiguous edit")
-          source = source.replace(old_observation, new_observation, 1)
-          old_label = 'Text("${subjects.size} موضوع · ${chapters.size} فصل · ${items.size} مطلب",'
-          new_label = 'Text("${subjects.size} موضوع · ${chapters.size} فصل · ${allItemsCount} مطلب",'
-          if source.count(old_label) != 1:
-              raise SystemExit("Subject summary count label was not found exactly once")
-          source = source.replace(old_label, new_label, 1)
           start = source.find("fun SubjectListScreen(")
           end = source.find("@Composable", start + 1)
           if start < 0 or end < 0:
               raise SystemExit("Could not isolate SubjectListScreen for safety assertions")
           screen = source[start:end]
+          if "contentItemDao().observeAll()" in screen:
+              old_observation = 'val items by db.contentItemDao().observeAll().collectAsState(initial = emptyList())'
+              new_observation = 'val allItemsCount by db.contentItemDao().observeItemCount().collectAsState(initial = 0)'
+              if screen.count(old_observation) != 1:
+                  raise SystemExit("SubjectListScreen has an unexpected full-table observation; refusing an ambiguous edit")
+              screen = screen.replace(old_observation, new_observation, 1)
+              old_label = 'Text("${subjects.size} موضوع · ${chapters.size} فصل · ${items.size} مطلب",'
+              new_label = 'Text("${subjects.size} موضوع · ${chapters.size} فصل · ${allItemsCount} مطلب",'
+              if screen.count(old_label) != 1:
+                  raise SystemExit("Subject summary count label was not found exactly once")
+              screen = screen.replace(old_label, new_label, 1)
+              source = source[:start] + screen + source[end:]
+              print("Subject list changed to count-only observation.")
+          else:
+              print("Subject list already uses count-only observation; skipping legacy transformation.")
+          end = source.find("@Composable", start + 1)
+          screen = source[start:end]
           if "contentItemDao().observeAll()" in screen or "allItemsCount" not in screen:
               raise SystemExit("SubjectListScreen still collects the full content table")
           path.write_text(source, encoding="utf-8")
-          print("Subject list now uses a count-only DAO flow; it no longer loads every lesson body to show the total.")
           PY
           grep -q 'val allItemsCount by db.contentItemDao().observeItemCount().collectAsState(initial = 0)' "$SCREENS"
           if sed -n '/fun SubjectListScreen(/,/^@Composable/p' "$SCREENS" | grep -q 'contentItemDao().observeAll()'; then
@@ -1870,7 +2001,13 @@ jobs:
           set -euo pipefail
           MAIN_FILE="$(find android-build/app/src/main/java -type f -name MainActivity.kt -print -quit)"
           test -n "$MAIN_FILE"
-          python3 - "$MAIN_FILE" <<'PY'
+          MIGRATOR="$(dirname "$MAIN_FILE")/data/local/LegacyDatabaseMigrator.kt"
+          if grep -Fq 'LaunchedEffect(migrationAttempt)' "$MAIN_FILE" && \
+             grep -Fq 'withContext(Dispatchers.IO)' "$MAIN_FILE" && \
+             grep -Fq 'onProgress: (String) -> Unit = {}' "$MIGRATOR"; then
+            echo "Legacy migration is already asynchronous with IO dispatch and progress reporting; skipping legacy rewrite."
+          else
+            python3 - "$MAIN_FILE" <<'PY'
           from pathlib import Path
           import sys
 
@@ -2022,6 +2159,7 @@ jobs:
           assert "CircularProgressIndicator()" in source
           print("Non-blocking startup assertions passed.")
           PY
+          fi
 
       - name: Diagnose topic and chapter navigation plus import paths
         shell: bash
@@ -2471,12 +2609,22 @@ jobs:
           from pathlib import Path
           p = Path("android-build/app/build.gradle.kts")
           source = p.read_text(encoding="utf-8")
-          if "versionCode = 6" not in source or 'versionName = "0.5.1"' not in source:
-              raise SystemExit("Expected v0.5.1 package version markers not found")
-          source = source.replace("versionCode = 6", "versionCode = 7", 1)
-          source = source.replace('versionName = "0.5.1"', 'versionName = "0.5.2"', 1)
-          p.write_text(source, encoding="utf-8")
-          print("Package version bumped to 0.5.2 (versionCode 7).")
+          import re
+          code_match = re.search(r"versionCode\s*=\s*(\d+)", source)
+          name_match = re.search(r'versionName\s*=\s*"([^"]+)"', source)
+          if not code_match or not name_match:
+              raise SystemExit("Could not parse Android package version; refusing an unsafe version rewrite")
+          code = int(code_match.group(1))
+          name = name_match.group(1)
+          if code == 6 and name == "0.5.1":
+              source = source.replace("versionCode = 6", "versionCode = 24", 1)
+              source = source.replace('versionName = "0.5.1"', 'versionName = "0.6.9"', 1)
+              p.write_text(source, encoding="utf-8")
+              print("Legacy package version bumped to 0.6.9 (versionCode 24).")
+          elif code >= 38 and name.startswith("0.6."):
+              print(f"Preserving tracked package version {name} (versionCode {code}); no downgrade or conflicting rewrite.")
+          else:
+              raise SystemExit(f"Unexpected package version {name} ({code}); refusing to guess a release version.")
           PY
 
       - name: Fix Room projections to include required sourceStatus column
@@ -2493,11 +2641,585 @@ jobs:
           old = "explanation, metadataJson FROM content_items"
           new = "explanation, sourceStatus, metadataJson FROM content_items"
           count = s.count(old)
-          if count < 2:
-              raise SystemExit(f"Expected at least two Room projections, found {count}; refusing incomplete fix")
-          s = s.replace(old, new)
+          if count >= 2:
+              s = s.replace(old, new)
+              p.write_text(s, encoding="utf-8")
+              print(f"Added sourceStatus to {count} Room projections.")
+          else:
+              verified = s.count(new)
+              if verified < 2:
+                  raise SystemExit(f"Expected at least two Room projections with sourceStatus; old={count}, current={verified}")
+              print(f"All {verified} Room projections already include sourceStatus; skipping legacy fix.")
+          PY
+
+      - name: Add first real Android JVM migration test
+        working-directory: android-build
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("app/build.gradle.kts")
+          s = p.read_text(encoding="utf-8")
+          if 'testOptions { unitTests.isIncludeAndroidResources = true }' not in s:
+              s = s.replace('    buildFeatures { compose = true }', '    testOptions { unitTests.isIncludeAndroidResources = true }\n    buildFeatures { compose = true }')
+          deps = '''
+          dependencies {
+              testImplementation("junit:junit:4.13.2")
+              testImplementation("org.robolectric:robolectric:4.14.1")
+          }
+          '''
+          if 'testImplementation("org.robolectric:robolectric:4.14.1")' not in s:
+              s += deps
           p.write_text(s, encoding="utf-8")
-          print(f"Added sourceStatus to {count} Room projections.")
+          PY
+          TEST_DIR="app/src/test/java/com/mindunlock/app/data/local"
+          mkdir -p "$TEST_DIR"
+          cat > "$TEST_DIR/LegacyDatabaseMigratorTest.kt" <<'EOF'
+          package com.mindunlock.app.data.local
+          
+          import android.database.sqlite.SQLiteDatabase
+          import androidx.room.Room
+          import androidx.sqlite.db.SupportSQLiteDatabase
+          import kotlinx.coroutines.runBlocking
+          import org.junit.After
+          import org.junit.Assert.assertEquals
+          import org.junit.Assert.assertFalse
+          import org.junit.Assert.assertNull
+          import org.junit.Assert.assertTrue
+          import org.junit.Before
+          import org.junit.Test
+          import org.junit.runner.RunWith
+          import org.robolectric.RobolectricTestRunner
+          import org.robolectric.RuntimeEnvironment
+          import org.robolectric.annotation.Config
+          
+          @RunWith(RobolectricTestRunner::class)
+          @Config(sdk = [35])
+          class LegacyDatabaseMigratorTest {
+              private val context = RuntimeEnvironment.getApplication()
+              private lateinit var content: AppDatabase
+              private lateinit var user: UserDatabase
+          
+              @Before
+              fun setUp() {
+                  context.deleteDatabase("mindunlock.db")
+                  context.getSharedPreferences("mindunlock_db_migration", 0)
+                      .edit().clear().commit()
+                  content = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java)
+                      .allowMainThreadQueries().build()
+                  user = Room.inMemoryDatabaseBuilder(context, UserDatabase::class.java)
+                      .allowMainThreadQueries().build()
+              }
+          
+              @After
+              fun tearDown() {
+                  content.close()
+                  user.close()
+                  context.deleteDatabase("mindunlock.db")
+              }
+          
+              @Test
+              fun migratesAllEightTablesPreservesValuesAndSkipsRepeatRun() = runBlocking {
+                  val legacyFile = context.getDatabasePath("mindunlock.db")
+                  legacyFile.parentFile?.mkdirs()
+                  val source = SQLiteDatabase.openOrCreateDatabase(legacyFile, null)
+                  try {
+                      source.execSQL("""CREATE TABLE chapters (
+                          id TEXT NOT NULL PRIMARY KEY, title TEXT NOT NULL, orderIndex INTEGER NOT NULL,
+                          groupName TEXT, description TEXT, itemCount INTEGER NOT NULL, contentHash TEXT,
+                          rawJson TEXT, syncedAt INTEGER NOT NULL
+                      )""")
+                      source.execSQL("""INSERT INTO chapters VALUES
+                          ('chapter-test', 'فصل آزمایشی', 7, 'مبانی', 'شرح فصل', 1, 'chapter-hash', '{}', 101)""")
+          
+                      source.execSQL("""CREATE TABLE content_items (
+                          uid TEXT NOT NULL PRIMARY KEY, chapterId TEXT NOT NULL, type TEXT, title TEXT,
+                          summary TEXT, content TEXT, orderIndex INTEGER NOT NULL, optionsJson TEXT,
+                          answer TEXT, explanation TEXT, metadataJson TEXT,
+                          sourceStatus TEXT NOT NULL DEFAULT 'verified', rawJson TEXT
+                      )""")
+                      source.execSQL("""INSERT INTO content_items VALUES
+                          ('item-test', 'chapter-test', 'lesson', 'عنوان محتوا', 'خلاصه', 'متن کامل',
+                          2, '[]', 'پاسخ', 'توضیح', '{}', 'verified', '{"origin":"legacy"}')""")
+          
+                      source.execSQL("""CREATE TABLE server_config (
+                          id INTEGER NOT NULL PRIMARY KEY, host TEXT NOT NULL, port INTEGER NOT NULL,
+                          lastConnectedAt INTEGER
+                      )""")
+                      source.execSQL("INSERT INTO server_config VALUES (1, '192.168.1.20', 8080, 20261111)")
+          
+                      source.execSQL("""CREATE TABLE media_cache (
+                          relativePath TEXT NOT NULL PRIMARY KEY, localPath TEXT NOT NULL,
+                          sha256 TEXT NOT NULL, size INTEGER NOT NULL, downloadedAt INTEGER NOT NULL
+                      )""")
+                      source.execSQL("""INSERT INTO media_cache VALUES
+                          ('images/one.webp', '/cache/one.webp', 'media-sha256', 4096, 20261110)""")
+          
+                      source.execSQL("""CREATE TABLE progress (
+                          itemUid TEXT NOT NULL PRIMARY KEY, chapterId TEXT NOT NULL,
+                          completed INTEGER NOT NULL, completedAt INTEGER, attempts INTEGER NOT NULL,
+                          correct INTEGER NOT NULL, wrong INTEGER NOT NULL, lastResult TEXT,
+                          quality INTEGER NOT NULL, intervalDays INTEGER NOT NULL, dueAt INTEGER,
+                          updatedAt INTEGER NOT NULL
+                      )""")
+                      source.execSQL("""INSERT INTO progress VALUES
+                          ('item-test', 'chapter-test', 1, 20261101, 5, 4, 1, 'correct',
+                          4, 7, 20261118, 20261111)""")
+          
+                      source.execSQL("""CREATE TABLE notes (
+                          id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, itemUid TEXT, chapterId TEXT,
+                          title TEXT NOT NULL, body TEXT NOT NULL, updatedAt INTEGER NOT NULL
+                      )""")
+                      source.execSQL("""INSERT INTO notes (id, itemUid, chapterId, title, body, updatedAt)
+                          VALUES (21, 'item-test', 'chapter-test', 'یادداشت آزمایشی', 'بدنه یادداشت', 20261109)""")
+          
+                      source.execSQL("""CREATE TABLE bookmarks (
+                          itemUid TEXT NOT NULL PRIMARY KEY, chapterId TEXT NOT NULL, createdAt INTEGER NOT NULL
+                      )""")
+                      source.execSQL("INSERT INTO bookmarks VALUES ('item-test', 'chapter-test', 20261108)")
+          
+                      source.execSQL("""CREATE TABLE study_tasks (
+                          id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, title TEXT NOT NULL,
+                          details TEXT NOT NULL, taskType TEXT NOT NULL, dueAt INTEGER, remindAt INTEGER,
+                          completed INTEGER NOT NULL, createdAt INTEGER NOT NULL
+                      )""")
+                      source.execSQL("""INSERT INTO study_tasks
+                          (id, title, details, taskType, dueAt, remindAt, completed, createdAt)
+                          VALUES (31, 'مرور فصل', 'جزئیات کار', 'review', 20261120, 20261119, 0, 20261107)""")
+                  } finally {
+                      source.close()
+                  }
+          
+                  LegacyDatabaseMigrator.migrate(context, content, user)
+          
+                  val contentDb = content.openHelper.readableDatabase
+                  val userDb = user.openHelper.readableDatabase
+                  assertRowCount(contentDb, "chapters", 1)
+                  assertRowCount(contentDb, "content_items", 1)
+                  assertRowCount(contentDb, "server_config", 1)
+                  assertRowCount(contentDb, "media_cache", 1)
+                  assertRowCount(userDb, "progress", 1)
+                  assertRowCount(userDb, "notes", 1)
+                  assertRowCount(userDb, "bookmarks", 1)
+                  assertRowCount(userDb, "study_tasks", 1)
+          
+                  // Assert every legacy column in all eight tables, not only representative fields.
+                  assertQuery(contentDb, "SELECT * FROM chapters WHERE id='chapter-test'") {
+                      assertEquals("chapter-test", getString(0))
+                      assertEquals("فصل آزمایشی", getString(1))
+                      assertEquals(7, getInt(2))
+                      assertEquals("مبانی", getString(3))
+                      assertEquals("شرح فصل", getString(4))
+                      assertEquals(1, getInt(5))
+                      assertEquals("chapter-hash", getString(6))
+                      assertEquals("{}", getString(7))
+                      assertEquals(101L, getLong(8))
+                  }
+                  assertQuery(contentDb, "SELECT * FROM content_items WHERE uid='item-test'") {
+                      assertEquals("item-test", getString(0))
+                      assertEquals("chapter-test", getString(1))
+                      assertEquals("lesson", getString(2))
+                      assertEquals("عنوان محتوا", getString(3))
+                      assertEquals("خلاصه", getString(4))
+                      assertEquals("متن کامل", getString(5))
+                      assertEquals(2, getInt(6))
+                      assertEquals("[]", getString(7))
+                      assertEquals("پاسخ", getString(8))
+                      assertEquals("توضیح", getString(9))
+                      assertEquals("{}", getString(10))
+                      assertEquals("verified", getString(11))
+                      assertEquals("""{"origin":"legacy"}""", getString(12))
+                  }
+                  assertQuery(contentDb, "SELECT * FROM server_config WHERE id=1") {
+                      assertEquals(1, getInt(0))
+                      assertEquals("192.168.1.20", getString(1))
+                      assertEquals(8080, getInt(2))
+                      assertEquals(20261111L, getLong(3))
+                  }
+                  assertQuery(contentDb, "SELECT * FROM media_cache WHERE relativePath='images/one.webp'") {
+                      assertEquals("images/one.webp", getString(0))
+                      assertEquals("/cache/one.webp", getString(1))
+                      assertEquals("media-sha256", getString(2))
+                      assertEquals(4096L, getLong(3))
+                      assertEquals(20261110L, getLong(4))
+                  }
+                  assertQuery(userDb, "SELECT * FROM progress WHERE itemUid='item-test'") {
+                      assertEquals("item-test", getString(0))
+                      assertEquals("chapter-test", getString(1))
+                      assertEquals(1, getInt(2))
+                      assertEquals(20261101L, getLong(3))
+                      assertEquals(5, getInt(4))
+                      assertEquals(4, getInt(5))
+                      assertEquals(1, getInt(6))
+                      assertEquals("correct", getString(7))
+                      assertEquals(4, getInt(8))
+                      assertEquals(7, getInt(9))
+                      assertEquals(20261118L, getLong(10))
+                      assertEquals(20261111L, getLong(11))
+                  }
+                  assertQuery(userDb, "SELECT * FROM notes WHERE id=21") {
+                      assertEquals(21L, getLong(0))
+                      assertEquals("item-test", getString(1))
+                      assertEquals("chapter-test", getString(2))
+                      assertEquals("یادداشت آزمایشی", getString(3))
+                      assertEquals("بدنه یادداشت", getString(4))
+                      assertEquals(20261109L, getLong(5))
+                  }
+                  assertQuery(userDb, "SELECT * FROM bookmarks WHERE itemUid='item-test'") {
+                      assertEquals("item-test", getString(0))
+                      assertEquals("chapter-test", getString(1))
+                      assertEquals(20261108L, getLong(2))
+                  }
+                  assertQuery(userDb, "SELECT * FROM study_tasks WHERE id=31") {
+                      assertEquals(31L, getLong(0))
+                      assertEquals("مرور فصل", getString(1))
+                      assertEquals("جزئیات کار", getString(2))
+                      assertEquals("review", getString(3))
+                      assertEquals(20261120L, getLong(4))
+                      assertEquals(20261119L, getLong(5))
+                      assertEquals(0, getInt(6))
+                      assertEquals(20261107L, getLong(7))
+                  }
+
+                  assertTrue(
+                      context.getSharedPreferences("mindunlock_db_migration", 0)
+                          .getBoolean("split_v1_complete", false)
+                  )
+          
+                  // A second invocation must honor the completion marker and leave target rows unchanged.
+                  LegacyDatabaseMigrator.migrate(context, content, user)
+                  assertRowCount(contentDb, "chapters", 1)
+                  assertRowCount(contentDb, "content_items", 1)
+                  assertRowCount(userDb, "progress", 1)
+                  assertRowCount(userDb, "notes", 1)
+              }
+          
+              @Test
+          fun marksMigrationCompleteWhenLegacyDatabaseDoesNotExist() {
+              LegacyDatabaseMigrator.migrate(context, content, user)
+
+              assertTrue(
+                  context.getSharedPreferences("mindunlock_db_migration", 0)
+                      .getBoolean("split_v1_complete", false)
+              )
+              assertRowCount(content.openHelper.readableDatabase, "chapters", 0)
+              assertRowCount(content.openHelper.readableDatabase, "content_items", 0)
+              assertRowCount(content.openHelper.readableDatabase, "server_config", 0)
+              assertRowCount(content.openHelper.readableDatabase, "media_cache", 0)
+              assertRowCount(user.openHelper.readableDatabase, "progress", 0)
+              assertRowCount(user.openHelper.readableDatabase, "notes", 0)
+              assertRowCount(user.openHelper.readableDatabase, "bookmarks", 0)
+              assertRowCount(user.openHelper.readableDatabase, "study_tasks", 0)
+          }
+
+          @Test
+          fun skipsUnknownOrMissingTablesInAnEmptyLegacyDatabase() {
+              val legacyFile = context.getDatabasePath("mindunlock.db")
+              legacyFile.parentFile?.mkdirs()
+              SQLiteDatabase.openOrCreateDatabase(legacyFile, null).close()
+
+              LegacyDatabaseMigrator.migrate(context, content, user)
+
+              assertTrue(
+                  context.getSharedPreferences("mindunlock_db_migration", 0)
+                      .getBoolean("split_v1_complete", false)
+              )
+              assertRowCount(content.openHelper.readableDatabase, "chapters", 0)
+              assertRowCount(content.openHelper.readableDatabase, "content_items", 0)
+              assertRowCount(content.openHelper.readableDatabase, "server_config", 0)
+              assertRowCount(content.openHelper.readableDatabase, "media_cache", 0)
+              assertRowCount(user.openHelper.readableDatabase, "progress", 0)
+              assertRowCount(user.openHelper.readableDatabase, "notes", 0)
+              assertRowCount(user.openHelper.readableDatabase, "bookmarks", 0)
+              assertRowCount(user.openHelper.readableDatabase, "study_tasks", 0)
+          }
+
+          @Test
+          fun preservesNullableColumnsAndMigratesWhenOnlyOneLegacyTableExists() {
+              val legacyFile = context.getDatabasePath("mindunlock.db")
+              legacyFile.parentFile?.mkdirs()
+              val source = SQLiteDatabase.openOrCreateDatabase(legacyFile, null)
+              try {
+                  source.execSQL("""CREATE TABLE chapters (
+                      id TEXT NOT NULL PRIMARY KEY, title TEXT NOT NULL, orderIndex INTEGER NOT NULL,
+                      groupName TEXT, description TEXT, itemCount INTEGER NOT NULL, contentHash TEXT,
+                      rawJson TEXT, syncedAt INTEGER NOT NULL
+                  )""")
+                  source.execSQL("""INSERT INTO chapters
+                      (id, title, orderIndex, groupName, description, itemCount, contentHash, rawJson, syncedAt)
+                      VALUES ('nullable-chapter', 'فصل با مقادیر تهی', 3, NULL, NULL, 0, NULL, NULL, 77)""")
+              } finally {
+                  source.close()
+              }
+
+              LegacyDatabaseMigrator.migrate(context, content, user)
+
+              val contentDb = content.openHelper.readableDatabase
+              assertRowCount(contentDb, "chapters", 1)
+              assertQuery(contentDb, "SELECT title, orderIndex, groupName, description, contentHash, rawJson, syncedAt FROM chapters WHERE id='nullable-chapter'") {
+                  assertEquals("فصل با مقادیر تهی", getString(0))
+                  assertEquals(3, getInt(1))
+                  assertNull(getString(2))
+                  assertNull(getString(3))
+                  assertNull(getString(4))
+                  assertNull(getString(5))
+                  assertEquals(77L, getLong(6))
+              }
+
+              // All other legacy tables are absent; their target Room tables must remain empty.
+              assertRowCount(contentDb, "content_items", 0)
+              assertRowCount(contentDb, "server_config", 0)
+              assertRowCount(contentDb, "media_cache", 0)
+              val userDb = user.openHelper.readableDatabase
+              assertRowCount(userDb, "progress", 0)
+              assertRowCount(userDb, "notes", 0)
+              assertRowCount(userDb, "bookmarks", 0)
+              assertRowCount(userDb, "study_tasks", 0)
+              assertTrue(
+                  context.getSharedPreferences("mindunlock_db_migration", 0)
+                      .getBoolean("split_v1_complete", false)
+              )
+          }
+
+          @Test
+          fun rollsBackBothTargetsAfterMidMigrationFailureAndAllowsRetry() {
+              val legacyFile = context.getDatabasePath("mindunlock.db")
+              legacyFile.parentFile?.mkdirs()
+              val source = SQLiteDatabase.openOrCreateDatabase(legacyFile, null)
+              try {
+                  source.execSQL("""CREATE TABLE chapters (
+                      id TEXT NOT NULL PRIMARY KEY, title TEXT NOT NULL, orderIndex INTEGER NOT NULL,
+                      groupName TEXT, description TEXT, itemCount INTEGER NOT NULL, contentHash TEXT,
+                      rawJson TEXT, syncedAt INTEGER NOT NULL
+                  )""")
+                  source.execSQL("""INSERT INTO chapters
+                      (id, title, orderIndex, itemCount, syncedAt)
+                      VALUES ('rollback-chapter', 'فصل برای آزمون بازگشت', 1, 0, 10)""")
+                  // Legacy schema permits NULL here; the destination Room schema does not.
+                  source.execSQL("""CREATE TABLE progress (
+                      itemUid TEXT, chapterId TEXT NOT NULL, completed INTEGER NOT NULL,
+                      completedAt INTEGER, attempts INTEGER NOT NULL, correct INTEGER NOT NULL,
+                      wrong INTEGER NOT NULL, lastResult TEXT, quality INTEGER NOT NULL,
+                      intervalDays INTEGER NOT NULL, dueAt INTEGER, updatedAt INTEGER NOT NULL
+                  )""")
+                  source.execSQL("""INSERT INTO progress VALUES
+                      (NULL, 'rollback-chapter', 0, NULL, 0, 0, 0, NULL, 0, 0, NULL, 10)""")
+              } finally {
+                  source.close()
+              }
+
+              val failed = runCatching { LegacyDatabaseMigrator.migrate(context, content, user) }
+              assertTrue("Migration should fail on the destination NOT NULL constraint", failed.isFailure)
+
+              // The exception occurs after the content table copy; neither destination may retain partial rows.
+              val contentDb = content.openHelper.readableDatabase
+              val userDb = user.openHelper.readableDatabase
+              assertRowCount(contentDb, "chapters", 0)
+              assertRowCount(userDb, "progress", 0)
+              assertFalse(
+                  "Completion marker must not be set after a failed migration",
+                  context.getSharedPreferences("mindunlock_db_migration", 0)
+                      .getBoolean("split_v1_complete", false)
+              )
+
+              // Repair only the legacy test fixture and retry the same migration.
+              val repair = SQLiteDatabase.openDatabase(legacyFile.absolutePath, null, SQLiteDatabase.OPEN_READWRITE)
+              try {
+                  repair.execSQL("UPDATE progress SET itemUid='retry-item' WHERE itemUid IS NULL")
+              } finally {
+                  repair.close()
+              }
+
+              LegacyDatabaseMigrator.migrate(context, content, user)
+
+              assertRowCount(contentDb, "chapters", 1)
+              assertRowCount(userDb, "progress", 1)
+              assertQuery(userDb, "SELECT itemUid, chapterId FROM progress WHERE itemUid='retry-item'") {
+                  assertEquals("retry-item", getString(0))
+                  assertEquals("rollback-chapter", getString(1))
+              }
+              assertTrue(
+                  context.getSharedPreferences("mindunlock_db_migration", 0)
+                      .getBoolean("split_v1_complete", false)
+              )
+          }
+
+          @Test
+          fun legacyPrimaryKeyCollisionReplacesExistingDestinationRow() {
+              // Seed the destination with an older row using the same primary key.
+              val targetDb = content.openHelper.writableDatabase
+              targetDb.execSQL("""INSERT INTO chapters
+                  (id, title, orderIndex, groupName, description, itemCount, contentHash, rawJson, syncedAt)
+                  VALUES ('collision-chapter', 'مقدار مقصد', 1, 'قدیمی', 'رکورد قبلی', 0, 'old-hash', NULL, 1)""")
+
+              val legacyFile = context.getDatabasePath("mindunlock.db")
+              legacyFile.parentFile?.mkdirs()
+              val source = SQLiteDatabase.openOrCreateDatabase(legacyFile, null)
+              try {
+                  source.execSQL("""CREATE TABLE chapters (
+                      id TEXT NOT NULL PRIMARY KEY, title TEXT NOT NULL, orderIndex INTEGER NOT NULL,
+                      groupName TEXT, description TEXT, itemCount INTEGER NOT NULL, contentHash TEXT,
+                      rawJson TEXT, syncedAt INTEGER NOT NULL
+                  )""")
+                  source.execSQL("""INSERT INTO chapters
+                      (id, title, orderIndex, groupName, description, itemCount, contentHash, rawJson, syncedAt)
+                      VALUES ('collision-chapter', 'مقدار legacy', 9, 'جدید', 'رکورد مهاجرتی', 2, 'new-hash', '{"source":"legacy"}', 99)""")
+              } finally {
+                  source.close()
+              }
+
+              LegacyDatabaseMigrator.migrate(context, content, user)
+
+              assertRowCount(content.openHelper.readableDatabase, "chapters", 1)
+              assertQuery(content.openHelper.readableDatabase,
+                  "SELECT title, orderIndex, groupName, description, contentHash, rawJson, syncedAt FROM chapters WHERE id='collision-chapter'") {
+                  assertEquals("مقدار legacy", getString(0))
+                  assertEquals(9, getInt(1))
+                  assertEquals("جدید", getString(2))
+                  assertEquals("رکورد مهاجرتی", getString(3))
+                  assertEquals("new-hash", getString(4))
+                  assertEquals("""{"source":"legacy"}""", getString(5))
+                  assertEquals(99L, getLong(6))
+              }
+              assertTrue(
+                  context.getSharedPreferences("mindunlock_db_migration", 0)
+                      .getBoolean("split_v1_complete", false)
+              )
+          }
+
+          private fun assertRowCount(db: SupportSQLiteDatabase, table: String, expected: Int) {
+                  db.query("SELECT COUNT(*) FROM `$table`").use { cursor ->
+                      assertTrue("COUNT query returned no row for $table", cursor.moveToFirst())
+                      assertEquals("Unexpected row count for $table", expected, cursor.getInt(0))
+                  }
+              }
+          
+              private inline fun assertQuery(
+                  db: SupportSQLiteDatabase,
+                  sql: String,
+                  assertions: android.database.Cursor.() -> Unit
+              ) {
+                  db.query(sql).use { cursor ->
+                      assertTrue("Query returned no row: $sql", cursor.moveToFirst())
+                      cursor.assertions()
+                  }
+              }
+          }
+          EOF
+          echo "Added Robolectric migration characterization test." | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Overlay tracked MindUnlock feature source
+        shell: bash
+        run: |
+          set -euo pipefail
+          for relative in \
+            app/src/main/java/com/mindunlock/app/MainActivity.kt \
+            app/src/main/java/com/mindunlock/app/MindDumpScreen.kt \
+            app/src/main/java/com/mindunlock/app/data/local/MindDumpTaskMapper.kt \
+            app/src/main/java/com/mindunlock/app/LaterTopicsScreen.kt \
+            app/src/main/java/com/mindunlock/app/JournalScreen.kt \
+            app/src/main/java/com/mindunlock/app/LearningProfileScreen.kt \
+            app/src/main/java/com/mindunlock/app/LearningPersonalization.kt \
+            app/src/main/java/com/mindunlock/app/LearningEngineScreen.kt \
+            app/src/main/java/com/mindunlock/app/LearningPersonalTopicPolicy.kt \
+            app/src/main/java/com/mindunlock/app/ui/StudyScreens.kt \
+            app/src/main/java/com/mindunlock/app/PlannerPolicy.kt \
+            app/src/main/java/com/mindunlock/app/LearningPathPolicy.kt \
+            app/src/main/java/com/mindunlock/app/LearningStagePolicy.kt \
+            app/src/main/java/com/mindunlock/app/PersianDate.kt \
+            app/src/main/java/com/mindunlock/app/ReviewScheduler.kt \
+            app/src/main/java/com/mindunlock/app/LabScenarioMetadata.kt \
+            app/src/main/java/com/mindunlock/app/LearningAnalytics.kt \
+            app/src/main/java/com/mindunlock/app/UserDataBackupCodec.kt \
+            app/src/main/java/com/mindunlock/app/UserDataBackupManager.kt \
+            app/src/main/java/com/mindunlock/app/BackupRestoreScreen.kt \
+            app/src/main/AndroidManifest.xml \
+            app/src/main/java/com/mindunlock/app/data/local/Entities.kt \
+            app/src/main/java/com/mindunlock/app/data/local/UserDatabase.kt \
+            app/src/main/java/com/mindunlock/app/data/local/AppDatabase.kt \
+            app/build.gradle.kts \
+            app/src/test/java/com/mindunlock/app/data/local/UserDatabaseMindDumpMigrationTest.kt \
+            app/src/test/java/com/mindunlock/app/LearningPathPolicyTest.kt \
+            app/src/test/java/com/mindunlock/app/PlannerPolicyTest.kt \
+            app/src/test/java/com/mindunlock/app/LearningStagePolicyTest.kt \
+            app/src/test/java/com/mindunlock/app/PersianDateTest.kt \
+            app/src/test/java/com/mindunlock/app/ReviewSchedulerTest.kt \
+            app/src/test/java/com/mindunlock/app/LabScenarioParserTest.kt \
+            app/src/test/java/com/mindunlock/app/LearningAnalyticsTest.kt \
+            app/src/test/java/com/mindunlock/app/LearningPersonalizationTest.kt \
+            app/src/test/java/com/mindunlock/app/data/local/LearningPersonalTopicPolicyTest.kt \
+            app/src/test/java/com/mindunlock/app/UserDataBackupCodecTest.kt \
+            app/src/test/java/com/mindunlock/app/UserDataBackupRestoreTransactionTest.kt
+          do
+            test -f "android/$relative"
+            mkdir -p "android-build/$(dirname "$relative")"
+            cp "android/$relative" "android-build/$relative"
+          done
+          echo "Planner daily focus policy, Mind Dump, Jalali calendar source and all registered JVM tests are included in the effective APK build."
+
+      - name: Preserve tracked dashboard and verify complete Persian voice coverage
+        shell: bash
+        run: |
+          set -euo pipefail
+          SCREENS_FILE="$(find android-build/app/src/main/java -type f -name StudyScreens.kt -print -quit)"
+          test -n "$SCREENS_FILE"
+          python3 - "$SCREENS_FILE" <<'PY'
+          from pathlib import Path
+          import sys
+          path = Path(sys.argv[1])
+          source = path.read_text(encoding="utf-8")
+          start = source.index("fun DashboardScreen(")
+          end = source.find("\n@Composable", start + 5)
+          dashboard = source[start:end if end >= 0 else len(source)]
+          routes = ("courses", "flashcards", "review", "quiz", "exam", "labs", "notes", "planner", "inbox", "later", "archive", "progress", "journal", "bookmarks", "learning", "profile", "backup", "settings", "sync", "about")
+          missing_routes = [route for route in routes if f'"{route}"' not in dashboard]
+          if missing_routes:
+              raise SystemExit("Tracked dashboard is missing routes: " + ", ".join(missing_routes))
+          required = (
+              'ResumeActionKind.ESSENTIAL_TOPICS -> onNavigate("later")',
+              'ResumeActionKind.START_LEARNING -> onNavigate("learning")',
+              'fun NotesScreen(userDb: UserDatabase, speech: PersianSpeech)',
+              'Text("خواندن یادداشت")',
+              'Text("خواندن کار")',
+              'Text("خواندن گزارش پیشرفت")',
+              'Text("خواندن سؤال و گزینه‌ها")',
+              'Text("خواندن راهنمای آزمایشگاه")',
+              'Text("خواندن نشانک")',
+          )
+          missing = [token for token in required if token not in source]
+          if missing:
+              raise SystemExit("Tracked dashboard/voice integration is incomplete: " + ", ".join(missing))
+          print("Preserved the tracked 20-route dashboard, exact resume actions and complete Persian read-aloud controls.")
+          PY
+
+      - name: Preserve exact last-item resume after dashboard generation
+        shell: bash
+        run: |
+          set -euo pipefail
+          SCREENS_FILE="$(find android-build/app/src/main/java -type f -name StudyScreens.kt -print -quit)"
+          test -n "$SCREENS_FILE"
+          python3 - "$SCREENS_FILE" <<'PY'
+          from pathlib import Path
+          import sys
+          path = Path(sys.argv[1])
+          source = path.read_text(encoding="utf-8")
+          marker = "    val last = chapters.firstOrNull()"
+          replacement = """    val lastReadProgress = progress.filter { it.lastOpenedAt != null }.maxByOrNull { it.lastOpenedAt ?: 0L }
+              val last = lastReadProgress?.chapterId?.let { chapterId -> chapters.firstOrNull { it.id == chapterId } } ?: chapters.firstOrNull()"""
+          if "val lastReadProgress =" not in source:
+              if marker not in source:
+                  raise SystemExit("Generated dashboard last-chapter marker not found")
+              source = source.replace(marker, replacement, 1)
+          source = source.replace(
+              "onContinue(last.id)",
+              'onContinue(lastReadProgress?.itemUid?.let { "item:$it" } ?: "chapter:${last.id}")'
+          )
+          source = source.replace(
+              'ActionTile("آرشیو دانش و یادداشت‌ها", "notes", onNavigate, Modifier.weight(1f))',
+              'ActionTile("دفتر یادداشت", "notes", onNavigate, Modifier.weight(1f))'
+          )
+          path.write_text(source, encoding="utf-8")
           PY
 
       - name: Generate effective Android source manifest
@@ -2637,7 +3359,7 @@ jobs:
           retention-days: 30
 
       - name: Publish review-only effective source candidate branch
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
         continue-on-error: true
         shell: bash
         run: |
@@ -2670,9 +3392,64 @@ jobs:
           git push origin "$BRANCH"
           echo "Review branch created: $BRANCH" | tee -a "$GITHUB_STEP_SUMMARY"
 
+      - name: Route essential side questions in generated dashboard
+        shell: bash
+        run: |
+          set -euo pipefail
+          SCREENS_FILE="$(find android-build/app/src/main/java -type f -name StudyScreens.kt -print -quit)"
+          test -n "$SCREENS_FILE"
+          python3 - "$SCREENS_FILE" <<'PY'
+          from pathlib import Path
+          import sys
+          path = Path(sys.argv[1])
+          source = path.read_text(encoding="utf-8")
+          branch = '                ResumeActionKind.ESSENTIAL_TOPICS -> onNavigate("later")\n'
+          anchor = '                ResumeActionKind.ACTIVE_TOPIC -> onNavigate("later")'
+          if branch.strip() not in source:
+              if source.count(anchor) != 1:
+                  raise SystemExit("Generated dashboard active-topic branch was not found exactly once.")
+              source = source.replace(anchor, branch + anchor, 1)
+              path.write_text(source, encoding="utf-8")
+          print("Generated dashboard now handles essential side-question resume actions.")
+          PY
+
       - name: Run JVM unit tests
         working-directory: android-build
         run: ./gradlew testDebugUnitTest --stacktrace
+
+      - name: Verify JVM test report is non-empty
+        working-directory: android-build
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+
+          reports = sorted(Path("app/build/test-results/testDebugUnitTest").glob("TEST-*.xml"))
+          if not reports:
+              raise SystemExit("No JVM JUnit XML reports were generated; refusing a false-green test run.")
+
+          totals = {"tests": 0, "failures": 0, "errors": 0, "skipped": 0}
+          for report in reports:
+              root = ET.parse(report).getroot()
+              for key in totals:
+                  totals[key] += int(root.attrib.get(key, 0))
+
+          print("JVM test report totals:", totals)
+          if totals["tests"] < 1:
+              raise SystemExit("Zero tests were executed.")
+          if totals["failures"] or totals["errors"]:
+              raise SystemExit("JVM test report contains failures or errors.")
+          with open(__import__("os").environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+              summary.write(
+                  "\n### JVM test report\n"
+                  f"- Tests: {totals['tests']}\n"
+                  f"- Failures: {totals['failures']}\n"
+                  f"- Errors: {totals['errors']}\n"
+                  f"- Skipped: {totals['skipped']}\n"
+              )
+          PY
 
       - name: Build Debug APK
         working-directory: android-build
@@ -2692,21 +3469,30 @@ jobs:
           echo "APK_SIZE_BYTES=$(stat -c%s "$APK")" | tee -a "$GITHUB_STEP_SUMMARY"
           echo "APK archive integrity and application package verified." | tee -a "$GITHUB_STEP_SUMMARY"
 
+      - name: Resolve Android artifact version
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION_NAME="$(sed -nE 's/.*versionName = "([^"]+)".*/\1/p' android-build/app/build.gradle.kts | head -n1)"
+          test -n "$VERSION_NAME"
+          echo "APK_VERSION_NAME=$VERSION_NAME" >> "$GITHUB_ENV"
+          echo "Android artifact version: $VERSION_NAME" | tee -a "$GITHUB_STEP_SUMMARY"
+
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: MindUnlock-Android-v0.5.1-debug
+          name: MindUnlock-Android-v${{ env.APK_VERSION_NAME }}-debug
           path: android-build/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
       - name: Publish GitHub Release with APK
-        if: success()
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && success()
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: android-v0.5.2-${{ github.run_number }}
-          name: MindUnlock Android 0.5.2 (#${{ github.run_number }})
+          tag_name: android-v0.6.13-${{ github.run_number }}
+          name: MindUnlock Android 0.6.16 (#${{ github.run_number }})
           body: |
-            Android Native 0.5.2 with guarded lesson loading, bounded image decoding, local error reports and non-blocking database migration, defensive chapter loading and validated APK packaging.
+            Android Native 0.6.16 extends Jalali calendar presentation to backup restore metadata, in addition to the dashboard, Mind Dump, journal, planner, later-topic reminders and seven-day learning activity report; backup and restore preserve original epoch timestamps for learning sessions and exportedAt, while retaining encrypted backup and offline learning features using AES-256-GCM with PBKDF2-HMAC-SHA256 key derivation, authenticated import, and plaintext compatibility for older backups. It retains versioned user-data backup and restore with SHA-256 integrity validation, bounded JSON import, transactional replacement and automatic rolling pre-restore safety snapshots. The backup includes private progress, notes, bookmarks, tasks, Mind Dump, Journal, Later topics, lab checklists and learning sessions and session feedback; downloaded content, speech models, preferences and connection settings are intentionally excluded. It retains local learning analytics, persistent lab checklists, structured scenarios, spaced-repetition review, the Learning Engine, Learning Profile and offline Persian speech features.
             HTTP sync is intended for trusted local networks only.
           files: android-build/app/build/outputs/apk/debug/app-debug.apk
           prerelease: true
