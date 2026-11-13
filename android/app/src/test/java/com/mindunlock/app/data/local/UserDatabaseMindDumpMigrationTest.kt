@@ -404,7 +404,7 @@ class UserDatabaseMindDumpMigrationTest {
             context,
             UserDatabase::class.java,
             databaseName
-        ).addMigrations(UserDatabase.MIGRATION_1_2, UserDatabase.MIGRATION_2_3, UserDatabase.MIGRATION_3_4, UserDatabase.MIGRATION_4_5, UserDatabase.MIGRATION_5_6, UserDatabase.MIGRATION_6_7, UserDatabase.MIGRATION_7_8, UserDatabase.MIGRATION_8_9, UserDatabase.MIGRATION_9_10, UserDatabase.MIGRATION_10_11).allowMainThreadQueries().build()
+        ).addMigrations(UserDatabase.MIGRATION_1_2, UserDatabase.MIGRATION_2_3, UserDatabase.MIGRATION_3_4, UserDatabase.MIGRATION_4_5, UserDatabase.MIGRATION_5_6, UserDatabase.MIGRATION_6_7, UserDatabase.MIGRATION_7_8, UserDatabase.MIGRATION_8_9, UserDatabase.MIGRATION_9_10, UserDatabase.MIGRATION_10_11, UserDatabase.MIGRATION_11_12).allowMainThreadQueries().build()
 
         try {
             val migratedProfile = LearningProfileEntity(answersCsv = List(20) { "5" }.joinToString(","), sessionMinutes = 60, maxTopics = 3, guidedMode = "flexible", completed = true)
@@ -558,7 +558,7 @@ class UserDatabaseMindDumpMigrationTest {
             val activeSession = migrated.learningSessionDao().observeActive().first()
             assertEquals(sessionId, activeSession?.id)
             assertEquals(null, activeSession?.endedAt)
-            migrated.learningSessionDao().finish(sessionId, 16_000L, 6L)
+            migrated.learningSessionDao().finish(sessionId, 16_000L)
             val finishedSession = migrated.learningSessionDao().observeAll().first().single()
             assertEquals(16_000L, finishedSession.endedAt)
             assertEquals(6L, finishedSession.durationSeconds)
@@ -610,6 +610,61 @@ class UserDatabaseMindDumpMigrationTest {
 
         } finally {
             migrated.close()
+        }
+    }
+
+    @Test
+    fun learningSessionPauseResumeExcludesBackgroundTimeAndCanFinishWhilePaused() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(context, UserDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+        try {
+            val activeId = db.learningSessionDao().insert(
+                LearningSessionEntity(topicTitle = "آزمون مکث", startedAt = 10_000L)
+            )
+            db.learningSessionDao().pause(activeId, 16_000L)
+            db.learningSessionDao().pause(activeId, 20_000L)
+            val paused = db.learningSessionDao().getActive()
+            assertEquals(6L, paused?.durationSeconds)
+            assertEquals(16_000L, paused?.pausedAt)
+            assertEquals(null, paused?.resumedAt)
+            assertEquals(null, db.learningSessionDao().startIfNone(
+                LearningSessionEntity(topicTitle = "جلسه دوم", startedAt = 21_000L)
+            ))
+
+            db.learningSessionDao().resume(activeId, 30_000L)
+            val resumed = db.learningSessionDao().getActive()
+            assertEquals(null, resumed?.pausedAt)
+            assertEquals(30_000L, resumed?.resumedAt)
+
+            db.learningSessionDao().finish(activeId, 36_000L)
+            val finished = db.learningSessionDao().getAll().single()
+            assertEquals(12L, finished.durationSeconds)
+            assertEquals(36_000L, finished.endedAt)
+            assertEquals(null, finished.pausedAt)
+            assertEquals(null, finished.resumedAt)
+            assertEquals(null, db.learningSessionDao().getActive())
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test
+    fun learningSessionFinishedWhilePausedDoesNotCountPausedInterval() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(context, UserDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+        try {
+            val id = db.learningSessionDao().insert(
+                LearningSessionEntity(topicTitle = "جلسه مکث‌شده", startedAt = 1_000L)
+            )
+            db.learningSessionDao().pause(id, 7_000L)
+            db.learningSessionDao().finish(id, 99_000L)
+            val finished = db.learningSessionDao().getAll().single()
+            assertEquals(6L, finished.durationSeconds)
+            assertEquals(99_000L, finished.endedAt)
+        } finally {
+            db.close()
         }
     }
 

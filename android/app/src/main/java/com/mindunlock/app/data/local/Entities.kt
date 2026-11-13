@@ -153,7 +153,9 @@ data class LearningSessionEntity(
     val source: String = "learning_engine",
     val startedAt: Long = System.currentTimeMillis(),
     val endedAt: Long? = null,
-    val durationSeconds: Long = 0
+    val durationSeconds: Long = 0,
+    val pausedAt: Long? = null,
+    val resumedAt: Long? = startedAt
 )
 
 

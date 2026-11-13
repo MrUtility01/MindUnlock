@@ -80,9 +80,7 @@ fun LearningEngineScreen(
             val observer = LifecycleEventObserver { _, event ->
                 if (event == Lifecycle.Event.ON_STOP) {
                     scope.launch {
-                        val endedAt = System.currentTimeMillis()
-                        val durationSeconds = ((endedAt - session.startedAt).coerceAtLeast(0L) / 1000L)
-                        userDb.learningSessionDao().finish(session.id, endedAt, durationSeconds)
+                        userDb.learningSessionDao().pause(session.id, System.currentTimeMillis())
                     }
                 }
             }
@@ -170,14 +168,34 @@ fun LearningEngineScreen(
                     } else {
                         Text("جلسه فعال: ${activeSession?.topicTitle}", fontWeight = FontWeight.SemiBold)
                         Text("شروع: " + PersianDate.format(activeSession?.startedAt ?: 0L), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
-                        Text("با رفتن برنامه به پس‌زمینه یا زدن دکمه پایان، ساعت پایان ثبت می‌شود. زمان بیکاری در حالی که برنامه باز است از زمان مطالعه جدا نمی‌شود.", style = MaterialTheme.typography.bodySmall)
+                        if (activeSession?.pausedAt != null) {
+                            Text("جلسه متوقف است؛ زمان مکث محاسبه نمی‌شود. برای ادامه، دکمه زیر را بزن.", style = MaterialTheme.typography.bodySmall)
+                            Button(
+                                onClick = {
+                                    val session = activeSession ?: return@Button
+                                    scope.launch {
+                                        userDb.learningSessionDao().resume(session.id, System.currentTimeMillis())
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) { Text("ادامه جلسه") }
+                        } else {
+                            Text("با رفتن برنامه به پس‌زمینه، جلسه به‌صورت مکث ذخیره می‌شود و زمان پس‌زمینه محاسبه نمی‌شود.", style = MaterialTheme.typography.bodySmall)
+                            Button(
+                                onClick = {
+                                    val session = activeSession ?: return@Button
+                                    scope.launch {
+                                        userDb.learningSessionDao().pause(session.id, System.currentTimeMillis())
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) { Text("مکث جلسه") }
+                        }
                         Button(
                             onClick = {
                                 val session = activeSession ?: return@Button
                                 scope.launch {
-                                    val endedAt = System.currentTimeMillis()
-                                    val duration = ((endedAt - session.startedAt).coerceAtLeast(0L) / 1000L)
-                                    userDb.learningSessionDao().finish(session.id, endedAt, duration)
+                                    userDb.learningSessionDao().finish(session.id, System.currentTimeMillis())
                                 }
                             },
                             modifier = Modifier.fillMaxWidth()
@@ -199,8 +217,7 @@ fun LearningEngineScreen(
                                 Text(session.topicTitle, fontWeight = FontWeight.SemiBold)
                                 Text("شروع: " + PersianDate.format(session.startedAt), style = MaterialTheme.typography.bodySmall)
                                 Text("پایان: " + PersianDate.format(session.endedAt ?: session.startedAt), style = MaterialTheme.typography.bodySmall)
-                                val elapsedSeconds = ((session.endedAt ?: session.startedAt) - session.startedAt).coerceAtLeast(0L) / 1000L
-                                Text("مدت: " + formatSessionDuration(elapsedSeconds), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                                Text("مدت: " + formatSessionDuration(session.durationSeconds), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                             }
                         }
                     }

@@ -91,8 +91,14 @@ interface LearningSessionDao {
         return insert(session)
     }
 
-    @Query("UPDATE learning_sessions SET endedAt = :endedAt, durationSeconds = :durationSeconds WHERE id = :id AND endedAt IS NULL")
-    suspend fun finish(id: Long, endedAt: Long, durationSeconds: Long)
+    @Query("UPDATE learning_sessions SET durationSeconds = durationSeconds + CASE WHEN resumedAt IS NOT NULL THEN MAX(0, (:pausedAt - resumedAt) / 1000) ELSE 0 END, pausedAt = :pausedAt, resumedAt = NULL WHERE id = :id AND endedAt IS NULL AND pausedAt IS NULL")
+    suspend fun pause(id: Long, pausedAt: Long)
+
+    @Query("UPDATE learning_sessions SET pausedAt = NULL, resumedAt = :resumedAt WHERE id = :id AND endedAt IS NULL AND pausedAt IS NOT NULL")
+    suspend fun resume(id: Long, resumedAt: Long)
+
+    @Query("UPDATE learning_sessions SET durationSeconds = durationSeconds + CASE WHEN resumedAt IS NOT NULL THEN MAX(0, (:endedAt - resumedAt) / 1000) ELSE 0 END, endedAt = :endedAt, pausedAt = NULL, resumedAt = NULL WHERE id = :id AND endedAt IS NULL")
+    suspend fun finish(id: Long, endedAt: Long)
 }
 
 @Dao
@@ -264,7 +270,7 @@ interface LaterTopicDao {
     suspend fun delete(id: Long)
 }
 
-@Database(entities = [ProgressEntity::class, NoteEntity::class, BookmarkEntity::class, StudyTaskEntity::class, MindDumpEntity::class, JournalEntryEntity::class, LaterTopicEntity::class, LabStepProgressEntity::class, LearningSessionEntity::class, LabQuestionResponseEntity::class, LearningProfileEntity::class, LearningSessionFeedbackEntity::class, LearningStageProgressEntity::class], version = 11, exportSchema = false)
+@Database(entities = [ProgressEntity::class, NoteEntity::class, BookmarkEntity::class, StudyTaskEntity::class, MindDumpEntity::class, JournalEntryEntity::class, LaterTopicEntity::class, LabStepProgressEntity::class, LearningSessionEntity::class, LabQuestionResponseEntity::class, LearningProfileEntity::class, LearningSessionFeedbackEntity::class, LearningStageProgressEntity::class], version = 12, exportSchema = false)
 abstract class UserDatabase : RoomDatabase() {
     abstract fun progressDao(): ProgressDao
     abstract fun noteDao(): NoteDao
@@ -341,9 +347,16 @@ abstract class UserDatabase : RoomDatabase() {
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_learning_stage_progress_chapterId ON learning_stage_progress(chapterId)")
             }
         }
+        val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE learning_sessions ADD COLUMN pausedAt INTEGER")
+                db.execSQL("ALTER TABLE learning_sessions ADD COLUMN resumedAt INTEGER")
+                db.execSQL("UPDATE learning_sessions SET resumedAt = startedAt WHERE endedAt IS NULL")
+            }
+        }
         @Volatile private var instance: UserDatabase? = null
         fun getInstance(context: Context): UserDatabase = instance ?: synchronized(this) {
-            instance ?: Room.databaseBuilder(context.applicationContext, UserDatabase::class.java, "mindunlock-user.db").addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11).build().also { instance = it }
+            instance ?: Room.databaseBuilder(context.applicationContext, UserDatabase::class.java, "mindunlock-user.db").addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12).build().also { instance = it }
         }
     }
 }
