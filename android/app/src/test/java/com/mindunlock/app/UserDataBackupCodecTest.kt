@@ -384,4 +384,20 @@ class UserDataBackupCodecTest {
         }
     }
 
+
+    @Test
+    fun rejectsDuplicateMindMapSourceReferences() {
+        val first = MindMapNodeEntity(id = 101, title = "گره اول", sourceType = "mind_dump", sourceId = 501)
+        val second = MindMapNodeEntity(id = 102, title = "گره دوم", sourceType = "mind_dump", sourceId = 501)
+        assertThrows(IllegalArgumentException::class.java) {
+            UserDataBackupCodec.decode(
+                UserDataBackupCodec.encode(
+                    UserDataBackupPayload(mindMapNodes = listOf(first, second)),
+                    1_800_000_000_200L,
+                    "test"
+                )
+            )
+        }
+    }
+
 }
