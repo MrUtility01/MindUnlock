@@ -162,6 +162,29 @@ interface MindDumpDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(item: MindDumpEntity): Long
 
+    @Query("SELECT * FROM mind_dump WHERE id = :id LIMIT 1")
+    suspend fun getById(id: Long): MindDumpEntity?
+
+    @Query("SELECT * FROM study_tasks WHERE id = :id LIMIT 1")
+    suspend fun getLinkedTask(id: Long): StudyTaskEntity?
+
+    @Insert
+    suspend fun insertTask(task: StudyTaskEntity): Long
+
+    /**
+     * Idempotently creates the Planner task and persists its source link in one Room transaction.
+     * A valid existing link is reused; a stale link is repaired by creating a replacement task.
+     * Returns null only when the source Mind Dump entry no longer exists.
+     */
+    @Transaction
+    suspend fun convertToTask(entryId: Long): Long? {
+        val entry = getById(entryId) ?: return null
+        val linkedTask = entry.linkedTaskId?.let { getLinkedTask(it) }
+        val taskId = linkedTask?.id ?: insertTask(MindDumpTaskMapper.toStudyTask(entry))
+        updateStatus(entry.id, "task", System.currentTimeMillis(), taskId)
+        return taskId
+    }
+
     @Query("UPDATE mind_dump SET status = :status, updatedAt = :updatedAt, linkedTaskId = :linkedTaskId WHERE id = :id")
     suspend fun updateStatus(id: Long, status: String, updatedAt: Long, linkedTaskId: Long?)
 

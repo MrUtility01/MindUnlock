@@ -37,9 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.room.withTransaction
 import com.mindunlock.app.data.local.LaterTopicEntity
 import com.mindunlock.app.data.local.MindDumpEntity
-import com.mindunlock.app.data.local.MindDumpTaskMapper
 import com.mindunlock.app.data.local.NoteEntity
-import com.mindunlock.app.data.local.StudyTaskEntity
 import com.mindunlock.app.data.local.UserDatabase
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
@@ -217,13 +215,8 @@ fun MindDumpScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
                         },
                         onConvertToTask = {
                             runEntryAction(entry.id, "به برنامه‌ریز منتقل شد.") {
-                                userDatabase.withTransaction {
-                                    val taskId = userDatabase.studyTaskDao().upsert(
-                                        MindDumpTaskMapper.toStudyTask(entry)
-                                    )
-                                    userDatabase.mindDumpDao().updateStatus(
-                                        entry.id, "task", System.currentTimeMillis(), taskId
-                                    )
+                                check(userDatabase.mindDumpDao().convertToTask(entry.id) != null) {
+                                    "Mind Dump entry no longer exists"
                                 }
                             }
                         },

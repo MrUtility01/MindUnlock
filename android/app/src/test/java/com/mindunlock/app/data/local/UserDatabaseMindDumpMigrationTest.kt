@@ -152,6 +152,71 @@ class UserDatabaseMindDumpMigrationTest {
     }
 
     @Test
+    fun convertingMindDumpToTaskIsIdempotentAndReusesTheExistingLink() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(context, UserDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+        try {
+            val sourceId = db.mindDumpDao().insert(
+                MindDumpEntity(
+                    content = "  پروژه ارتقای شبکه  \nجزئیات کامل و چندخطی",
+                    category = "project"
+                )
+            )
+
+            val firstTaskId = db.mindDumpDao().convertToTask(sourceId)
+            val secondTaskId = db.mindDumpDao().convertToTask(sourceId)
+
+            assertEquals(firstTaskId, secondTaskId)
+            assertEquals(1, db.studyTaskDao().getAll().size)
+            val task = db.studyTaskDao().getAll().single()
+            assertEquals(firstTaskId, task.id)
+            assertEquals("پروژه ارتقای شبکه", task.title)
+            assertEquals("  پروژه ارتقای شبکه  \nجزئیات کامل و چندخطی", task.details)
+            assertEquals("project", task.taskType)
+
+            val linkedEntry = db.mindDumpDao().getById(sourceId)
+            assertEquals("task", linkedEntry?.status)
+            assertEquals(firstTaskId, linkedEntry?.linkedTaskId)
+
+            // Editing source content after conversion must not break or duplicate the linked task.
+            db.mindDumpDao().updateContent(sourceId, "متن جدید منبع", 20_000L)
+            assertEquals(firstTaskId, db.mindDumpDao().convertToTask(sourceId))
+            assertEquals(1, db.studyTaskDao().getAll().size)
+            assertEquals("  پروژه ارتقای شبکه  \nجزئیات کامل و چندخطی", db.studyTaskDao().getAll().single().details)
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test
+    fun convertingMindDumpRepairsStaleTaskLinksAndReturnsNullForMissingEntries() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(context, UserDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+        try {
+            val sourceId = db.mindDumpDao().insert(
+                MindDumpEntity(
+                    content = "  مرور DNS  \nبررسی رکوردهای داخلی",
+                    category = "learning",
+                    linkedTaskId = 987_654L
+                )
+            )
+            val repairedTaskId = db.mindDumpDao().convertToTask(sourceId)
+            val entry = db.mindDumpDao().getById(sourceId)
+
+            assertEquals(true, repairedTaskId != null && repairedTaskId != 987_654L)
+            assertEquals(repairedTaskId, entry?.linkedTaskId)
+            assertEquals("task", entry?.status)
+            assertEquals(1, db.studyTaskDao().getAll().size)
+            assertEquals("مرور DNS", db.studyTaskDao().getAll().single().title)
+            assertEquals(null, db.mindDumpDao().convertToTask(999_999L))
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test
     fun returningOrDeletingLaterTopicPreservesItsOriginalMindDumpEntry() = runBlocking {
         val db = Room.inMemoryDatabaseBuilder(context, UserDatabase::class.java)
             .allowMainThreadQueries()
