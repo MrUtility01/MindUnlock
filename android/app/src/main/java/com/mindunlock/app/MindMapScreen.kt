@@ -81,6 +81,11 @@ fun MindMapScreen(userDb: UserDatabase) {
             it.title.contains(q, true) || it.description.contains(q, true) || it.nodeType.contains(q, true)
         }
     }
+    LaunchedEffect(visibleNodes, selectedGraphNodeId) {
+        if (nodes.isNotEmpty() && selectedGraphNodeId != null && visibleNodes.none { it.id == selectedGraphNodeId }) {
+            selectedGraphNodeId = null
+        }
+    }
     val names = remember(nodes) { nodes.associate { it.id to it.title } }
     var sourceSearch by rememberSaveable { mutableStateOf("") }
     var sourceChoices by remember { mutableStateOf<List<MindMapSourceItem>>(emptyList()) }
@@ -337,6 +342,7 @@ fun MindMapScreen(userDb: UserDatabase) {
                     pendingDeleteId = null
                     if (id != null) scope.launch {
                         userDb.mindMapDao().deleteNode(id)
+                        if (selectedGraphNodeId == id) selectedGraphNodeId = null
                         status = "گره و ارتباط‌های وابسته حذف شدند."
                     }
                 }) { Text("حذف قطعی") }
@@ -437,12 +443,18 @@ private fun MindMapGraphCanvas(
                         val local = Offset((tap.x - panX - center.x) / scale + center.x, (tap.y - panY - center.y) / scale + center.y)
                         val orbit = minOf(size.width, size.height) * 0.34f
                         val hitRadius = nodeRadius.toPx() * 2.2f
-                        val hit = nodes.mapIndexed { index, node ->
+                        var nearestNode: MindMapNodeEntity? = null
+                        var nearestDistance = hitRadius
+                        nodes.forEachIndexed { index, node ->
                             val angle = -Math.PI / 2.0 + (2.0 * Math.PI * index / nodes.size)
                             val point = if (nodes.size == 1) center else Offset(center.x + orbit * kotlin.math.cos(angle).toFloat(), center.y + orbit * kotlin.math.sin(angle).toFloat())
-                            node to (point - local).getDistance()
-                        }.filter { it.second <= hitRadius }.minByOrNull { it.second }
-                        hit?.first?.let { onSelectNode(it.id) }
+                            val distance = (point - local).getDistance()
+                            if (distance <= nearestDistance) {
+                                nearestNode = node
+                                nearestDistance = distance
+                            }
+                        }
+                        nearestNode?.let { onSelectNode(it.id) }
                     }
                 }
             }
