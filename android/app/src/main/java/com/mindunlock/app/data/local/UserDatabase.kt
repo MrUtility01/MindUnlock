@@ -10,6 +10,7 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.room.Room
 import androidx.room.Update
+import androidx.room.Transaction
 import androidx.room.RoomDatabase
 import kotlinx.coroutines.flow.Flow
 
@@ -78,8 +79,17 @@ interface LearningSessionDao {
     @Query("SELECT * FROM learning_sessions WHERE endedAt IS NULL ORDER BY startedAt DESC LIMIT 1")
     fun observeActive(): Flow<LearningSessionEntity?>
 
+    @Query("SELECT * FROM learning_sessions WHERE endedAt IS NULL ORDER BY startedAt DESC LIMIT 1")
+    suspend fun getActive(): LearningSessionEntity?
+
     @Insert
     suspend fun insert(session: LearningSessionEntity): Long
+
+    @Transaction
+    suspend fun startIfNone(session: LearningSessionEntity): Long? {
+        if (getActive() != null) return null
+        return insert(session)
+    }
 
     @Query("UPDATE learning_sessions SET endedAt = :endedAt, durationSeconds = :durationSeconds WHERE id = :id AND endedAt IS NULL")
     suspend fun finish(id: Long, endedAt: Long, durationSeconds: Long)
