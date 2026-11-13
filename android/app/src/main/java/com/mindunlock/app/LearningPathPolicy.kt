@@ -39,6 +39,7 @@ enum class ResumeActionKind {
     REVIEW,
     OVERDUE_TASKS,
     TODAY_TASKS,
+    ESSENTIAL_TOPICS,
     ACTIVE_TOPIC,
     RESUME_ITEM,
     RESUME_CHAPTER,
@@ -61,7 +62,8 @@ object ResumeActionPolicy {
         activeTopicTitle: String?,
         lastReadItemUid: String?,
         lastReadChapterId: String?,
-        fallbackChapterId: String?
+        fallbackChapterId: String?,
+        essentialTopicCount: Int = 0
     ): ResumeAction = when {
         dueReviewCount > 0 -> ResumeAction(
             ResumeActionKind.REVIEW,
@@ -77,6 +79,11 @@ object ResumeActionPolicy {
             ResumeActionKind.TODAY_TASKS,
             "رسیدگی به برنامهٔ امروز",
             "$todayTaskCount کار زمان‌بندی‌شده برای امروز داری."
+        )
+        essentialTopicCount > 0 -> ResumeAction(
+            ResumeActionKind.ESSENTIAL_TOPICS,
+            "رسیدگی به سؤال‌های ضروری",
+            "$essentialTopicCount سؤال ضروری در انتظار تصمیم یا پیگیری است."
         )
         !activeTopicTitle.isNullOrBlank() -> ResumeAction(
             ResumeActionKind.ACTIVE_TOPIC,
