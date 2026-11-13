@@ -73,6 +73,33 @@ fun BackupRestoreScreen(userDb: UserDatabase) {
         }
     }
 
+    val markdownExportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("text/markdown")
+    ) { uri ->
+        if (uri != null && !busy) {
+            scope.launch {
+                busy = true
+                status = "در حال آماده‌سازی خروجی Markdown..."
+                try {
+                    val markdown = UserDataMarkdownExporter.export(context, userDb)
+                    val written = withContext(Dispatchers.IO) {
+                        context.contentResolver.openOutputStream(uri, "w")?.bufferedWriter(Charsets.UTF_8)?.use { writer ->
+                            writer.write(markdown)
+                            writer.flush()
+                            true
+                        } ?: false
+                    }
+                    status = if (written) "خروجی Markdown با موفقیت ذخیره شد."
+                    else "امکان نوشتن فایل Markdown وجود نداشت."
+                } catch (error: Exception) {
+                    status = "ساخت خروجی Markdown ناموفق بود: ${error.message ?: "خطای نامشخص"}"
+                } finally {
+                    busy = false
+                }
+            }
+        }
+    }
+
     val importLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
@@ -144,6 +171,11 @@ fun BackupRestoreScreen(userDb: UserDatabase) {
             enabled = !busy,
             modifier = Modifier.fillMaxWidth()
         ) { Text(if (busy) "لطفاً صبر کن..." else "ساخت و ذخیره فایل پشتیبان") }
+        OutlinedButton(
+            onClick = { markdownExportLauncher.launch("MindUnlock-export-${System.currentTimeMillis()}.md") },
+            enabled = !busy,
+            modifier = Modifier.fillMaxWidth()
+        ) { Text("خروجی خوانای Markdown") }
         OutlinedButton(
             onClick = { importLauncher.launch(arrayOf("application/json", "text/json", "text/plain", "application/octet-stream")) },
             enabled = !busy,
