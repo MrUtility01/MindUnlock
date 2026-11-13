@@ -7,8 +7,8 @@ package com.mindunlock.app.data.local
 object MindDumpTaskMapper {
     fun toStudyTask(entry: MindDumpEntity): StudyTaskEntity {
         val title = entry.content.lineSequence()
-            .map(String::trim)
-            .firstOrNull(String::isNotEmpty)
+            .map { it.trim() }
+            .firstOrNull { it.isNotEmpty() }
             ?.take(80)
             ?: "کار جدید"
         return StudyTaskEntity(

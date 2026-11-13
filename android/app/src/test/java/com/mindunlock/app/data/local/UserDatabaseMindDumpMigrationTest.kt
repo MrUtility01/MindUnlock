@@ -29,20 +29,20 @@ class UserDatabaseMindDumpMigrationTest {
     fun mindDumpTaskMapperPreservesFullTextAndMapsProjectCategory() {
         val project = MindDumpTaskMapper.toStudyTask(
             MindDumpEntity(
-                content = "  پروژهٔ ارتقای شبکه  \\nشرح کامل پروژه با جزئیات",
+                content = "  پروژهٔ ارتقای شبکه  \nشرح کامل پروژه با جزئیات",
                 category = "project"
             )
         )
         assertEquals("پروژهٔ ارتقای شبکه", project.title)
-        assertEquals("  پروژهٔ ارتقای شبکه  \\nشرح کامل پروژه با جزئیات", project.details)
+        assertEquals("  پروژهٔ ارتقای شبکه  \nشرح کامل پروژه با جزئیات", project.details)
         assertEquals("project", project.taskType)
 
         val learning = MindDumpTaskMapper.toStudyTask(
-            MindDumpEntity(content = "مرور OSPF\\nتمرین عملی", category = "learning")
+            MindDumpEntity(content = "مرور OSPF\nتمرین عملی", category = "learning")
         )
         assertEquals("مرور OSPF", learning.title)
         assertEquals("task", learning.taskType)
-        assertEquals("مرور OSPF\\nتمرین عملی", learning.details)
+        assertEquals("مرور OSPF\nتمرین عملی", learning.details)
     }
 
     @Test
