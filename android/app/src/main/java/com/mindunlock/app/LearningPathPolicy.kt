@@ -30,18 +30,19 @@ object LearningPathPolicy {
     ): ChapterEntity? {
         if (chapters.isEmpty()) return null
 
-        val completedByChapter = progress.asSequence()
-            .filter { it.completed }
-            .groupBy { it.chapterId }
-            .mapValues { (_, records) -> records.asSequence().map { it.itemUid }.toHashSet().size }
+        val progressByChapter = progress.groupBy { it.chapterId }
 
         return chapters.asSequence()
             .sortedBy { it.orderIndex }
             .firstOrNull { chapter ->
-                val completedCount = completedByChapter[chapter.id] ?: 0
+                val chapterProgress = progressByChapter[chapter.id].orEmpty()
+                val completedCount = chapterProgress.asSequence()
+                    .filter { it.completed }
+                    .map { it.itemUid }
+                    .toHashSet()
+                    .size
                 if (chapter.itemCount <= 0) {
-                    progress.none { it.chapterId == chapter.id } ||
-                        progress.any { it.chapterId == chapter.id && !it.completed }
+                    chapterProgress.isEmpty() || chapterProgress.any { !it.completed }
                 } else {
                     completedCount < chapter.itemCount
                 }
