@@ -2635,11 +2635,15 @@ jobs:
           old = "explanation, metadataJson FROM content_items"
           new = "explanation, sourceStatus, metadataJson FROM content_items"
           count = s.count(old)
-          if count < 2:
-              raise SystemExit(f"Expected at least two Room projections, found {count}; refusing incomplete fix")
-          s = s.replace(old, new)
-          p.write_text(s, encoding="utf-8")
-          print(f"Added sourceStatus to {count} Room projections.")
+          if count >= 2:
+              s = s.replace(old, new)
+              p.write_text(s, encoding="utf-8")
+              print(f"Added sourceStatus to {count} Room projections.")
+          else:
+              verified = s.count(new)
+              if verified < 2:
+                  raise SystemExit(f"Expected at least two Room projections with sourceStatus; old={count}, current={verified}")
+              print(f"All {verified} Room projections already include sourceStatus; skipping legacy fix.")
           PY
 
       - name: Add first real Android JVM migration test
