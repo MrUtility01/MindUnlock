@@ -145,6 +145,29 @@ fun MindMapScreen(userDb: UserDatabase) {
             Text("گره‌ها: ${nodes.size}  ·  ارتباط‌ها: ${edges.size}", style = MaterialTheme.typography.labelLarge)
             if (status.isNotBlank()) Text(status, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
         }
+        if (visibleNodes.isNotEmpty()) {
+            item {
+                val graphIds = remember(visibleNodes) { visibleNodes.take(80).map { it.id }.toSet() }
+                val graphEdges = remember(edges, graphIds) { edges.filter { it.sourceNodeId in graphIds && it.targetNodeId in graphIds } }
+                Text("نمای گراف", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text("برای جابه‌جایی بکش؛ برای بزرگ‌نمایی از دو انگشت استفاده کن؛ روی گره بزن تا انتخاب شود.", style = MaterialTheme.typography.bodySmall)
+                MindMapGraphCanvas(nodes = visibleNodes.take(80), edges = graphEdges, selectedNodeId = selectedGraphNodeId, scale = graphScale, panX = graphPanX, panY = graphPanY, onSelectNode = { selectedGraphNodeId = it }, onTransform = { zoom, dx, dy -> graphScale = (graphScale * zoom).coerceIn(0.65f, 2.8f); graphPanX += dx; graphPanY += dy })
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("بزرگ‌نمایی: " + (graphScale * 100).toInt() + "٪", style = MaterialTheme.typography.labelSmall)
+                    TextButton(onClick = { graphScale = 1f; graphPanX = 0f; graphPanY = 0f }) { Text("بازنشانی نما") }
+                }
+                val selected = visibleNodes.firstOrNull { it.id == selectedGraphNodeId }
+                if (selected != null) Card(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(selected.title, fontWeight = FontWeight.SemiBold)
+                        Text(selected.nodeType, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                        if (selected.description.isNotBlank()) Text(selected.description, style = MaterialTheme.typography.bodySmall)
+                        TextButton(onClick = { edit(selected) }) { Text("ویرایش گره انتخاب‌شده") }
+                    }
+                }
+                if (visibleNodes.size > 80) Text("برای حفظ سرعت، حداکثر ۸۰ گره در نمای گراف نمایش داده می‌شود؛ فهرست پایین همه گره‌ها را دارد.", style = MaterialTheme.typography.bodySmall)
+            }
+        }
         if (nodes.isEmpty()) {
             item {
                 Card(Modifier.fillMaxWidth()) {
