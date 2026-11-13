@@ -22,6 +22,23 @@ class PlannerPolicyTest {
         assertEquals(listOf(1L, 2L, 3L), PlannerPolicy.selectDailyFocusTasks(tasks, now).map { it.id })
     }
 
+
+    @Test
+    fun dailyFocusTreatsEarlierTodayDeadlinesAsOverdue() {
+        val zone = ZoneId.of("Europe/Berlin")
+        val today = LocalDate.of(2026, 11, 13)
+        val now = today.atTime(12, 0).atZone(zone).toInstant().toEpochMilli()
+        val earlierToday = today.atTime(9, 0).atZone(zone).toInstant().toEpochMilli()
+        val laterToday = today.atTime(15, 0).atZone(zone).toInstant().toEpochMilli()
+        val tomorrow = today.plusDays(1).atTime(8, 0).atZone(zone).toInstant().toEpochMilli()
+        val tasks = listOf(
+            StudyTaskEntity(id = 3, title = "فردا", dueAt = tomorrow),
+            StudyTaskEntity(id = 2, title = "امروز عصر", dueAt = laterToday),
+            StudyTaskEntity(id = 1, title = "امروز صبح", dueAt = earlierToday)
+        )
+        assertEquals(listOf(1L, 2L, 3L), PlannerPolicy.selectDailyFocusTasks(tasks, now).map { it.id })
+    }
+
     @Test
     fun dailyFocusHonorsLimitAndReturnsEmptyForNonPositiveLimit() {
         val tasks = (1L..5L).map { StudyTaskEntity(id = it, title = "کار $it", createdAt = it) }

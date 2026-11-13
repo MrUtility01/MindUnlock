@@ -18,7 +18,7 @@ object PlannerPolicy {
                 compareBy<StudyTaskEntity> {
                     when {
                         it.dueAt == null -> 3
-                        it.dueAt < todayStart -> 0
+                        it.dueAt < nowMillis -> 0
                         it.dueAt < tomorrowStart -> 1
                         else -> 2
                     }
