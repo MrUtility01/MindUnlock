@@ -1674,6 +1674,7 @@ fun PlannerScreen(userDb: UserDatabase, speech: PersianSpeech) {
     }
 
     val now = System.currentTimeMillis()
+    val dailyFocusTasks = PlannerPolicy.selectDailyFocusTasks(tasks, now)
     val overdueCount = tasks.count { !it.completed && it.dueAt != null && it.dueAt < now }
     val visibleTasks = tasks.filter { task ->
         (filter == "all" || (filter == "pending" && !task.completed) || (filter == "completed" && task.completed)) &&
@@ -1683,6 +1684,42 @@ fun PlannerScreen(userDb: UserDatabase, speech: PersianSpeech) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("برنامهٔ روزانه، تکلیف و پروژهٔ شخصی", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         Text("کارهای عقب‌افتاده: $overdueCount · کل کارها: ${tasks.size}", style = MaterialTheme.typography.bodySmall, color = if (overdueCount > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("سه تمرکز پیشنهادی امروز", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                Text("بر اساس موعدهای عقب‌افتاده، موعد امروز و سپس کارهای آینده مرتب شده‌اند.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (dailyFocusTasks.isEmpty()) {
+                    Text("کار بازی برای تمرکز امروز وجود ندارد.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } else {
+                    dailyFocusTasks.forEachIndexed { index, focusTask ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(
+                                checked = focusTask.completed,
+                                enabled = focusTask.id !in busyTaskIds,
+                                onCheckedChange = { checked ->
+                                    runTaskAction(focusTask.id) {
+                                        userDb.studyTaskDao().upsert(focusTask.copy(completed = checked))
+                                        if (checked) cancelTaskReminder(focusTask.id)
+                                        else if (focusTask.remindAt != null) {
+                                            scheduleReminder(context, focusTask.id, focusTask.title, focusTask.remindAt)
+                                        }
+                                        message = if (checked) "اولویت امروز تکمیل شد." else "کار به فهرست فعال برگشت."
+                                    }
+                                }
+                            )
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text("${index + 1}. ${focusTask.title}", fontWeight = FontWeight.Medium)
+                                Text(
+                                    focusTask.dueAt?.let { "موعد: ${PersianDate.format(it)}" } ?: "بدون موعد مشخص",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
         OutlinedTextField(title, { title = it }, Modifier.fillMaxWidth(), label = { Text("عنوان") }, singleLine = true)
         PersianVoiceInputButton { spoken -> title = listOf(title, spoken).filter { it.isNotBlank() }.joinToString(" ") }
         OutlinedTextField(details, { details = it }, Modifier.fillMaxWidth(), label = { Text("توضیحات") }, minLines = 2)

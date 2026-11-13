@@ -2998,6 +2998,7 @@ jobs:
             app/src/main/java/com/mindunlock/app/LearningPersonalization.kt \
             app/src/main/java/com/mindunlock/app/LearningEngineScreen.kt \
             app/src/main/java/com/mindunlock/app/ui/StudyScreens.kt \
+            app/src/main/java/com/mindunlock/app/PlannerPolicy.kt \
             app/src/main/java/com/mindunlock/app/LearningPathPolicy.kt \
             app/src/main/java/com/mindunlock/app/LearningStagePolicy.kt \
             app/src/main/java/com/mindunlock/app/PersianDate.kt \
@@ -3014,6 +3015,7 @@ jobs:
             app/build.gradle.kts \
             app/src/test/java/com/mindunlock/app/data/local/UserDatabaseMindDumpMigrationTest.kt \
             app/src/test/java/com/mindunlock/app/LearningPathPolicyTest.kt \
+            app/src/test/java/com/mindunlock/app/PlannerPolicyTest.kt \
             app/src/test/java/com/mindunlock/app/LearningStagePolicyTest.kt \
             app/src/test/java/com/mindunlock/app/PersianDateTest.kt \
             app/src/test/java/com/mindunlock/app/ReviewSchedulerTest.kt \
@@ -3027,7 +3029,7 @@ jobs:
             mkdir -p "android-build/$(dirname "$relative")"
             cp "android/$relative" "android-build/$relative"
           done
-          echo "Mind Dump, Jalali calendar source and all registered JVM tests are included in the effective APK build."
+          echo "Planner daily focus policy, Mind Dump, Jalali calendar source and all registered JVM tests are included in the effective APK build."
 
       - name: Expand dashboard into the complete app control center
         shell: bash
