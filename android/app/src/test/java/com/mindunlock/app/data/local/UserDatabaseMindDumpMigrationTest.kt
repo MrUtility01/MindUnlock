@@ -163,7 +163,7 @@ class UserDatabaseMindDumpMigrationTest {
             )
 
             val firstTopicId = db.mindDumpDao().convertToLaterTopic(sourceId)
-            val secondTopicId = db.convertMindDumpToLaterTopic(sourceId)
+            val secondTopicId = db.mindDumpDao().convertToLaterTopic(sourceId)
 
             assertEquals(firstTopicId, secondTopicId)
             assertEquals(1, db.laterTopicDao().getAll().size)
@@ -177,14 +177,14 @@ class UserDatabaseMindDumpMigrationTest {
 
             // A retry must reuse the original topic rather than overwrite user edits.
             db.laterTopicDao().update(topic.copy(title = "عنوان ویرایش‌شده", details = "جزئیات شخصی‌سازی‌شده"))
-            assertEquals(firstTopicId, db.convertMindDumpToLaterTopic(sourceId))
+            assertEquals(firstTopicId, db.mindDumpDao().convertToLaterTopic(sourceId))
             val editedTopic = db.laterTopicDao().getAll().single()
             assertEquals("عنوان ویرایش‌شده", editedTopic.title)
             assertEquals("جزئیات شخصی‌سازی‌شده", editedTopic.details)
 
             // If the linked topic was deleted, the next conversion repairs the link.
             db.laterTopicDao().delete(firstTopicId!!)
-            val replacementTopicId = db.convertMindDumpToLaterTopic(sourceId)
+            val replacementTopicId = db.mindDumpDao().convertToLaterTopic(sourceId)
             assertEquals(true, replacementTopicId != null && replacementTopicId != firstTopicId)
             assertEquals(1, db.laterTopicDao().getAll().size)
             assertEquals(replacementTopicId, db.laterTopicDao().getAll().single().id)
@@ -199,7 +199,7 @@ class UserDatabaseMindDumpMigrationTest {
             .allowMainThreadQueries()
             .build()
         try {
-            assertEquals(null, db.convertMindDumpToLaterTopic(404L))
+            assertEquals(null, db.mindDumpDao().convertToLaterTopic(404L))
             assertEquals(0, db.laterTopicDao().getAll().size)
         } finally {
             db.close()
