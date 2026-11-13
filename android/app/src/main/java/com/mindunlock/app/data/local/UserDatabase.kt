@@ -160,6 +160,7 @@ interface LabQuestionResponseDao {
 interface NoteDao {
     @Query("SELECT * FROM notes ORDER BY updatedAt DESC") fun observeAll(): Flow<List<NoteEntity>>
     @Query("SELECT * FROM notes") suspend fun getAll(): List<NoteEntity>
+    @Query("SELECT id, substr(title, 1, 160) AS title FROM notes WHERE title LIKE '%' || :query || '%' ORDER BY updatedAt DESC LIMIT :limit") suspend fun searchMindMapSources(query: String, limit: Int): List<MindMapSourceItem>
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertAll(items: List<NoteEntity>)
     @Query("DELETE FROM notes") suspend fun deleteAll()
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsert(note: NoteEntity)
@@ -181,6 +182,7 @@ interface BookmarkDao {
 interface StudyTaskDao {
     @Query("SELECT * FROM study_tasks ORDER BY completed ASC, COALESCE(dueAt, 9223372036854775807) ASC, createdAt DESC") fun observeAll(): Flow<List<StudyTaskEntity>>
     @Query("SELECT * FROM study_tasks") suspend fun getAll(): List<StudyTaskEntity>
+    @Query("SELECT id, substr(title, 1, 160) AS title FROM study_tasks WHERE title LIKE '%' || :query || '%' ORDER BY createdAt DESC LIMIT :limit") suspend fun searchMindMapSources(query: String, limit: Int): List<MindMapSourceItem>
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertAll(items: List<StudyTaskEntity>)
     @Query("DELETE FROM study_tasks") suspend fun deleteAll()
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsert(task: StudyTaskEntity): Long
@@ -192,6 +194,7 @@ interface MindDumpDao {
     @Query("SELECT * FROM mind_dump ORDER BY updatedAt DESC")
     fun observeAll(): Flow<List<MindDumpEntity>>
     @Query("SELECT * FROM mind_dump") suspend fun getAll(): List<MindDumpEntity>
+    @Query("SELECT id, substr(content, 1, 160) AS title FROM mind_dump WHERE TRIM(content) != '' AND content LIKE '%' || :query || '%' ORDER BY updatedAt DESC LIMIT :limit") suspend fun searchMindMapSources(query: String, limit: Int): List<MindMapSourceItem>
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertAll(items: List<MindDumpEntity>)
     @Query("DELETE FROM mind_dump") suspend fun deleteAll()
 
@@ -265,6 +268,7 @@ interface JournalEntryDao {
     @Query("SELECT * FROM journal_entries ORDER BY updatedAt DESC")
     fun observeAll(): Flow<List<JournalEntryEntity>>
     @Query("SELECT * FROM journal_entries") suspend fun getAll(): List<JournalEntryEntity>
+    @Query("SELECT id, CASE WHEN TRIM(title) = '' THEN substr(body, 1, 160) ELSE substr(title, 1, 160) END AS title FROM journal_entries WHERE title LIKE '%' || :query || '%' OR body LIKE '%' || :query || '%' ORDER BY updatedAt DESC LIMIT :limit") suspend fun searchMindMapSources(query: String, limit: Int): List<MindMapSourceItem>
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertAll(items: List<JournalEntryEntity>)
     @Query("DELETE FROM journal_entries") suspend fun deleteAll()
 
@@ -284,6 +288,7 @@ interface LaterTopicDao {
     @Query("SELECT * FROM later_topics ORDER BY CASE status WHEN 'active' THEN 0 WHEN 'parked' THEN 1 ELSE 2 END, priority ASC, COALESCE(revisitAt, 9223372036854775807) ASC, updatedAt DESC")
     fun observeAll(): Flow<List<LaterTopicEntity>>
     @Query("SELECT * FROM later_topics") suspend fun getAll(): List<LaterTopicEntity>
+    @Query("SELECT id, substr(title, 1, 160) AS title FROM later_topics WHERE title LIKE '%' || :query || '%' ORDER BY updatedAt DESC LIMIT :limit") suspend fun searchMindMapSources(query: String, limit: Int): List<MindMapSourceItem>
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertAll(items: List<LaterTopicEntity>)
     @Query("DELETE FROM later_topics") suspend fun deleteAll()
 
