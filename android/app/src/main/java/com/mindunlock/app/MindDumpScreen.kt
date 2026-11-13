@@ -57,12 +57,13 @@ fun MindDumpScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
     var pendingDeleteEntryId by rememberSaveable { mutableStateOf<Long?>(null) }
     var pendingEditEntryId by rememberSaveable { mutableStateOf<Long?>(null) }
     var editDraft by rememberSaveable { mutableStateOf("") }
-    fun runEntryAction(entryId: Long, successMessage: String, action: suspend () -> Unit) {
+    fun runEntryAction(entryId: Long, successMessage: String, action: suspend () -> Unit, onSuccess: () -> Unit = {}) {
         if (entryId in processingEntryIds) return
         processingEntryIds = processingEntryIds + entryId
         scope.launch {
             try {
                 action()
+                onSuccess()
                 message = successMessage
             } catch (cancelled: CancellationException) {
                 throw cancelled
@@ -290,7 +291,7 @@ fun MindDumpScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
         val pendingEntry = entries.firstOrNull { it.id == entryId }
         if (pendingEntry != null) {
             AlertDialog(
-                onDismissRequest = { pendingEditEntryId = null },
+                onDismissRequest = { if (entryId !in processingEntryIds) pendingEditEntryId = null },
                 title = { Text("ویرایش ورودی") },
                 text = {
                     OutlinedTextField(
@@ -307,16 +308,23 @@ fun MindDumpScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
                         onClick = {
                             val value = editDraft.trim()
                             if (value.isNotEmpty()) {
-                                pendingEditEntryId = null
-                                runEntryAction(entryId, "ورودی ویرایش شد.") {
-                                    userDatabase.mindDumpDao().updateContent(
-                                        entryId, value, System.currentTimeMillis()
-                                    )
-                                }
+                                runEntryAction(
+                                    entryId,
+                                    "ورودی ویرایش شد.",
+                                    action = {
+                                        userDatabase.mindDumpDao().updateContent(
+                                            entryId, value, System.currentTimeMillis()
+                                        )
+                                    },
+                                    onSuccess = {
+                                        pendingEditEntryId = null
+                                        editDraft = ""
+                                    }
+                                )
                             }
                         },
-                        enabled = editDraft.isNotBlank() && editDraft.trim() != pendingEntry.content
-                    ) { Text("ذخیره تغییرات") }
+                        enabled = entryId !in processingEntryIds && editDraft.isNotBlank() && editDraft.trim() != pendingEntry.content
+                    ) { Text(if (entryId in processingEntryIds) "در حال ذخیره…" else "ذخیره تغییرات") }
                 },
                 dismissButton = {
                     TextButton(onClick = { pendingEditEntryId = null }) { Text("انصراف") }
