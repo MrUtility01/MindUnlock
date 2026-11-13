@@ -1827,6 +1827,22 @@ fun PlannerScreen(userDb: UserDatabase, speech: PersianSpeech) {
                     if (task.dueAt != null) {
                         Text("موعد: ${PersianDate.format(task.dueAt)}", color = if (isOverdue) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                     }
+                    if (!task.completed && task.dueAt != null) {
+                        TextButton(
+                            enabled = task.id !in busyTaskIds,
+                            onClick = {
+                                val moved = PlannerPolicy.moveIncompleteTaskToTomorrow(task, System.currentTimeMillis())
+                                if (moved != null) {
+                                    runTaskAction(task.id) {
+                                        userDb.studyTaskDao().upsert(moved)
+                                        cancelTaskReminder(task.id)
+                                        moved.remindAt?.let { scheduleReminder(context, task.id, moved.title, it) }
+                                        message = "موعد کار به فردا منتقل شد."
+                                    }
+                                }
+                            }
+                        ) { Text("انتقال به فردا") }
+                    }
                     if (task.details.isNotBlank()) Text(task.details, style = MaterialTheme.typography.bodySmall)
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(

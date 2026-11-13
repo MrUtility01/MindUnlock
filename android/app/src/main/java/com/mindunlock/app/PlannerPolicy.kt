@@ -29,4 +29,28 @@ object PlannerPolicy {
             .take(limit)
             .toList()
     }
+
+    /**
+     * Moves an open dated task to the next local calendar day, preserving wall-clock time.
+     * The reminder is shifted by the same instant delta so its offset from the due date remains stable.
+     */
+    fun moveIncompleteTaskToTomorrow(
+        task: StudyTaskEntity,
+        nowMillis: Long,
+        zone: ZoneId = ZoneId.systemDefault()
+    ): StudyTaskEntity? {
+        if (task.completed) return null
+        val oldDueAt = task.dueAt ?: return null
+        val oldDue = Instant.ofEpochMilli(oldDueAt).atZone(zone)
+        val newDueAt = oldDue.toLocalDate().plusDays(1)
+            .atTime(oldDue.toLocalTime())
+            .atZone(zone)
+            .toInstant()
+            .toEpochMilli()
+        val delta = newDueAt - oldDueAt
+        return task.copy(
+            dueAt = newDueAt,
+            remindAt = task.remindAt?.plus(delta)
+        )
+    }
 }
