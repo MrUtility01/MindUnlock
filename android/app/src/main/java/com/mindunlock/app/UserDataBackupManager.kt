@@ -41,6 +41,39 @@ object UserDataBackupManager {
         UserDataBackupCodec.encode(payload, exportedAt, version)
     }
 
+    /**
+     * Permanently removes user-owned records while preserving the separately managed learning content DB.
+     * The database wipe is atomic; private restore-safety copies and diagnostics are removed afterwards.
+     */
+    suspend fun deleteAllPersonalData(context: Context, userDb: UserDatabase) = withContext(Dispatchers.IO) {
+        userDb.withTransaction {
+            userDb.progressDao().deleteAll()
+            userDb.noteDao().deleteAll()
+            userDb.bookmarkDao().deleteAll()
+            userDb.studyTaskDao().deleteAll()
+            userDb.mindDumpDao().deleteAll()
+            userDb.journalEntryDao().deleteAll()
+            userDb.laterTopicDao().deleteAll()
+            userDb.labStepProgressDao().deleteAll()
+            userDb.learningSessionDao().deleteAll()
+            userDb.labQuestionResponseDao().deleteAll()
+            userDb.learningProfileDao().deleteAll()
+            userDb.learningSessionFeedbackDao().deleteAll()
+            userDb.learningStageProgressDao().deleteAll()
+            userDb.mindMapDao().getAllEdges().forEach { userDb.mindMapDao().deleteEdge(it.id) }
+            userDb.mindMapDao().getAllNodes().forEach { userDb.mindMapDao().deleteNode(it.id) }
+        }
+
+        listOf(
+            File(context.filesDir, "backup-safety"),
+            File(context.filesDir, "diagnostics")
+        ).forEach { directory ->
+            if (directory.exists() && !directory.deleteRecursively()) {
+                throw IOException("حذف فایل‌های خصوصی از مسیر ${directory.name} کامل نشد.")
+            }
+        }
+    }
+
     suspend fun restore(context: Context, userDb: UserDatabase, document: UserDataBackupDocument) = withContext(Dispatchers.IO) {
         require(document.schemaVersion in 1..UserDataBackupCodec.CURRENT_SCHEMA_VERSION) {
             "نسخه ساختار پشتیبان پشتیبانی نمی‌شود."
