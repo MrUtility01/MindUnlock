@@ -472,6 +472,10 @@ fun DashboardScreen(
         }
         Text("شروع یادگیری", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+            ActionTile("نقشه ذهنی و گراف دانش", "mindmap", onNavigate, Modifier.weight(1f))
+            ActionTile("موتور یادگیری", "learning", onNavigate, Modifier.weight(1f))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
             ActionTile("موضوع‌ها و فصل‌ها", "courses", onNavigate, Modifier.weight(1f))
             ActionTile("فلش‌کارت‌ها", "flashcards", onNavigate, Modifier.weight(1f))
         }
