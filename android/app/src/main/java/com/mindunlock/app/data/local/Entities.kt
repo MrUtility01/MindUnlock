@@ -199,12 +199,14 @@ data class LearningStageProgressEntity(
 
 
 /** User-authored concept or knowledge item in the personal knowledge graph. */
-@Entity(tableName = "mind_map_nodes", indices = [Index("updatedAt"), Index("nodeType")])
+@Entity(tableName = "mind_map_nodes", indices = [Index("updatedAt"), Index("nodeType"), Index(value = ["sourceType", "sourceId"], unique = true)])
 data class MindMapNodeEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val title: String,
     val description: String = "",
     val nodeType: String = "ایده",
+    val sourceType: String? = null,
+    val sourceId: Long? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )
