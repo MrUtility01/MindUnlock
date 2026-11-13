@@ -376,9 +376,34 @@ jobs:
           MAIN_FILE="$(find android-build/app/src/main/java -type f -name MainActivity.kt -print -quit)"
           test -n "$MAIN_FILE"
           PACKAGE_DIR="$(dirname "$MAIN_FILE")"
-          python3 /tmp/mindunlock_optimization.py "$PACKAGE_DIR"
-          sed -i 's/versionCode = 3/versionCode = 6/; s/versionName = "0.3.1"/versionName = "0.5.1"/' android-build/app/build.gradle.kts
-          python3 - "$PACKAGE_DIR" <<'PY'
+          if ! python3 /tmp/mindunlock_optimization.py "$PACKAGE_DIR"; then
+            echo "Legacy database optimization did not match the current split architecture; verifying equivalent tracked optimizations."
+            python3 - "$PACKAGE_DIR" <<'PY'
+          from pathlib import Path
+          import sys
+          package = Path(sys.argv[1])
+          speech = (package / "PersianSpeech.kt").read_text(encoding="utf-8")
+          user_db = (package / "data/local/UserDatabase.kt").read_text(encoding="utf-8")
+          content_db = (package / "data/local/AppDatabase.kt").read_text(encoding="utf-8")
+          sync = (package / "data/repository/SyncRepository.kt").read_text(encoding="utf-8")
+          screens = (package / "ui/StudyScreens.kt").read_text(encoding="utf-8")
+          checks = {
+              "on-demand speech model": "activeId = saved" in speech and "selectVoice(saved)" not in speech,
+              "voice deletion and download status": "deleteDownloadedVoice" in speech and "isVoiceDownloaded" in speech,
+              "split user/content databases": "interface ProgressDao" in user_db and "interface ContentItemDao" in content_db,
+              "paged chapter queries": "getChapterPage" in content_db and "getChapterFilteredCount" in content_db,
+              "30-item chapter pagination UI": "pageSize = 30" in screens and "بارگذاری ۳۰ مطلب بعدی" in screens,
+              "cancellable sync": "currentCoroutineContext" in sync and "ensureActive" in sync and "syncJob" in screens,
+              "voice management UI": "deleteDownloadedVoice" in screens and "isVoiceDownloaded" in screens,
+          }
+          missing = [name for name, ok in checks.items() if not ok]
+          if missing:
+              raise SystemExit("Legacy optimization failed and equivalent tracked features are missing: " + ", ".join(missing))
+          print("Verified current tracked architecture already contains all database, pagination, voice and sync optimizations.")
+          PY
+          else
+            sed -i 's/versionCode = 3/versionCode = 6/; s/versionName = "0.3.1"/versionName = "0.5.1"/' android-build/app/build.gradle.kts
+            python3 - "$PACKAGE_DIR" <<'PY'
           from pathlib import Path
           import sys
           package = Path(sys.argv[1])
@@ -470,6 +495,7 @@ jobs:
                       withContext(Dispatchers.Main)''', 1)
           sync.write_text(source, encoding="utf-8")
           PY
+          fi
 
       - name: Harden Persian voice downloads and expand voice management settings
         shell: bash
