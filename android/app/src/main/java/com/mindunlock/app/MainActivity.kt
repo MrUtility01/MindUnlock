@@ -374,8 +374,9 @@ private fun MoreScreen(onNavigate: (String) -> Unit) {
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Text("ابزارهای آموزشی روی گوشی", style = MaterialTheme.typography.titleLarge)
-        Text("همهٔ داده‌های این بخش‌ها روی همین گوشی ذخیره می‌شوند و پس از دانلود فصل‌ها بدون اینترنت در دسترس‌اند.", style = MaterialTheme.typography.bodyMedium)
+        Text("فضای کار MindUnlock", style = MaterialTheme.typography.headlineSmall, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+        Text("ابزارها در چند گروه مشخص چیده شده‌اند تا مسیرهای روزمره سریع‌تر پیدا شوند. داده‌های شخصی روی همین دستگاه نگهداری می‌شوند.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("یادگیری و تمرین", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ActionTile("تمرین", "quiz", onNavigate, Modifier.weight(1f))
             ActionTile("آزمون", "exam", onNavigate, Modifier.weight(1f))
@@ -384,6 +385,7 @@ private fun MoreScreen(onNavigate: (String) -> Unit) {
             ActionTile("برنامه‌ریز", "planner", onNavigate, Modifier.weight(1f))
             ActionTile("گزارش پیشرفت", "progress", onNavigate, Modifier.weight(1f))
         }
+        Text("مدیریت ذهن و برنامه‌ریزی", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ActionTile("نشانک‌ها", "bookmarks", onNavigate, Modifier.weight(1f))
             ActionTile("تنظیمات", "settings", onNavigate, Modifier.weight(1f))
@@ -400,15 +402,18 @@ private fun MoreScreen(onNavigate: (String) -> Unit) {
             ActionTile("دفتر روزانه", "journal", onNavigate, Modifier.weight(1f))
             ActionTile("موضوعات برای بعد", "later", onNavigate, Modifier.weight(1f))
         }
+        Text("ابزارهای مطالعه", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ActionTile("پروفایل یادگیری", "profile", onNavigate, Modifier.weight(1f))
             ActionTile("موتور یادگیری", "learning", onNavigate, Modifier.weight(1f))
         }
+        Text("تنظیمات و اطلاعات برنامه", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ActionTile("پشتیبان‌گیری و بازیابی", "backup", onNavigate, Modifier.weight(1f))
+            ActionTile("تنظیمات", "settings", onNavigate, Modifier.weight(1f))
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            ActionTile("درباره MindUnlock", "about", onNavigate, Modifier.weight(1f))
+            ActionTile("درباره سازنده و برنامه", "about", onNavigate, Modifier.weight(1f))
         }
     }
 }
