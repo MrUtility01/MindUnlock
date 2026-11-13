@@ -126,6 +126,7 @@ fun BackupRestoreScreen(userDb: UserDatabase) {
                 Text("• موضوعات برای بعد")
                 Text("• وضعیت چک‌لیست آزمایشگاه‌ها")
                 Text("• تاریخچه جلسه‌های یادگیری")
+                Text("• گره‌ها و ارتباط‌های نقشه ذهنی / گراف دانش")
                 Text("• در حالت رمزگذاری، فایل با AES-256-GCM و گذرواژه‌ای که تعیین می‌کنی محافظت می‌شود.")
             }
         }
@@ -188,6 +189,7 @@ fun BackupRestoreScreen(userDb: UserDatabase) {
                     Text("پیشرفت: ${payload.progress.size} · یادداشت: ${payload.notes.size} · نشانک: ${payload.bookmarks.size}")
                     Text("کارها: ${payload.tasks.size} · صندوق ورودی: ${payload.mindDump.size} · دفتر روزانه: ${payload.journalEntries.size}")
                     Text("موضوعات بعدی: ${payload.laterTopics.size} · مراحل آزمایشگاه: ${payload.labStepProgress.size} · جلسه‌ها: ${payload.learningSessions.size} · پاسخ‌های آزمایشگاه: ${payload.labQuestionResponses.size}")
+                    Text("نقشه ذهنی: ${payload.mindMapNodes.size} گره · ${payload.mindMapEdges.size} ارتباط")
                     Text("پیش از جایگزینی، یک نسخه اضطراری از اطلاعات فعلی در فضای خصوصی برنامه ذخیره می‌شود.")
                 }
             },
