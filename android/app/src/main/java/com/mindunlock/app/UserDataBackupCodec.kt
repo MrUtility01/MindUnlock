@@ -12,6 +12,8 @@ import com.mindunlock.app.data.local.LearningSessionEntity
 import com.mindunlock.app.data.local.LearningProfileEntity
 import com.mindunlock.app.data.local.LearningSessionFeedbackEntity
 import com.mindunlock.app.data.local.LearningStageProgressEntity
+import com.mindunlock.app.data.local.MindMapNodeEntity
+import com.mindunlock.app.data.local.MindMapEdgeEntity
 import com.mindunlock.app.data.local.MindDumpEntity
 import com.mindunlock.app.data.local.NoteEntity
 import com.mindunlock.app.data.local.ProgressEntity
@@ -39,11 +41,13 @@ data class UserDataBackupPayload(
     val labQuestionResponses: List<LabQuestionResponseEntity> = emptyList(),
     val learningProfile: List<LearningProfileEntity> = emptyList(),
     val learningSessionFeedback: List<LearningSessionFeedbackEntity> = emptyList(),
-    val learningStageProgress: List<LearningStageProgressEntity> = emptyList()
+    val learningStageProgress: List<LearningStageProgressEntity> = emptyList(),
+    val mindMapNodes: List<MindMapNodeEntity> = emptyList(),
+    val mindMapEdges: List<MindMapEdgeEntity> = emptyList()
 ) {
     val totalRecords: Int
         get() = progress.size + notes.size + bookmarks.size + tasks.size + mindDump.size +
-            journalEntries.size + laterTopics.size + labStepProgress.size + learningSessions.size + labQuestionResponses.size + learningProfile.size + learningSessionFeedback.size + learningStageProgress.size
+            journalEntries.size + laterTopics.size + labStepProgress.size + learningSessions.size + labQuestionResponses.size + learningProfile.size + learningSessionFeedback.size + learningStageProgress.size + mindMapNodes.size + mindMapEdges.size
 }
 
 data class UserDataBackupDocument(
@@ -54,11 +58,11 @@ data class UserDataBackupDocument(
 )
 
 object UserDataBackupCodec {
-    const val CURRENT_SCHEMA_VERSION = 1
+    const val CURRENT_SCHEMA_VERSION = 2
     private val gson = Gson()
     private val requiredCollections = listOf(
         "progress", "notes", "bookmarks", "tasks", "mindDump",
-        "journalEntries", "laterTopics", "labStepProgress", "learningSessions", "labQuestionResponses", "learningProfile", "learningSessionFeedback", "learningStageProgress"
+        "journalEntries", "laterTopics", "labStepProgress", "learningSessions", "labQuestionResponses", "learningProfile", "learningSessionFeedback", "learningStageProgress", "mindMapNodes", "mindMapEdges"
     )
 
     fun encode(payload: UserDataBackupPayload, exportedAt: Long, appVersion: String): String {
@@ -159,7 +163,7 @@ object UserDataBackupCodec {
             .getOrElse { throw IllegalArgumentException("ساختار JSON فایل پشتیبان معتبر نیست.") }
         val schema = root.get("schemaVersion")?.takeIf { it.isJsonPrimitive }?.asInt
             ?: throw IllegalArgumentException("نسخه ساختار پشتیبان مشخص نیست.")
-        require(schema == CURRENT_SCHEMA_VERSION) { "نسخه پشتیبان پشتیبانی نمی‌شود: $schema" }
+        require(schema in 1..CURRENT_SCHEMA_VERSION) { "نسخه پشتیبان پشتیبانی نمی‌شود: $schema" }
         val exportedAt = root.get("exportedAt")?.takeIf { it.isJsonPrimitive }?.asLong
             ?: throw IllegalArgumentException("تاریخ ساخت پشتیبان وجود ندارد.")
         require(exportedAt > 0) { "تاریخ ساخت پشتیبان نامعتبر است." }
@@ -204,6 +208,13 @@ object UserDataBackupCodec {
         require(payload.learningSessions.map { it.id }.distinct().size == payload.learningSessions.size) { "جلسه یادگیری تکراری است." }
         require(payload.labQuestionResponses.map { it.itemUid to it.questionIndex }.distinct().size == payload.labQuestionResponses.size) { "پاسخ سؤال آزمایشگاه تکراری است." }
         require(payload.learningStageProgress.map { it.chapterId to it.stageId }.distinct().size == payload.learningStageProgress.size) { "پیشرفت مرحله آموزشی تکراری است." }
+
+        require(payload.mindMapNodes.map { it.id }.distinct().size == payload.mindMapNodes.size) { "شناسه گره نقشه ذهنی تکراری است." }
+        require(payload.mindMapEdges.map { it.id }.distinct().size == payload.mindMapEdges.size) { "شناسه رابطه نقشه ذهنی تکراری است." }
+        val nodeIds = payload.mindMapNodes.map { it.id }.toSet()
+        require(payload.mindMapNodes.all { it.id > 0 && it.title.isNotBlank() && it.title.length <= 200 && it.description.length <= 4000 && it.nodeType.length <= 40 && it.createdAt > 0 && it.updatedAt > 0 }) { "اطلاعات گره نقشه ذهنی معتبر نیست." }
+        require(payload.mindMapEdges.all { it.id > 0 && it.sourceNodeId in nodeIds && it.targetNodeId in nodeIds && it.sourceNodeId != it.targetNodeId && it.relationType.isNotBlank() && it.relationType.length <= 80 && it.createdAt > 0 }) { "رابطه نقشه ذهنی به گره معتبر متصل نیست." }
+        require(payload.mindMapEdges.map { it.sourceNodeId to it.targetNodeId }.distinct().size == payload.mindMapEdges.size) { "رابطه تکراری در نقشه ذهنی وجود دارد." }
         require(payload.learningStageProgress.all { it.chapterId.isNotBlank() && it.chapterId.length <= 200 && LearningStagePolicy.stages.any { definition -> definition.id == it.stageId && definition.order == it.stageIndex } && it.completed && it.completedAt > 0 && it.updatedAt > 0 }) { "پیشرفت مرحله آموزشی معتبر نیست." }
         require(payload.learningSessionFeedback.map { it.sessionId }.distinct().size == payload.learningSessionFeedback.size) { "بازخورد جلسه تکراری است." }
         require(payload.learningSessionFeedback.all { it.sessionId > 0 && it.comprehension in 1..5 && it.perceivedDifficulty in 1..5 && it.focus in 1..5 && (it.energyBefore == null || it.energyBefore in 1..5) && (it.energyAfter == null || it.energyAfter in 1..5) && (it.note?.length ?: 0) <= 2000 }) { "بازخورد جلسه یادگیری معتبر نیست." }
