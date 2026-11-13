@@ -1868,12 +1868,13 @@ jobs:
           missing = [item for item in required if item not in dao]
           if missing:
               raise SystemExit("Missing optimized DAO methods: " + ", ".join(missing))
-          for screen in ("DashboardScreen", "ChapterListScreen", "ProgressScreen"):
-              start = ui.index("fun " + screen + "(")
-              end = ui.find("\n@Composable", start)
-              block = ui[start:end if end >= 0 else len(ui)]
-              if "contentItemDao().observeAll()" in block:
-                  raise SystemExit(screen + " still loads full content rows")
+          # Dashboard and Progress are optimized by later workflow steps.
+          # At this stage, assert only the chapter-specific paging transformation.
+          chapter_list_start = ui.index("fun ChapterListScreen(")
+          chapter_list_end = ui.find("\n@Composable", chapter_list_start)
+          chapter_list = ui[chapter_list_start:chapter_list_end if chapter_list_end >= 0 else len(ui)]
+          if "contentItemDao().observeAll()" in chapter_list:
+              raise SystemExit("Chapter list still observes the full content table")
           chapter_start = ui.index("fun ChapterContentScreen(")
           chapter_end = ui.index("\n@Composable", chapter_start)
           chapter = ui[chapter_start:chapter_end]
