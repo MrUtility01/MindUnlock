@@ -157,6 +157,26 @@ fun MindMapScreen(userDb: UserDatabase) {
                 Text("نمای گراف", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Text("برای جابه‌جایی بکش؛ برای بزرگ‌نمایی از دو انگشت استفاده کن؛ روی گره بزن تا انتخاب شود.", style = MaterialTheme.typography.bodySmall)
                 MindMapGraphCanvas(nodes = visibleNodes.take(16), edges = graphEdges, selectedNodeId = selectedGraphNodeId, scale = graphScale, panX = graphPanX, panY = graphPanY, onSelectNode = { selectedGraphNodeId = it }, onTransform = { zoom, dx, dy -> graphScale = (graphScale * zoom).coerceIn(0.65f, 2.8f); graphPanX += dx; graphPanY += dy })
+                // Compose text labels keep Persian shaping, accessibility and selection reliable;
+                // the Canvas itself only renders compact numeric markers for performance.
+                visibleNodes.take(16).chunked(2).forEachIndexed { rowIndex, pair ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        pair.forEachIndexed { columnIndex, node ->
+                            val number = rowIndex * 2 + columnIndex + 1
+                            TextButton(
+                                onClick = { selectedGraphNodeId = node.id },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text(
+                                    text = "$number · ${node.title}",
+                                    maxLines = 1,
+                                    color = if (node.id == selectedGraphNodeId) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+                        if (pair.size == 1) androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
+                    }
+                }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text("بزرگ‌نمایی: " + (graphScale * 100).toInt() + "٪", style = MaterialTheme.typography.labelSmall)
                     TextButton(onClick = { graphScale = 1f; graphPanX = 0f; graphPanY = 0f }) { Text("بازنشانی نما") }
