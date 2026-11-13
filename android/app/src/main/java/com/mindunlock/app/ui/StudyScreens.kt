@@ -1361,6 +1361,7 @@ fun QuizScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeech, exa
             Text(cleanHtml(item.content.orEmpty()), style = MaterialTheme.typography.bodyLarge)
             val meta = runCatching { JsonParser.parseString(item.metadataJson ?: "{}").asJsonObject }.getOrNull()
             val options = readStringArray(item.optionsJson ?: meta?.get("options")?.toString())
+            OutlinedButton(onClick = { speech.speak(item.title.orEmpty() + ". " + cleanHtml(item.content.orEmpty()) + ". " + options.joinToString(". ")) }, enabled = speech.ready.value, modifier = Modifier.fillMaxWidth()) { Text("خواندن سؤال و گزینه‌ها") }
             options.forEachIndexed { i, option ->
                 Card(
                     onClick = { if (!checked) answer = i },
@@ -1889,6 +1890,7 @@ fun PlannerScreen(userDb: UserDatabase, speech: PersianSpeech) {
                         ) { Text("انتقال به فردا") }
                     }
                     if (task.details.isNotBlank()) Text(task.details, style = MaterialTheme.typography.bodySmall)
+                    OutlinedButton(onClick = { speech.speak(task.title + ". " + task.details) }, enabled = speech.ready.value) { Text("خواندن کار") }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(
                             enabled = task.id !in busyTaskIds,
@@ -2079,6 +2081,7 @@ fun ProgressScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeech)
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text("گزارش پیشرفت و تحلیل یادگیری", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         Text("آمار از محتوای تأییدشده و پیشرفت آموزشی همین دستگاه محاسبه می‌شود.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        OutlinedButton(onClick = { speech.speak("گزارش پیشرفت. " + snapshot.completedItems + " از " + snapshot.totalItems + " مطلب تکمیل شده. " + snapshot.attempts + " تلاش و " + snapshot.accuracyPercent + " درصد دقت.") }, enabled = speech.ready.value, modifier = Modifier.fillMaxWidth()) { Text("خواندن گزارش پیشرفت") }
         Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -2310,6 +2313,7 @@ fun BookmarksScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeech
                             Text(kindLabel(item.type), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                             if (!item.summary.isNullOrBlank()) {
                                 Text(cleanHtml(item.summary), maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
+                                OutlinedButton(onClick = { speech.speak(item.title.orEmpty() + ". " + cleanHtml(item.summary.orEmpty())) }, enabled = speech.ready.value) { Text("خواندن نشانک") }
                             }
                         }
                         IconButton(onClick = { pendingRemoval = item.uid }) {
