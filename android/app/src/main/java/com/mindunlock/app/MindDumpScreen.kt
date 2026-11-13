@@ -55,6 +55,7 @@ fun MindDumpScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
     var pendingDeleteEntryId by rememberSaveable { mutableStateOf<Long?>(null) }
     var pendingEditEntryId by rememberSaveable { mutableStateOf<Long?>(null) }
     var editDraft by rememberSaveable { mutableStateOf("") }
+    var editCategory by rememberSaveable { mutableStateOf("thought") }
     fun runEntryAction(entryId: Long, successMessage: String, onSuccess: () -> Unit = {}, action: suspend () -> Unit) {
         if (entryId in processingEntryIds) return
         processingEntryIds = processingEntryIds + entryId
@@ -195,6 +196,7 @@ fun MindDumpScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
                         onEdit = {
                             pendingEditEntryId = entry.id
                             editDraft = entry.content
+                            editCategory = entry.category
                         },
                         onConvertToLater = { priority ->
                             val priorityLabel = when (priority) {
@@ -279,15 +281,37 @@ fun MindDumpScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
                 onDismissRequest = { if (entryId !in processingEntryIds) pendingEditEntryId = null },
                 title = { Text("ویرایش ورودی") },
                 text = {
-                    OutlinedTextField(
-                        value = editDraft,
-                        onValueChange = { editDraft = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = entryId !in processingEntryIds,
-                        minLines = 4,
-                        maxLines = 10,
-                        label = { Text("متن ورودی") }
-                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        OutlinedTextField(
+                            value = editDraft,
+                            onValueChange = { editDraft = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = entryId !in processingEntryIds,
+                            minLines = 4,
+                            maxLines = 10,
+                            label = { Text("متن ورودی") }
+                        )
+                        Text("نوع ورودی", style = MaterialTheme.typography.labelLarge)
+                        Row(
+                            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            listOf(
+                                "thought" to "فکر", "task" to "کار", "idea" to "ایده",
+                                "learning" to "یادگیری", "government_job" to "کار دولتی",
+                                "freelance" to "کار آزاد", "private_job" to "کار شرکتی",
+                                "project" to "پروژه", "finance" to "مالی",
+                                "personal" to "شخصی", "family" to "خانواده", "other" to "سایر"
+                            ).forEach { (value, label) ->
+                                FilterChip(
+                                    selected = editCategory == value,
+                                    onClick = { editCategory = value },
+                                    enabled = entryId !in processingEntryIds,
+                                    label = { Text(label) }
+                                )
+                            }
+                        }
+                    }
                 },
                 confirmButton = {
                     TextButton(
@@ -298,8 +322,8 @@ fun MindDumpScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
                                     entryId,
                                     "ورودی ویرایش شد.",
                                     action = {
-                                        userDatabase.mindDumpDao().updateContent(
-                                            entryId, value, System.currentTimeMillis()
+                                        userDatabase.mindDumpDao().updateContentAndCategory(
+                                            entryId, value, editCategory, System.currentTimeMillis()
                                         )
                                     },
                                     onSuccess = {
@@ -309,7 +333,8 @@ fun MindDumpScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
                                 )
                             }
                         },
-                        enabled = entryId !in processingEntryIds && editDraft.isNotBlank() && editDraft.trim() != pendingEntry.content
+                        enabled = entryId !in processingEntryIds && editDraft.isNotBlank() &&
+                            (editDraft.trim() != pendingEntry.content || editCategory != pendingEntry.category)
                     ) { Text(if (entryId in processingEntryIds) "در حال ذخیره…" else "ذخیره تغییرات") }
                 },
                 dismissButton = {
