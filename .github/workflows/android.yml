@@ -3512,8 +3512,8 @@ jobs:
           import sys
           path = Path(sys.argv[1])
           source = path.read_text(encoding="utf-8")
-          branch = '                          ResumeActionKind.ESSENTIAL_TOPICS -> onNavigate("later")\n'
-          anchor = '                          ResumeActionKind.ACTIVE_TOPIC -> onNavigate("later")'
+          branch = '                ResumeActionKind.ESSENTIAL_TOPICS -> onNavigate("later")\n'
+          anchor = '                ResumeActionKind.ACTIVE_TOPIC -> onNavigate("later")'
           if branch.strip() not in source:
               if source.count(anchor) != 1:
                   raise SystemExit("Generated dashboard active-topic branch was not found exactly once.")
