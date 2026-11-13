@@ -18,7 +18,7 @@ private val MindUnlockShapes = Shapes(
 )
 
 @Composable
-fun MindUnlockTheme(themeName: String = "dark", content: @Composable () -> Unit) {
+fun MindUnlockTheme(themeName: String = "light", content: @Composable () -> Unit) {
     val colors = when (themeName) {
         "light" -> lightColorScheme(
             primary = Color(0xFF176E72),
