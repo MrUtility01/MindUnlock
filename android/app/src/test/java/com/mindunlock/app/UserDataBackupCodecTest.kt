@@ -8,6 +8,8 @@ import com.mindunlock.app.data.local.LearningProfileEntity
 import com.mindunlock.app.data.local.LearningSessionFeedbackEntity
 import com.mindunlock.app.data.local.LearningStageProgressEntity
 import com.mindunlock.app.data.local.MindDumpEntity
+import com.mindunlock.app.data.local.MindMapNodeEntity
+import com.mindunlock.app.data.local.MindMapEdgeEntity
 import com.mindunlock.app.data.local.ProgressEntity
 import com.mindunlock.app.data.local.StudyTaskEntity
 import org.junit.Assert.assertEquals
@@ -40,7 +42,7 @@ class UserDataBackupCodecTest {
         )
         val json = UserDataBackupCodec.encode(payload, 1_800_000_000_000L, "0.6.5")
         val restored = UserDataBackupCodec.decode(json)
-        assertEquals(1, restored.schemaVersion)
+        assertEquals(2, restored.schemaVersion)
         assertEquals(1_800_000_000_000L, restored.exportedAt)
         assertEquals("0.6.5", restored.appVersion)
         assertEquals(10, restored.payload.totalRecords)
@@ -87,11 +89,14 @@ class UserDataBackupCodecTest {
         payload.remove("learningProfile")
         payload.remove("learningSessionFeedback")
         payload.remove("learningStageProgress")
+        payload.remove("mindMapNodes")
+        payload.remove("mindMapEdges")
         val digest = java.security.MessageDigest.getInstance("SHA-256")
             .digest(payload.toString().toByteArray(Charsets.UTF_8))
             .joinToString("") { "%02x".format(it) }
         root.addProperty("sha256", digest)
 
+        root.addProperty("schemaVersion", 1)
         val restored = UserDataBackupCodec.decode(root.toString())
 
         assertEquals("یادداشت قدیمی", restored.payload.mindDump.single().content)
@@ -175,7 +180,7 @@ class UserDataBackupCodecTest {
     fun rejectsUnsupportedSchemaAndMissingCollections() {
         val json = UserDataBackupCodec.encode(UserDataBackupPayload(), 1_800_000_000_000L, "test")
         assertThrows(IllegalArgumentException::class.java) {
-            UserDataBackupCodec.decode(json.replace("\"schemaVersion\":1", "\"schemaVersion\":99"))
+            UserDataBackupCodec.decode(json.replace("\"schemaVersion\":2", "\"schemaVersion\":99"))
         }
         assertThrows(IllegalArgumentException::class.java) {
             UserDataBackupCodec.decode("""{"schemaVersion":1,"exportedAt":1800000000000,"appVersion":"test","payload":{},"sha256":"x"}""")
@@ -270,6 +275,40 @@ class UserDataBackupCodecTest {
             assertEquals("preserve", file.readText())
         } finally {
             parent.deleteRecursively()
+        }
+    }
+
+
+    @Test
+    fun roundTripsMindMapNodesAndDirectedRelationships() {
+        val nodes = listOf(
+            MindMapNodeEntity(id = 21, title = "شبکه", nodeType = "یادگیری", createdAt = 1_800_000_000_000L, updatedAt = 1_800_000_000_100L),
+            MindMapNodeEntity(id = 22, title = "DNS", description = "سامانه نام", nodeType = "مفهوم", createdAt = 1_800_000_000_000L, updatedAt = 1_800_000_000_100L)
+        )
+        val edge = MindMapEdgeEntity(id = 31, sourceNodeId = 21, targetNodeId = 22, relationType = "شامل", createdAt = 1_800_000_000_200L)
+        val decoded = UserDataBackupCodec.decode(
+            UserDataBackupCodec.encode(
+                UserDataBackupPayload(mindMapNodes = nodes, mindMapEdges = listOf(edge)),
+                1_800_000_000_300L,
+                "test"
+            )
+        )
+        assertEquals(2, decoded.schemaVersion)
+        assertEquals(nodes, decoded.payload.mindMapNodes)
+        assertEquals(edge, decoded.payload.mindMapEdges.single())
+        assertEquals(3, decoded.payload.totalRecords)
+    }
+
+    @Test
+    fun rejectsMindMapEdgesWithMissingEndpointsOrSelfLinks() {
+        val node = MindMapNodeEntity(id = 41, title = "گره", createdAt = 1_800_000_000_000L, updatedAt = 1_800_000_000_000L)
+        val dangling = MindMapEdgeEntity(id = 51, sourceNodeId = 41, targetNodeId = 99, createdAt = 1_800_000_000_000L)
+        assertThrows(IllegalArgumentException::class.java) {
+            UserDataBackupCodec.decode(UserDataBackupCodec.encode(UserDataBackupPayload(mindMapNodes = listOf(node), mindMapEdges = listOf(dangling)), 1_800_000_000_100L, "test"))
+        }
+        val selfLink = dangling.copy(targetNodeId = 41)
+        assertThrows(IllegalArgumentException::class.java) {
+            UserDataBackupCodec.decode(UserDataBackupCodec.encode(UserDataBackupPayload(mindMapNodes = listOf(node), mindMapEdges = listOf(selfLink)), 1_800_000_000_100L, "test"))
         }
     }
 
