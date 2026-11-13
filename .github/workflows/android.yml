@@ -1290,7 +1290,7 @@ jobs:
               "showResetDialog" in settings
               and "appVersion" in settings
               and "CrashDiagnostics" in settings
-              and "کپی اطلاعات فنی" in settings
+              and "کپی گزارش فنی" in settings
           ):
               print("Settings reset and diagnostics are already implemented; skipping legacy settings patch.")
               raise SystemExit(0)
