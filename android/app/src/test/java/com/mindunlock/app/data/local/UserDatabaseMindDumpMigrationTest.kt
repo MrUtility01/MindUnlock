@@ -162,8 +162,8 @@ class UserDatabaseMindDumpMigrationTest {
                 MindDumpEntity(content = sourceText, category = "idea")
             )
 
-            val firstTopicId = db.mindDumpDao().convertToLaterTopic(sourceId)
-            val secondTopicId = db.mindDumpDao().convertToLaterTopic(sourceId)
+            val firstTopicId = db.mindDumpDao().convertToLaterTopic(sourceId, 1)
+            val secondTopicId = db.mindDumpDao().convertToLaterTopic(sourceId, 3)
 
             assertEquals(firstTopicId, secondTopicId)
             assertEquals(1, db.laterTopicDao().getAll().size)
@@ -172,6 +172,7 @@ class UserDatabaseMindDumpMigrationTest {
             assertEquals("موضوع برنامه‌ریزی شبکه", topic.title)
             assertEquals(sourceText, topic.details)
             assertEquals(sourceId, topic.sourceMindDumpId)
+            assertEquals(1, topic.priority)
             val source = db.mindDumpDao().getById(sourceId)
             assertEquals("later", source?.status)
 
@@ -181,6 +182,7 @@ class UserDatabaseMindDumpMigrationTest {
             val editedTopic = db.laterTopicDao().getAll().single()
             assertEquals("عنوان ویرایش‌شده", editedTopic.title)
             assertEquals("جزئیات شخصی‌سازی‌شده", editedTopic.details)
+            assertEquals("priority must also remain unchanged on retry", 1, editedTopic.priority)
 
             // If the linked topic was deleted, the next conversion repairs the link.
             db.laterTopicDao().delete(firstTopicId!!)
