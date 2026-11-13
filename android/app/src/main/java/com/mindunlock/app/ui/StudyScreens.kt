@@ -2179,7 +2179,9 @@ fun BookmarksScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeech
     val scope = rememberCoroutineScope()
     var query by rememberSaveable { mutableStateOf("") }
     var pendingRemoval by remember { mutableStateOf<String?>(null) }
-    
+    var removingBookmark by remember { mutableStateOf(false) }
+    var bookmarkMessage by remember { mutableStateOf("") }
+
     val visible = saved.filter { item ->
         query.isBlank() ||
             item.title.orEmpty().contains(query, true) ||
@@ -2192,6 +2194,9 @@ fun BookmarksScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeech
         Text("نشانک‌ها · " + bookmarks.size, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth(), label = { Text("جست‌وجو در نشانک‌ها") }, singleLine = true)
         PersianVoiceInputButton(compact = true) { spoken -> query = listOf(query, spoken).filter { it.isNotBlank() }.joinToString(" ") }
+        if (bookmarkMessage.isNotBlank()) {
+            Text(bookmarkMessage, style = MaterialTheme.typography.bodySmall, color = if (bookmarkMessage.startsWith("حذف نشانک ناموفق")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
+        }
         LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (visible.isEmpty()) {
                 item { EmptyMessage(if (saved.isEmpty()) "هنوز نشانکی ذخیره نشده است." else "نشانکی با این عبارت پیدا نشد.") }
@@ -2224,12 +2229,29 @@ fun BookmarksScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeech
             title = { Text("حذف نشانک") },
             text = { Text("این مطلب از فهرست نشانک‌ها حذف شود؟ محتوای اصلی و یادداشت‌های آن پاک نمی‌شوند.") },
             confirmButton = {
-                TextButton(onClick = {
-                    scope.launch { userDb.bookmarkDao().delete(uid) }
-                    pendingRemoval = null
-                }) { Text("حذف نشانک") }
+                TextButton(
+                    enabled = !removingBookmark,
+                    onClick = {
+                        if (!removingBookmark) {
+                            removingBookmark = true
+                            scope.launch {
+                                try {
+                                    userDb.bookmarkDao().delete(uid)
+                                    bookmarkMessage = "نشانک حذف شد؛ محتوای اصلی دست‌نخورده باقی ماند."
+                                    pendingRemoval = null
+                                } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                                    throw cancelled
+                                } catch (_: Exception) {
+                                    bookmarkMessage = "حذف نشانک ناموفق بود؛ دوباره تلاش کن."
+                                } finally {
+                                    removingBookmark = false
+                                }
+                            }
+                        }
+                    }
+                ) { Text(if (removingBookmark) "در حال حذف…" else "حذف نشانک") }
             },
-            dismissButton = { TextButton(onClick = { pendingRemoval = null }) { Text("انصراف") } }
+            dismissButton = { TextButton(enabled = !removingBookmark, onClick = { pendingRemoval = null }) { Text("انصراف") } }
         )
     }
 }
