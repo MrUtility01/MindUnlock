@@ -36,7 +36,6 @@ object PlannerPolicy {
      */
     fun moveIncompleteTaskToTomorrow(
         task: StudyTaskEntity,
-        nowMillis: Long,
         zone: ZoneId = ZoneId.systemDefault()
     ): StudyTaskEntity? {
         if (task.completed) return null

@@ -45,7 +45,7 @@ class PlannerPolicyTest {
         val due = java.time.LocalDateTime.of(2026, 11, 13, 9, 30).atZone(zone).toInstant().toEpochMilli()
         val reminder = java.time.LocalDateTime.of(2026, 11, 13, 8, 30).atZone(zone).toInstant().toEpochMilli()
         val task = StudyTaskEntity(id = 9, title = "کار", dueAt = due, remindAt = reminder)
-        val moved = PlannerPolicy.moveIncompleteTaskToTomorrow(task, due, zone)
+        val moved = PlannerPolicy.moveIncompleteTaskToTomorrow(task, zone)
         assertEquals(
             java.time.LocalDateTime.of(2026, 11, 14, 9, 30).atZone(zone).toInstant().toEpochMilli(),
             moved?.dueAt
@@ -64,7 +64,7 @@ class PlannerPolicyTest {
         val due = java.time.LocalDateTime.of(2026, 3, 28, 9, 30).atZone(zone).toInstant().toEpochMilli()
         val reminder = java.time.LocalDateTime.of(2026, 3, 28, 8, 30).atZone(zone).toInstant().toEpochMilli()
         val moved = PlannerPolicy.moveIncompleteTaskToTomorrow(
-            StudyTaskEntity(id = 10, title = "DST", dueAt = due, remindAt = reminder), due, zone
+            StudyTaskEntity(id = 10, title = "DST", dueAt = due, remindAt = reminder), zone
         )
         assertEquals(
             java.time.LocalDateTime.of(2026, 3, 29, 9, 30).atZone(zone).toInstant().toEpochMilli(),
@@ -79,7 +79,7 @@ class PlannerPolicyTest {
     @Test
     fun rolloverSkipsCompletedOrUndatedTasks() {
         assertEquals(null, PlannerPolicy.moveIncompleteTaskToTomorrow(
-            StudyTaskEntity(id = 1, title = "انجام‌شده", dueAt = 1000L, completed = true), 0L
+            StudyTaskEntity(id = 1, title = "انجام‌شده", dueAt = 1000L, completed = true)
         ))
         assertEquals(null, PlannerPolicy.moveIncompleteTaskToTomorrow(
             StudyTaskEntity(id = 2, title = "بدون موعد"), 0L

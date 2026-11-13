@@ -1831,7 +1831,7 @@ fun PlannerScreen(userDb: UserDatabase, speech: PersianSpeech) {
                         TextButton(
                             enabled = task.id !in busyTaskIds,
                             onClick = {
-                                val moved = PlannerPolicy.moveIncompleteTaskToTomorrow(task, System.currentTimeMillis())
+                                val moved = PlannerPolicy.moveIncompleteTaskToTomorrow(task)
                                 if (moved != null) {
                                     runTaskAction(task.id) {
                                         userDb.studyTaskDao().upsert(moved)
