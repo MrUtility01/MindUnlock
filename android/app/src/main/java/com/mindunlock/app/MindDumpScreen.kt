@@ -174,8 +174,7 @@ fun MindDumpScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
         )
         Text(
             "نمایش " + visibleEntries.size + " مورد از " +
-                if (showArchived) archivedCount else inboxCount
-                + " مورد",
+                (if (showArchived) archivedCount else inboxCount) + " مورد",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
