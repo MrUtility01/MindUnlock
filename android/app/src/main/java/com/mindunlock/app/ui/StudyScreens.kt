@@ -1664,6 +1664,7 @@ fun PlannerScreen(userDb: UserDatabase, speech: PersianSpeech) {
     var editReminder by rememberSaveable { mutableStateOf(true) }
     var editError by rememberSaveable { mutableStateOf("") }
     var pendingDeleteTask by remember { mutableStateOf<StudyTaskEntity?>(null) }
+    var pendingMoveTask by remember { mutableStateOf<StudyTaskEntity?>(null) }
     var busyTaskIds by remember { mutableStateOf(emptySet<Long>()) }
 
     fun cancelTaskReminder(taskId: Long) {
@@ -1876,17 +1877,7 @@ fun PlannerScreen(userDb: UserDatabase, speech: PersianSpeech) {
                     if (!task.completed && task.dueAt != null) {
                         TextButton(
                             enabled = task.id !in busyTaskIds,
-                            onClick = {
-                                val moved = PlannerPolicy.moveIncompleteTaskToTomorrow(task)
-                                if (moved != null) {
-                                    runTaskAction(task.id) {
-                                        userDb.studyTaskDao().upsert(moved)
-                                        cancelTaskReminder(task.id)
-                                        moved.remindAt?.let { scheduleReminder(context, task.id, moved.title, it) }
-                                        message = "موعد کار به فردا منتقل شد."
-                                    }
-                                }
-                            }
+                            onClick = { pendingMoveTask = task }
                         ) { Text("انتقال به فردا") }
                     }
                     if (task.details.isNotBlank()) Text(task.details, style = MaterialTheme.typography.bodySmall)
@@ -1966,6 +1957,38 @@ fun PlannerScreen(userDb: UserDatabase, speech: PersianSpeech) {
                 ) { Text("ذخیره تغییرات") }
             },
             dismissButton = { TextButton(onClick = { editingTask = null }) { Text("انصراف") } }
+        )
+    }
+
+    pendingMoveTask?.let { task ->
+        AlertDialog(
+            onDismissRequest = { pendingMoveTask = null },
+            title = { Text("انتقال کار به فردا؟") },
+            text = {
+                Text("موعد «${task.title}» به روز تقویمی بعد منتقل می‌شود. ساعت محلی و فاصله زمانی یادآور حفظ می‌شود؛ یادآور فعلی جایگزین خواهد شد.")
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = task.id !in busyTaskIds,
+                    onClick = {
+                        val moved = PlannerPolicy.moveIncompleteTaskToTomorrow(task)
+                        pendingMoveTask = null
+                        if (moved == null) {
+                            message = "انتقال این کار ممکن نیست؛ موعد آن را بررسی کن."
+                        } else {
+                            runTaskAction(task.id) {
+                                userDb.studyTaskDao().upsert(moved)
+                                cancelTaskReminder(task.id)
+                                moved.remindAt?.let { scheduleReminder(context, task.id, moved.title, it) }
+                                message = "موعد کار به فردا منتقل شد."
+                            }
+                        }
+                    }
+                ) { Text("تأیید انتقال") }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingMoveTask = null }) { Text("انصراف") }
+            }
         )
     }
 
