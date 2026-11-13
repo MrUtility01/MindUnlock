@@ -99,7 +99,9 @@ jobs:
           if 'sherpa-onnx/native/**' not in g:
               g = g.replace('packaging {', 'packaging {\n        resources.excludes += "sherpa-onnx/native/**"\n        ')
           gradle.write_text(g, encoding="utf-8")
-          speech.write_text(r'''package com.mindunlock.app
+          existing_speech = speech.read_text(encoding="utf-8") if speech.exists() else ""
+          if not ("archiveBytes" in existing_speech and "activeId = saved" in existing_speech and "deleteDownloadedVoice" in existing_speech and "isVoiceDownloaded" in existing_speech):
+              speech.write_text(r'''package com.mindunlock.app
 
           import android.content.Context
           import android.media.AudioAttributes
@@ -239,7 +241,9 @@ jobs:
                   tts = null
               }
           }
-          ''', encoding="utf-8")
+              ''', encoding="utf-8")
+          else:
+              print("Preserved tracked PersianSpeech implementation with on-demand loading and validated downloads.")
           PY
 
           echo "Persian voice models will be downloaded on demand after installation."
