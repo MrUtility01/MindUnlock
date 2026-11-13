@@ -198,9 +198,10 @@ data class LearningStageProgressEntity(
 )
 
 
-/** User-authored concept or knowledge item in the personal knowledge graph. */
+/** Lightweight projection used by the MindMap source picker; avoids loading full records. */
 data class MindMapSourceItem(val id: Long, val title: String)
 
+/** User-authored concept or knowledge item in the personal knowledge graph. */
 @Entity(tableName = "mind_map_nodes", indices = [Index("updatedAt"), Index("nodeType"), Index(value = ["sourceType", "sourceId"], unique = true)])
 data class MindMapNodeEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
