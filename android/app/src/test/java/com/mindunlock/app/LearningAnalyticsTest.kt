@@ -88,6 +88,56 @@ class LearningAnalyticsTest {
     }
 
     @Test
+    fun ignoresFutureSessionsAndBoundsCorruptedProgressCounters() {
+        val item = ContentItemEntity(uid = "bounded", chapterId = "network")
+        val malformed = ProgressEntity(
+            itemUid = "bounded",
+            chapterId = "network",
+            attempts = 2,
+            correct = 9,
+            wrong = 7,
+            quality = 9,
+            intervalDays = -4
+        )
+        val valid = LearningSessionEntity(
+            id = 1,
+            topicTitle = "Completed",
+            startedAt = now - 60_000L,
+            endedAt = now,
+            durationSeconds = 1L
+        )
+        val futureEnd = LearningSessionEntity(
+            id = 2,
+            topicTitle = "Future end",
+            startedAt = now - 60_000L,
+            endedAt = now + 60_000L
+        )
+        val futureStart = LearningSessionEntity(
+            id = 3,
+            topicTitle = "Future start",
+            startedAt = now + 60_000L,
+            endedAt = now + 120_000L
+        )
+
+        val result = LearningAnalytics.build(
+            chapters = emptyList(),
+            items = listOf(item),
+            progress = listOf(malformed),
+            tasks = emptyList(),
+            sessions = listOf(valid, futureEnd, futureStart),
+            now = now,
+            zone = ZoneOffset.UTC
+        )
+
+        assertEquals(2, result.attempts)
+        assertEquals(2, result.correct)
+        assertEquals(0, result.wrong)
+        assertEquals(100, result.accuracyPercent)
+        assertEquals(1, result.completedSessions)
+        assertEquals(1L, result.totalStudyMinutes)
+    }
+
+    @Test
     fun reportsOverdueAndCompletedTasksWithoutReadingPrivateJournalOrInbox() {
         val tasks = listOf(
             StudyTaskEntity(id = 1, title = "Overdue", dueAt = now - 1),
