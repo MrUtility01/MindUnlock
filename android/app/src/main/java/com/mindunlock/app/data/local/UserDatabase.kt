@@ -209,6 +209,34 @@ interface MindDumpDao {
 
     @Query("SELECT * FROM later_topics WHERE sourceMindDumpId = :sourceId ORDER BY updatedAt DESC, id DESC LIMIT 1")
     suspend fun getLaterTopicBySourceMindDumpId(sourceId: Long): LaterTopicEntity?
+    @Query("SELECT * FROM later_topics WHERE id = :topicId LIMIT 1")
+    suspend fun getLaterTopicById(topicId: Long): LaterTopicEntity?
+
+    @Query("DELETE FROM later_topics WHERE id = :topicId")
+    suspend fun deleteLaterTopic(topicId: Long)
+
+    /**
+     * Restores a parked topic to Inbox atomically. A stale/missing source link is repaired
+     * by recreating the captured text instead of silently losing the user's content.
+     * Returns the restored or newly-created Mind Dump ID, or null for a missing topic.
+     */
+    @Transaction
+    suspend fun returnLaterTopicToInbox(topicId: Long): Long? {
+        val topic = getLaterTopicById(topicId) ?: return null
+        val source = topic.sourceMindDumpId?.let { getById(it) }
+        val now = System.currentTimeMillis()
+        val restoredId = if (source != null) {
+            updateStatus(source.id, "inbox", now, null)
+            source.id
+        } else {
+            val content = listOf(topic.title, topic.details)
+                .filter { it.isNotBlank() }
+                .joinToString("\\n\\n")
+            insert(MindDumpEntity(content = content, category = "learning", createdAt = now, updatedAt = now))
+        }
+        deleteLaterTopic(topic.id)
+        return restoredId
+    }
 
     @Insert
     suspend fun insertLaterTopic(topic: LaterTopicEntity): Long
