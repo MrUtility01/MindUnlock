@@ -231,7 +231,7 @@ interface MindDumpDao {
         } else {
             val content = listOf(topic.title, topic.details)
                 .filter { it.isNotBlank() }
-                .joinToString("\\n\\n")
+                .joinToString("\n\n")
             insert(MindDumpEntity(content = content, category = "learning", createdAt = now, updatedAt = now))
         }
         deleteLaterTopic(topic.id)
