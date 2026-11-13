@@ -198,22 +198,8 @@ fun LaterTopicsScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
                         },
                         onReturnToInbox = {
                             runTopicAction(topic.id, "موضوع به صندوق ورودی بازگردانده شد.") {
-                                userDatabase.withTransaction {
-                                    val restoredContent = listOf(topic.title, topic.details)
-                                        .filter { it.isNotBlank() }.joinToString("\n\n")
-                                    val sourceId = topic.sourceMindDumpId
-                                    val sourceExists = sourceId != null &&
-                                        userDatabase.mindDumpDao().getAll().any { it.id == sourceId }
-                                    if (sourceExists) {
-                                        userDatabase.mindDumpDao().updateStatus(
-                                            sourceId!!, "inbox", System.currentTimeMillis(), null
-                                        )
-                                    } else {
-                                        userDatabase.mindDumpDao().insert(
-                                            MindDumpEntity(content = restoredContent, category = "learning")
-                                        )
-                                    }
-                                    userDatabase.laterTopicDao().delete(topic.id)
+                                check(userDatabase.mindDumpDao().returnLaterTopicToInbox(topic.id) != null) {
+                                    "Later Topic no longer exists"
                                 }
                             }
                         },
