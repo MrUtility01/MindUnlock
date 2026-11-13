@@ -3164,7 +3164,7 @@ jobs:
           path = Path(sys.argv[1])
           source = path.read_text(encoding="utf-8")
           start = source.index("fun DashboardScreen(")
-          end = source.find("\\n@Composable", start + 5)
+          end = source.find("\n@Composable", start + 5)
           dashboard = source[start:end if end >= 0 else len(source)]
           routes = ("courses", "flashcards", "review", "quiz", "exam", "labs", "notes", "planner", "inbox", "later", "archive", "progress", "journal", "bookmarks", "learning", "profile", "backup", "settings", "sync", "about")
           missing_routes = [route for route in routes if f'"{route}"' not in dashboard]
