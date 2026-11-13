@@ -2621,8 +2621,8 @@ jobs:
               source = source.replace('versionName = "0.5.1"', 'versionName = "0.6.9"', 1)
               p.write_text(source, encoding="utf-8")
               print("Legacy package version bumped to 0.6.9 (versionCode 24).")
-          elif code >= 38 and name == "0.6.23":
-              print("Preserving newer tracked package version 0.6.23 (versionCode 38); no downgrade or conflicting rewrite.")
+          elif code >= 38 and name.startswith("0.6."):
+              print(f"Preserving tracked package version {name} (versionCode {code}); no downgrade or conflicting rewrite.")
           else:
               raise SystemExit(f"Unexpected package version {name} ({code}); refusing to guess a release version.")
           PY
