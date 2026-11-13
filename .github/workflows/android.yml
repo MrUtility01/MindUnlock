@@ -386,8 +386,6 @@ jobs:
           sync = (package / "data/repository/SyncRepository.kt").read_text(encoding="utf-8")
           screens = (package / "ui/StudyScreens.kt").read_text(encoding="utf-8")
           checks = {
-              "on-demand speech model": "activeId = saved" in speech and "selectVoice(saved)" not in speech,
-              "voice deletion and download status": "deleteDownloadedVoice" in speech and "isVoiceDownloaded" in speech,
               "split user/content databases": "interface ProgressDao" in user_db and "interface ContentItemDao" in content_db,
               "paged chapter queries": "getChapterPage" in content_db and "getChapterFilteredCount" in content_db,
               "30-item chapter pagination UI": "pageSize = 30" in screens and "بارگذاری ۳۰ مطلب بعدی" in screens,
@@ -401,7 +399,49 @@ jobs:
           print("Current tracked source already contains the complete optimization set.")
           PY
           then
-            echo "Skipping legacy transformation; the tracked source already has the newer split database, pagination, on-demand voice and cancellable sync implementations."
+            echo "Skipping legacy database/UI transformation; the tracked source already has split databases, pagination and cancellable sync."
+            python3 - "$PACKAGE_DIR" <<'PY'
+          from pathlib import Path
+          import sys
+          package = Path(sys.argv[1])
+          speech = package / "PersianSpeech.kt"
+          source = speech.read_text(encoding="utf-8")
+          old_init = '''    init {
+                  val saved = appContext.getSharedPreferences("mindunlock_preferences", Context.MODE_PRIVATE).getString("speech_voice", "gyro") ?: "gyro"
+                  selectVoice(saved)
+              }'''
+          new_init = '''    init {
+                  val saved = appContext.getSharedPreferences("mindunlock_preferences", Context.MODE_PRIVATE).getString("speech_voice", "gyro") ?: "gyro"
+                  activeId = saved
+                  activeVoice.value = saved
+              }'''
+          if old_init in source:
+              source = source.replace(old_init, new_init, 1)
+          elif not ("activeId = saved" in source and "selectVoice(saved)" not in source):
+              raise SystemExit("Could not safely switch generated speech engine to on-demand loading")
+          if "fun deleteDownloadedVoice(id: String)" not in source:
+              marker = "    fun speak(text: String, speed: Float = 1f, voiceName: String? = null) {"
+              method = '''    fun deleteDownloadedVoice(id: String) {
+                  val target = voiceOptions.firstOrNull { it.first == id }?.first ?: return
+                  if (loadedId == target) {
+                      stop()
+                      try { tts?.release() } catch (_: Throwable) {}
+                      tts = null
+                      loadedId = null
+                      ready.value = false
+                  }
+                  val folder = File(appContext.filesDir, "speech/\${spec(target).directory}")
+                  folder.deleteRecursively()
+                  status.value = "مدل صوتی انتخاب‌شده از حافظهٔ برنامه حذف شد."
+              }
+
+          '''
+              if marker not in source:
+                  raise SystemExit("Speech method insertion point not found for safe voice deletion")
+              source = source.replace(marker, method + marker, 1)
+          speech.write_text(source, encoding="utf-8")
+          print("Applied on-demand speech initialization and safe model deletion to generated speech engine.")
+          PY
           else
             python3 /tmp/mindunlock_optimization.py "$PACKAGE_DIR"
             sed -i 's/versionCode = 3/versionCode = 6/; s/versionName = "0.3.1"/versionName = "0.5.1"/' android-build/app/build.gradle.kts
