@@ -1174,7 +1174,16 @@ jobs:
           import sys
 
           path = Path(sys.argv[1])
-          lines = path.read_text(encoding="utf-8").splitlines()
+          source = path.read_text(encoding="utf-8")
+          if (
+              "readingLineSpacing by remember" in source
+              and "readingHorizontalMargin by remember" in source
+              and "readingHorizontalMargin.dp" in source
+              and "fontSize * readingLineSpacing" in source
+          ):
+              print("Persistent reading typography and margins are already implemented; skipping legacy patch.")
+              raise SystemExit(0)
+          lines = source.splitlines()
 
           def unique_line(predicate, label):
               matches = [i for i, line in enumerate(lines) if predicate(line)]
