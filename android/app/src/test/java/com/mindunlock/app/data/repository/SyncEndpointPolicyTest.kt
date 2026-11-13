@@ -1,0 +1,42 @@
+package com.mindunlock.app.data.repository
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertThrows
+import org.junit.Test
+
+class SyncEndpointPolicyTest {
+    @Test
+    fun explicitHttpsIsPreserved() {
+        assertEquals("https://192.168.1.20:8443", SyncEndpointPolicy.baseUrl("https://192.168.1.20", 8443))
+    }
+
+    @Test
+    fun explicitHttpRemainsAvailableForLegacyLanServers() {
+        assertEquals("http://mindunlock-pc.local:82", SyncEndpointPolicy.baseUrl("http://mindunlock-pc.local/", 82))
+    }
+
+    @Test
+    fun bareHostKeepsBackwardCompatibleHttpDefault() {
+        assertEquals("http://192.168.1.20:82", SyncEndpointPolicy.baseUrl("192.168.1.20", 82))
+    }
+
+    @Test
+    fun rejectsUnsupportedSchemesAndCredentialsOrPaths() {
+        assertThrows(IllegalArgumentException::class.java) {
+            SyncEndpointPolicy.baseUrl("ftp://192.168.1.20", 82)
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            SyncEndpointPolicy.baseUrl("https://user:pass@example.com", 443)
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            SyncEndpointPolicy.baseUrl("https://example.com/api", 443)
+        }
+    }
+
+    @Test
+    fun rejectsInvalidPortsAndEmptyHosts() {
+        assertThrows(IllegalArgumentException::class.java) { SyncEndpointPolicy.baseUrl("", 82) }
+        assertThrows(IllegalArgumentException::class.java) { SyncEndpointPolicy.baseUrl("host", 0) }
+        assertThrows(IllegalArgumentException::class.java) { SyncEndpointPolicy.baseUrl("host", 65536) }
+    }
+}
