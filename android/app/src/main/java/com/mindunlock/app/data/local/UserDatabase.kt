@@ -21,7 +21,17 @@ interface MindMapDao {
     @Query("SELECT * FROM mind_map_nodes") suspend fun getAllNodes(): List<MindMapNodeEntity>
     @Query("SELECT * FROM mind_map_edges") suspend fun getAllEdges(): List<MindMapEdgeEntity>
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun insertNode(node: MindMapNodeEntity): Long
+    @Insert(onConflict = OnConflictStrategy.IGNORE) suspend fun insertLinkedNode(node: MindMapNodeEntity): Long
+    @Query("SELECT * FROM mind_map_nodes WHERE sourceType = :sourceType AND sourceId = :sourceId LIMIT 1")
+    suspend fun findBySource(sourceType: String, sourceId: Long): MindMapNodeEntity?
     @Update suspend fun updateNode(node: MindMapNodeEntity)
+    @Transaction
+    suspend fun createLinkedNode(node: MindMapNodeEntity): Long {
+        val type = node.sourceType?.takeIf { it in setOf("mind_dump", "note", "task", "later_topic", "journal") } ?: return -1L
+        val source = node.sourceId?.takeIf { it > 0 } ?: return -1L
+        if (findBySource(type, source) != null) return -1L
+        return insertLinkedNode(node.copy(sourceType = type, sourceId = source))
+    }
     @Query("DELETE FROM mind_map_nodes WHERE id = :id") suspend fun deleteNode(id: Long)
     @Insert(onConflict = OnConflictStrategy.IGNORE) suspend fun insertEdge(edge: MindMapEdgeEntity): Long
     @Query("DELETE FROM mind_map_edges WHERE id = :id") suspend fun deleteEdge(id: Long)
@@ -290,7 +300,7 @@ interface LaterTopicDao {
     suspend fun delete(id: Long)
 }
 
-@Database(entities = [ProgressEntity::class, NoteEntity::class, BookmarkEntity::class, StudyTaskEntity::class, MindDumpEntity::class, JournalEntryEntity::class, LaterTopicEntity::class, LabStepProgressEntity::class, LearningSessionEntity::class, LabQuestionResponseEntity::class, LearningProfileEntity::class, LearningSessionFeedbackEntity::class, LearningStageProgressEntity::class, MindMapNodeEntity::class, MindMapEdgeEntity::class], version = 13, exportSchema = false)
+@Database(entities = [ProgressEntity::class, NoteEntity::class, BookmarkEntity::class, StudyTaskEntity::class, MindDumpEntity::class, JournalEntryEntity::class, LaterTopicEntity::class, LabStepProgressEntity::class, LearningSessionEntity::class, LabQuestionResponseEntity::class, LearningProfileEntity::class, LearningSessionFeedbackEntity::class, LearningStageProgressEntity::class, MindMapNodeEntity::class, MindMapEdgeEntity::class], version = 14, exportSchema = false)
 abstract class UserDatabase : RoomDatabase() {
     abstract fun progressDao(): ProgressDao
     abstract fun noteDao(): NoteDao
@@ -386,9 +396,16 @@ abstract class UserDatabase : RoomDatabase() {
                 db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_mind_map_edges_sourceNodeId_targetNodeId ON mind_map_edges(sourceNodeId, targetNodeId)")
             }
         }
+        val MIGRATION_13_14 = object : Migration(13, 14) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE mind_map_nodes ADD COLUMN sourceType TEXT")
+                db.execSQL("ALTER TABLE mind_map_nodes ADD COLUMN sourceId INTEGER")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_mind_map_nodes_sourceType_sourceId ON mind_map_nodes(sourceType, sourceId)")
+            }
+        }
         @Volatile private var instance: UserDatabase? = null
         fun getInstance(context: Context): UserDatabase = instance ?: synchronized(this) {
-            instance ?: Room.databaseBuilder(context.applicationContext, UserDatabase::class.java, "mindunlock-user.db").addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13).build().also { instance = it }
+            instance ?: Room.databaseBuilder(context.applicationContext, UserDatabase::class.java, "mindunlock-user.db").addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14).build().also { instance = it }
         }
     }
 }
