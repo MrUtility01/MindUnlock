@@ -2385,6 +2385,9 @@ fun SettingsScreen(
     var showDeleteVoiceDialog by remember { mutableStateOf(false) }
     var asrModelPresent by remember { mutableStateOf(OfflinePersianSpeech.isInstalled(context)) }
     var showDeleteAsrDialog by remember { mutableStateOf(false) }
+    var showDeletePersonalDataDialog by remember { mutableStateOf(false) }
+    var deletingPersonalData by remember { mutableStateOf(false) }
+    val settingsScope = rememberCoroutineScope()
 
     fun folderSize(file: java.io.File): Long =
         if (!file.exists()) 0L else if (file.isFile) file.length()
@@ -2686,6 +2689,14 @@ fun SettingsScreen(
                 Button(onClick = onOpenSync, modifier = Modifier.fillMaxWidth()) {
                     Text("بازکردن تنظیمات اتصال به سرور ویندوز")
                 }
+                HorizontalDivider()
+                Text("حذف دائمی اطلاعات شخصی", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+                Text("این عملیات فقط داده‌های کاربر و نسخه‌های اضطراری داخلی را حذف می‌کند؛ کتابخانه آموزشی، تنظیمات برنامه، رمز قفل و مدل‌های گفتار باقی می‌مانند. فایل‌های پشتیبان صادرشده در حافظه یا فضای ابری نیز باید جداگانه حذف شوند.", style = MaterialTheme.typography.bodySmall)
+                OutlinedButton(
+                    onClick = { showDeletePersonalDataDialog = true },
+                    enabled = !deletingPersonalData,
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text(if (deletingPersonalData) "در حال حذف اطلاعات..." else "حذف همه اطلاعات شخصی", color = MaterialTheme.colorScheme.error) }
             }
         }
 
@@ -2745,6 +2756,41 @@ fun SettingsScreen(
                 }
             }
         }
+    }
+
+    if (showDeletePersonalDataDialog) {
+        AlertDialog(
+            onDismissRequest = { if (!deletingPersonalData) showDeletePersonalDataDialog = false },
+            title = { Text("حذف برگشت‌ناپذیر اطلاعات شخصی؟") },
+            text = {
+                Text("همه یادداشت‌ها، نشانک‌ها، کارها، صندوق ورودی، دفتر روزانه، موضوعات بعدی، پیشرفت مطالعه، جلسه‌ها، بازخوردها، پروفایل یادگیری و گراف دانش از این دستگاه حذف می‌شوند. نسخه‌های اضطراری بازیابی و گزارش‌های عیب‌یابی داخلی نیز پاک می‌شوند. این کار قابل بازگشت نیست و جایگزین ساخت فایل پشتیبان نیست.")
+            },
+            confirmButton = {
+                Button(
+                    enabled = !deletingPersonalData,
+                    onClick = {
+                        deletingPersonalData = true
+                        settingsScope.launch {
+                            try {
+                                UserDataBackupManager.deleteAllPersonalData(context, userDb)
+                                crashReportPreview = ""
+                                storageBytes = privateDataSize()
+                                cacheBytes = folderSize(context.cacheDir)
+                                settingsMessage = "همه داده‌های شخصی محلی حذف شدند. کتابخانه آموزشی و تنظیمات برنامه حفظ شده‌اند."
+                                showDeletePersonalDataDialog = false
+                            } catch (error: Exception) {
+                                settingsMessage = "حذف کامل نشد: ${error.message ?: "خطای نامشخص"}"
+                            } finally {
+                                deletingPersonalData = false
+                            }
+                        }
+                    }
+                ) { Text(if (deletingPersonalData) "در حال حذف..." else "حذف دائمی") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeletePersonalDataDialog = false }, enabled = !deletingPersonalData) { Text("انصراف") }
+            }
+        )
     }
 
     if (showDeleteVoiceDialog) {
