@@ -221,6 +221,8 @@ object UserDataBackupCodec {
         }) { "اطلاعات گره یا پیوند منبع آن معتبر نیست." }
         require(payload.mindMapEdges.all { it.id > 0 && it.sourceNodeId in nodeIds && it.targetNodeId in nodeIds && it.sourceNodeId != it.targetNodeId && it.relationType.isNotBlank() && it.relationType.length <= 80 && it.createdAt > 0 }) { "رابطه نقشه ذهنی به گره معتبر متصل نیست." }
         require(payload.mindMapEdges.map { it.sourceNodeId to it.targetNodeId }.distinct().size == payload.mindMapEdges.size) { "رابطه تکراری در نقشه ذهنی وجود دارد." }
+        val linkedSources = payload.mindMapNodes.filter { it.sourceType != null && it.sourceId != null }.map { it.sourceType to it.sourceId }
+        require(linkedSources.distinct().size == linkedSources.size) { "یک منبع بیش از یک بار به نقشه ذهنی پیوند داده شده است." }
         require(payload.learningStageProgress.all { it.chapterId.isNotBlank() && it.chapterId.length <= 200 && LearningStagePolicy.stages.any { definition -> definition.id == it.stageId && definition.order == it.stageIndex } && it.completed && it.completedAt > 0 && it.updatedAt > 0 }) { "پیشرفت مرحله آموزشی معتبر نیست." }
         require(payload.learningSessionFeedback.map { it.sessionId }.distinct().size == payload.learningSessionFeedback.size) { "بازخورد جلسه تکراری است." }
         require(payload.learningSessionFeedback.all { it.sessionId > 0 && it.comprehension in 1..5 && it.perceivedDifficulty in 1..5 && it.focus in 1..5 && (it.energyBefore == null || it.energyBefore in 1..5) && (it.energyAfter == null || it.energyAfter in 1..5) && (it.note?.length ?: 0) <= 2000 }) { "بازخورد جلسه یادگیری معتبر نیست." }
