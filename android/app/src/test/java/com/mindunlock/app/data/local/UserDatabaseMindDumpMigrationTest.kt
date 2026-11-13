@@ -304,13 +304,18 @@ class UserDatabaseMindDumpMigrationTest {
     }
 
     @Test
-    fun returningOrDeletingLaterTopicPreservesItsOriginalMindDumpEntry() = runBlocking {
+    fun returningLaterTopicToInboxRestoresSourceAndRepairsMissingLinksAtomically() = runBlocking {
         val db = Room.inMemoryDatabaseBuilder(context, UserDatabase::class.java)
             .allowMainThreadQueries()
             .build()
         try {
             val sourceId = db.mindDumpDao().insert(
-                MindDumpEntity(content = "سؤال درباره مسیریابی", category = "learning")
+                MindDumpEntity(
+                    content = "سؤال درباره مسیریابی",
+                    category = "learning",
+                    status = "later",
+                    linkedTaskId = 123L
+                )
             )
             val topicId = db.laterTopicDao().insert(
                 LaterTopicEntity(
@@ -319,37 +324,22 @@ class UserDatabaseMindDumpMigrationTest {
                     sourceMindDumpId = sourceId
                 )
             )
-            db.withTransaction {
-                db.mindDumpDao().updateStatus(sourceId, "inbox", 10_000L, null)
-                db.laterTopicDao().delete(topicId)
-            }
-            val restored = db.mindDumpDao().getAll().single()
-            assertEquals("inbox", restored.status)
-            assertEquals("سؤال درباره مسیریابی", restored.content)
+
+            assertEquals(sourceId, db.mindDumpDao().returnLaterTopicToInbox(topicId))
+            val restored = db.mindDumpDao().getById(sourceId)
+            assertEquals("inbox", restored?.status)
+            assertEquals(null, restored?.linkedTaskId)
+            assertEquals("سؤال درباره مسیریابی", restored?.content)
             assertEquals(0, db.laterTopicDao().getAll().size)
 
             val orphanTopicId = db.laterTopicDao().insert(
-                LaterTopicEntity(
-                    title = "موضوع مستقل",
-                    details = "بدون منبع قبلی"
-                )
+                LaterTopicEntity(title = "موضوع مستقل", details = "بدون منبع قبلی")
             )
-            db.withTransaction {
-                val topic = db.laterTopicDao().getAll().first { it.id == orphanTopicId }
-                if (topic.sourceMindDumpId != null) {
-                    db.mindDumpDao().updateStatus(topic.sourceMindDumpId, "inbox", 11_000L, null)
-                } else {
-                    db.mindDumpDao().insert(
-                        MindDumpEntity(content = listOf(topic.title, topic.details).filter { it.isNotBlank() }.joinToString("\n\n"), category = "learning")
-                    )
-                }
-                db.laterTopicDao().delete(orphanTopicId)
-            }
-            assertEquals(2, db.mindDumpDao().getAll().size)
-            assertEquals("موضوع مستقل\n\nبدون منبع قبلی", db.mindDumpDao().getAll().last().content)
-            assertEquals(0, db.laterTopicDao().getAll().size)
+            val orphanRestoredId = db.mindDumpDao().returnLaterTopicToInbox(orphanTopicId)
+            val orphan = orphanRestoredId?.let { db.mindDumpDao().getById(it) }
+            assertEquals("موضوع مستقل\n\nبدون منبع قبلی", orphan?.content)
+            assertEquals("inbox", orphan?.status)
 
-            // A stale source ID must not cause the topic text to be lost.
             val staleSourceTopicId = db.laterTopicDao().insert(
                 LaterTopicEntity(
                     title = "بازیابی پیوند خراب",
@@ -357,29 +347,14 @@ class UserDatabaseMindDumpMigrationTest {
                     sourceMindDumpId = 999_999L
                 )
             )
-            db.withTransaction {
-                val topic = db.laterTopicDao().getAll().first { it.id == staleSourceTopicId }
-                val sourceExists = topic.sourceMindDumpId != null &&
-                    db.mindDumpDao().getAll().any { it.id == topic.sourceMindDumpId }
-                if (sourceExists) {
-                    db.mindDumpDao().updateStatus(
-                        topic.sourceMindDumpId!!, "inbox", 12_000L, null
-                    )
-                } else {
-                    db.mindDumpDao().insert(
-                        MindDumpEntity(
-                            content = listOf(topic.title, topic.details)
-                                .filter { it.isNotBlank() }.joinToString("\n\n"),
-                            category = "learning"
-                        )
-                    )
-                }
-                db.laterTopicDao().delete(staleSourceTopicId)
-            }
-            val recovered = db.mindDumpDao().getAll().last()
-            assertEquals("بازیابی پیوند خراب\n\nاین متن باید بازیابی شود", recovered.content)
-            assertEquals(3, db.mindDumpDao().getAll().size)
+            val staleRestoredId = db.mindDumpDao().returnLaterTopicToInbox(staleSourceTopicId)
+            val staleRestored = staleRestoredId?.let { db.mindDumpDao().getById(it) }
+            assertEquals("بازیابی پیوند خراب\n\nاین متن باید بازیابی شود", staleRestored?.content)
+            assertEquals("inbox", staleRestored?.status)
+            assertEquals(null, db.mindDumpDao().returnLaterTopicToInbox(staleSourceTopicId))
+            assertEquals(null, db.mindDumpDao().returnLaterTopicToInbox(999_999L))
             assertEquals(0, db.laterTopicDao().getAll().size)
+            assertEquals(3, db.mindDumpDao().getAll().size)
         } finally {
             db.close()
         }
