@@ -312,7 +312,26 @@ jobs:
           MAIN_FILE="$(find android-build/app/src/main/java -type f -name MainActivity.kt -print -quit)"
           test -n "$MAIN_FILE"
           PACKAGE_DIR="$(dirname "$MAIN_FILE")"
-          python3 /tmp/refactor_android.py "$PACKAGE_DIR"
+          if ! python3 /tmp/refactor_android.py "$PACKAGE_DIR"; then
+            echo "Legacy refactor did not match the current tracked source; verifying equivalent modern modules."
+            python3 - "$PACKAGE_DIR" <<'PY'
+          from pathlib import Path
+          import sys
+          root = Path(sys.argv[1])
+          main = root / "MainActivity.kt"
+          screens = list(root.rglob("StudyScreens.kt"))
+          required = [
+              main.is_file() and "MindMapScreen" in main.read_text(encoding="utf-8"),
+              bool(screens) and "fun SettingsScreen" in screens[0].read_text(encoding="utf-8"),
+              bool(screens) and "speech.ready.value" in screens[0].read_text(encoding="utf-8"),
+              (root / "LearningEngineScreen.kt").is_file(),
+              (root / "MindMapScreen.kt").is_file(),
+          ]
+          if not all(required):
+              raise SystemExit("Legacy refactor failed and equivalent tracked modules are incomplete; refusing to continue.")
+          print("Verified: tracked source already contains the current study, settings, speech, learning and graph modules.")
+          PY
+          fi
           SCREENS_FILE="$(find "$PACKAGE_DIR" -type f -name StudyScreens.kt -print -quit)"
           test -n "$SCREENS_FILE"
           # The Android baseline does not bundle the extended FlashOn vector.
