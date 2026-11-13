@@ -196,9 +196,14 @@ fun MindDumpScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
                             pendingEditEntryId = entry.id
                             editDraft = entry.content
                         },
-                        onConvertToLater = {
-                            runEntryAction(entry.id, "به موضوعات برای بعد منتقل شد؛ متن اصلی حفظ شده است.") {
-                                check(userDatabase.mindDumpDao().convertToLaterTopic(entry.id) != null) {
+                        onConvertToLater = { priority ->
+                            val priorityLabel = when (priority) {
+                                1 -> "ضروری"
+                                3 -> "کنجکاوی"
+                                else -> "موکول‌شده"
+                            }
+                            runEntryAction(entry.id, "با اولویت «$priorityLabel» به موضوعات برای بعد منتقل شد؛ متن اصلی حفظ شده است.") {
+                                check(userDatabase.mindDumpDao().convertToLaterTopic(entry.id, priority) != null) {
                                     "Mind Dump entry no longer exists"
                                 }
                             }
@@ -324,7 +329,7 @@ private fun MindDumpCard(
     speech: PersianSpeech,
     busy: Boolean,
     onEdit: () -> Unit,
-    onConvertToLater: () -> Unit,
+    onConvertToLater: (Int) -> Unit,
     onConvertToTask: () -> Unit,
     onSaveAsNote: () -> Unit,
     onArchive: () -> Unit,
@@ -374,7 +379,9 @@ private fun MindDumpCard(
             } else if (entry.status == "inbox" || entry.status == "learning" || entry.status == "thought" || entry.status == "idea") {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = onConvertToTask, enabled = !busy) { Text(if (busy) "در حال انجام…" else "تبدیل به کار") }
-                    OutlinedButton(onClick = onConvertToLater, enabled = !busy) { Text("برای بعد") }
+                    OutlinedButton(onClick = { onConvertToLater(1) }, enabled = !busy) { Text("ضروری") }
+                    OutlinedButton(onClick = { onConvertToLater(2) }, enabled = !busy) { Text("موکول") }
+                    OutlinedButton(onClick = { onConvertToLater(3) }, enabled = !busy) { Text("کنجکاوی") }
                     OutlinedButton(onClick = onSaveAsNote, enabled = !busy) { Text("ذخیره یادداشت") }
                 }
                 OutlinedButton(onClick = onArchive, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("بایگانی") }
