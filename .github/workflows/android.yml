@@ -504,7 +504,16 @@ jobs:
           MAIN_FILE="$(find android-build/app/src/main/java -type f -name MainActivity.kt -print -quit)"
           test -n "$MAIN_FILE"
           PACKAGE_DIR="$(dirname "$MAIN_FILE")"
-          python3 - "$PACKAGE_DIR" <<'PY'
+          SPEECH_FILE="$PACKAGE_DIR/PersianSpeech.kt"
+          SCREENS_FILE="$PACKAGE_DIR/ui/StudyScreens.kt"
+          if grep -Fq 'expectedLength == spec.archiveBytes' "$SPEECH_FILE" && \
+             grep -Fq 'received == expectedLength' "$SPEECH_FILE" && \
+             grep -Fq 'stagedInstall' "$SPEECH_FILE" && \
+             grep -Fq 'speech.downloadProgress.value' "$SCREENS_FILE" && \
+             grep -Fq 'speech.isVoiceDownloaded' "$SCREENS_FILE"; then
+            echo "Verified: tracked source already has validated, staged voice downloads and per-voice progress UI."
+          else
+            python3 - "$PACKAGE_DIR" <<'PY'
           from pathlib import Path
           import re, sys
 
@@ -675,6 +684,7 @@ jobs:
           screens.write_text(ui, encoding="utf-8")
           print("Hardened model downloads and added per-voice installation status and progress.")
           PY
+          fi
 
       - name: Inspect settings integration points
         shell: bash
