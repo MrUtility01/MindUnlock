@@ -26,6 +26,51 @@ class UserDatabaseMindDumpMigrationTest {
     }
 
     @Test
+    fun plannerTasksSupportEditingCompletionAndDeletionWithoutLosingScheduleFields() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(context, UserDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+        try {
+            val dueAt = 1_800_000_000_000L
+            val id = db.studyTaskDao().upsert(
+                StudyTaskEntity(
+                    title = "مرور VLAN",
+                    details = "مرور سناریوی شبکه",
+                    taskType = "task",
+                    dueAt = dueAt,
+                    remindAt = dueAt
+                )
+            )
+            val original = db.studyTaskDao().getAll().single()
+            assertEquals(id, original.id)
+            assertEquals(dueAt, original.dueAt)
+            assertEquals(dueAt, original.remindAt)
+
+            db.studyTaskDao().upsert(
+                original.copy(
+                    title = "مرور پیشرفته VLAN",
+                    details = "بررسی trunk و inter-VLAN routing",
+                    taskType = "project",
+                    dueAt = dueAt + 3_600_000L,
+                    remindAt = dueAt + 3_600_000L,
+                    completed = true
+                )
+            )
+            val edited = db.studyTaskDao().getAll().single()
+            assertEquals("مرور پیشرفته VLAN", edited.title)
+            assertEquals("project", edited.taskType)
+            assertEquals(true, edited.completed)
+            assertEquals(dueAt + 3_600_000L, edited.dueAt)
+            assertEquals(dueAt + 3_600_000L, edited.remindAt)
+
+            db.studyTaskDao().delete(id)
+            assertEquals(0, db.studyTaskDao().getAll().size)
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test
     fun mindDumpConversionsCommitAtomicallyAndRollbackOnFailure() = runBlocking {
         val db = Room.inMemoryDatabaseBuilder(context, UserDatabase::class.java)
             .allowMainThreadQueries()
