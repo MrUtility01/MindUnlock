@@ -152,6 +152,61 @@ class UserDatabaseMindDumpMigrationTest {
     }
 
     @Test
+    fun convertingMindDumpToLaterTopicIsIdempotentAndPreservesTheSourceLink() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(context, UserDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+        try {
+            val sourceText = "\\n  موضوع برنامه‌ریزی شبکه  \\nشرح کامل و چندخطی موضوع"
+            val sourceId = db.mindDumpDao().insert(
+                MindDumpEntity(content = sourceText, category = "idea")
+            )
+
+            val firstTopicId = db.convertMindDumpToLaterTopic(sourceId)
+            val secondTopicId = db.convertMindDumpToLaterTopic(sourceId)
+
+            assertEquals(firstTopicId, secondTopicId)
+            assertEquals(1, db.laterTopicDao().getAll().size)
+            val topic = db.laterTopicDao().getAll().single()
+            assertEquals(firstTopicId, topic.id)
+            assertEquals("موضوع برنامه‌ریزی شبکه", topic.title)
+            assertEquals(sourceText, topic.details)
+            assertEquals(sourceId, topic.sourceMindDumpId)
+            val source = db.mindDumpDao().getById(sourceId)
+            assertEquals("later", source?.status)
+
+            // A retry must reuse the original topic rather than overwrite user edits.
+            db.laterTopicDao().update(topic.copy(title = "عنوان ویرایش‌شده", details = "جزئیات شخصی‌سازی‌شده"))
+            assertEquals(firstTopicId, db.convertMindDumpToLaterTopic(sourceId))
+            val editedTopic = db.laterTopicDao().getAll().single()
+            assertEquals("عنوان ویرایش‌شده", editedTopic.title)
+            assertEquals("جزئیات شخصی‌سازی‌شده", editedTopic.details)
+
+            // If the linked topic was deleted, the next conversion repairs the link.
+            db.laterTopicDao().delete(firstTopicId!!)
+            val replacementTopicId = db.convertMindDumpToLaterTopic(sourceId)
+            assertEquals(true, replacementTopicId != null && replacementTopicId != firstTopicId)
+            assertEquals(1, db.laterTopicDao().getAll().size)
+            assertEquals(replacementTopicId, db.laterTopicDao().getAll().single().id)
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test
+    fun convertingMissingMindDumpToLaterTopicReturnsNullWithoutCreatingTopic() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(context, UserDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+        try {
+            assertEquals(null, db.convertMindDumpToLaterTopic(404L))
+            assertEquals(0, db.laterTopicDao().getAll().size)
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test
     fun convertingMindDumpToTaskIsIdempotentAndReusesTheExistingLink() = runBlocking {
         val db = Room.inMemoryDatabaseBuilder(context, UserDatabase::class.java)
             .allowMainThreadQueries()
