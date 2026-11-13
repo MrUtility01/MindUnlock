@@ -43,6 +43,7 @@ fun MindMapScreen(userDb: UserDatabase) {
     var showNodeDialog by rememberSaveable { mutableStateOf(false) }
     var showEdgeDialog by rememberSaveable { mutableStateOf(false) }
     var editingId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var pendingDeleteId by rememberSaveable { mutableStateOf<Long?>(null) }
     var nodeTitle by rememberSaveable { mutableStateOf("") }
     var nodeDescription by rememberSaveable { mutableStateOf("") }
     var nodeType by rememberSaveable { mutableStateOf("ایده") }
@@ -58,6 +59,14 @@ fun MindMapScreen(userDb: UserDatabase) {
         }
     }
     val names = remember(nodes) { nodes.associate { it.id to it.title } }
+    val relatedByNode = remember(edges) {
+        buildMap<Long, MutableList<com.mindunlock.app.data.local.MindMapEdgeEntity>> {
+            edges.forEach { edge ->
+                getOrPut(edge.sourceNodeId) { mutableListOf() }.add(edge)
+                getOrPut(edge.targetNodeId) { mutableListOf() }.add(edge)
+            }
+        }
+    }
 
     fun edit(node: MindMapNodeEntity? = null) {
         editingId = node?.id
@@ -99,7 +108,7 @@ fun MindMapScreen(userDb: UserDatabase) {
         } else if (visibleNodes.isEmpty()) Text("گرهی با این عبارت پیدا نشد.")
 
         visibleNodes.forEach { node ->
-            val related = edges.filter { it.sourceNodeId == node.id || it.targetNodeId == node.id }
+            val related = relatedByNode[node.id].orEmpty()
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -121,16 +130,31 @@ fun MindMapScreen(userDb: UserDatabase) {
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         TextButton(onClick = { edit(node) }) { Text("ویرایش") }
-                        TextButton(onClick = {
-                            scope.launch {
-                                userDb.mindMapDao().deleteNode(node.id)
-                                status = "گره و ارتباط‌های وابسته حذف شدند."
-                            }
-                        }) { Text("حذف") }
+                        TextButton(onClick = { pendingDeleteId = node.id }) { Text("حذف") }
                     }
                 }
             }
         }
+    }
+
+    if (pendingDeleteId != null) {
+        val deletingNode = nodes.firstOrNull { it.id == pendingDeleteId }
+        AlertDialog(
+            onDismissRequest = { pendingDeleteId = null },
+            title = { Text("حذف گره؟") },
+            text = { Text("«${deletingNode?.title ?: "این گره"}» و تمام ارتباط‌های متصل به آن حذف می‌شود. این عمل قابل بازگشت مستقیم نیست.") },
+            confirmButton = {
+                Button(onClick = {
+                    val id = pendingDeleteId
+                    pendingDeleteId = null
+                    if (id != null) scope.launch {
+                        userDb.mindMapDao().deleteNode(id)
+                        status = "گره و ارتباط‌های وابسته حذف شدند."
+                    }
+                }) { Text("حذف قطعی") }
+            },
+            dismissButton = { TextButton(onClick = { pendingDeleteId = null }) { Text("انصراف") } }
+        )
     }
 
     if (showNodeDialog) AlertDialog(
