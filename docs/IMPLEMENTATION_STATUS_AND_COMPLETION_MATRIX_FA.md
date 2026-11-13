@@ -127,8 +127,8 @@
 - Repository: MrUtility01/MindUnlock
 - Branch: feature/mindunlock-core-modules
 - PR #3: باز، Draft و ادغام‌نشده
-- CI #401 تا #405، #417، #418، #472 و #497: موفق؛ CI #511 برای 0.6.21 موفق؛ تست JVM، ساخت و بررسی APK تأیید شد
-- آخرین ساخت Debug تأییدشده: نسخه 0.6.24-debug / versionCode 39؛ GitHub Actions run #677 (ID: 43473339179) با نتیجه success؛ artifact ID: 14061434454. این نتیجه به معنی تست نصب/ارتقای واقعی یا Release امضاشده نیست.
+- CI #401 تا #405، #417، #418، #472 و #497: موفق؛ CI #511 برای 0.6.21 و CI #694 برای 0.6.24 موفق؛ در #694 تست‌های JVM، ساخت و بررسی APK تأیید شد
+- آخرین ساخت Debug تأییدشده: نسخه 0.6.24-debug / versionCode 39؛ GitHub Actions run #694 (ID: 43478050013) روی commit `02f9c48df76003a99d10a9c3d0dfc81db93325a1` با نتیجه success؛ JVM unit tests، گزارش غیرخالی تست‌ها، بررسی یکپارچگی APK و بسته‌بندی APK همگی موفق؛ artifact ID: 14063144202. SHA-256 فایل APK: `c9dabbac54ea45228b867cfcfefb8e9e1b03dd8e37214dbf2b0d16ad91eae65f`. این نتیجه به معنی تست نصب/ارتقای واقعی یا Release امضاشده نیست.
 - CI موفق به معنی تست روی گوشی واقعی یا آماده‌بودن برای انتشار عمومی نیست.
 
 ## 6) قواعد ادامه توسعه
