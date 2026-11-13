@@ -16,6 +16,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -31,6 +32,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -373,11 +375,12 @@ private fun MindMapGraphCanvas(
     onTransform: (Float, Float, Float) -> Unit
 ) {
     val scheme = MaterialTheme.colorScheme
+    val currentOnTransform by rememberUpdatedState(onTransform)
     val nodeRadius = 13.dp
     Canvas(
         Modifier.fillMaxWidth().height(250.dp)
             .pointerInput(Unit) {
-                detectTransformGestures { _, pan, zoom, _ -> onTransform(zoom, pan.x, pan.y) }
+                detectTransformGestures { _, pan, zoom, _ -> currentOnTransform(zoom, pan.x, pan.y) }
             }
             .pointerInput(nodes, scale, panX, panY) {
                 detectTapGestures { tap ->
