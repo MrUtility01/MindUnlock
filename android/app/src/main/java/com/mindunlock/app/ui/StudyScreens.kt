@@ -1635,6 +1635,8 @@ fun PlannerScreen(userDb: UserDatabase, speech: PersianSpeech) {
     var message by remember { mutableStateOf("") }
     var query by rememberSaveable { mutableStateOf("") }
     var filter by rememberSaveable { mutableStateOf("pending") }
+    var selectedPlannerDate by rememberSaveable { mutableStateOf("") }
+    var showPlannerDatePicker by rememberSaveable { mutableStateOf(false) }
     var editingTask by remember { mutableStateOf<StudyTaskEntity?>(null) }
     var editTitle by rememberSaveable { mutableStateOf("") }
     var editDetails by rememberSaveable { mutableStateOf("") }
@@ -1676,7 +1678,10 @@ fun PlannerScreen(userDb: UserDatabase, speech: PersianSpeech) {
     val now = System.currentTimeMillis()
     val dailyFocusTasks = PlannerPolicy.selectDailyFocusTasks(tasks, now)
     val overdueCount = tasks.count { !it.completed && it.dueAt != null && it.dueAt < now }
-    val visibleTasks = tasks.filter { task ->
+    val selectedLocalDate = selectedPlannerDate.takeIf { it.isNotBlank() }
+        ?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+    val dateScopedTasks = selectedLocalDate?.let { PlannerPolicy.tasksForLocalDate(tasks, it) } ?: tasks
+    val visibleTasks = dateScopedTasks.filter { task ->
         (filter == "all" || (filter == "pending" && !task.completed) || (filter == "completed" && task.completed)) &&
             (query.isBlank() || task.title.contains(query, true) || task.details.contains(query, true))
     }
@@ -1796,6 +1801,28 @@ fun PlannerScreen(userDb: UserDatabase, speech: PersianSpeech) {
             listOf("pending" to "در انتظار", "completed" to "انجام‌شده", "all" to "همه").forEach { (value, label) ->
                 FilterChip(selected = filter == value, onClick = { filter = value }, label = { Text(label) })
             }
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            OutlinedButton(onClick = { showPlannerDatePicker = true }, modifier = Modifier.weight(1f)) {
+                Text(selectedLocalDate?.let {
+                    "روز: ${PersianDate.formatInput(it.atTime(12, 0))}"
+                } ?: "فیلتر بر اساس روز")
+            }
+            if (selectedLocalDate != null) {
+                TextButton(onClick = { selectedPlannerDate = "" }) { Text("نمایش همهٔ روزها") }
+            }
+        }
+        if (showPlannerDatePicker) {
+            val initialDate = selectedLocalDate?.let { PersianDate.fromGregorian(it) }
+                ?: PersianDate.fromGregorian(LocalDate.now())
+            PersianJalaliDatePicker(
+                initialDate = initialDate,
+                onDismiss = { showPlannerDatePicker = false },
+                onSelect = { selected ->
+                    selectedPlannerDate = PersianDate.toGregorian(selected).toString()
+                    showPlannerDatePicker = false
+                }
+            )
         }
         if (visibleTasks.isEmpty()) {
             Text("موردی مطابق فیلتر و جست‌وجو پیدا نشد.", color = MaterialTheme.colorScheme.onSurfaceVariant)

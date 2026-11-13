@@ -2,6 +2,7 @@ package com.mindunlock.app
 
 import com.mindunlock.app.data.local.StudyTaskEntity
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
 
 /** Selects up to three open tasks by urgency without persisting derived priority. */
@@ -10,7 +11,6 @@ object PlannerPolicy {
         if (limit <= 0) return emptyList()
         val zone = ZoneId.systemDefault()
         val today = Instant.ofEpochMilli(nowMillis).atZone(zone).toLocalDate()
-        val todayStart = today.atStartOfDay(zone).toInstant().toEpochMilli()
         val tomorrowStart = today.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
         return tasks.asSequence()
             .filterNot { it.completed }
@@ -27,6 +27,20 @@ object PlannerPolicy {
                     .thenBy { it.id }
             )
             .take(limit)
+            .toList()
+    }
+
+    /** Returns tasks whose due instant falls within the selected local calendar day. */
+    fun tasksForLocalDate(
+        tasks: List<StudyTaskEntity>,
+        date: LocalDate,
+        zone: ZoneId = ZoneId.systemDefault()
+    ): List<StudyTaskEntity> {
+        val start = date.atStartOfDay(zone).toInstant().toEpochMilli()
+        val end = date.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+        return tasks.asSequence()
+            .filter { it.dueAt != null && it.dueAt >= start && it.dueAt < end }
+            .sortedWith(compareBy<StudyTaskEntity> { it.dueAt }.thenBy { it.createdAt }.thenBy { it.id })
             .toList()
     }
 

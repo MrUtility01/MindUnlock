@@ -56,6 +56,37 @@ class PlannerPolicyTest {
         assertEquals(listOf(1L, 2L, 3L), PlannerPolicy.selectDailyFocusTasks(tasks, 0L).map { it.id })
     }
 
+
+    @Test
+    fun selectedDayIncludesOnlyDueTasksWithinLocalDayAndSortsByTime() {
+        val zone = ZoneId.of("Europe/Berlin")
+        val day = LocalDate.of(2026, 11, 13)
+        fun at(hour: Int) = day.atTime(hour, 0).atZone(zone).toInstant().toEpochMilli()
+        val tasks = listOf(
+            StudyTaskEntity(id = 4, title = "بدون موعد"),
+            StudyTaskEntity(id = 3, title = "فردا", dueAt = day.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()),
+            StudyTaskEntity(id = 2, title = "عصر", dueAt = at(17)),
+            StudyTaskEntity(id = 1, title = "صبح", dueAt = at(8)),
+            StudyTaskEntity(id = 5, title = "نیمه‌شب قبل", dueAt = day.atStartOfDay(zone).toInstant().toEpochMilli() - 1)
+        )
+        assertEquals(listOf(1L, 2L), PlannerPolicy.tasksForLocalDate(tasks, day, zone).map { it.id })
+    }
+
+    @Test
+    fun selectedDayUsesLocalCalendarBoundariesAcrossDaylightSavingChange() {
+        val zone = ZoneId.of("Europe/Berlin")
+        val day = LocalDate.of(2026, 3, 29)
+        val start = day.atStartOfDay(zone).toInstant().toEpochMilli()
+        val end = day.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+        val tasks = listOf(
+            StudyTaskEntity(id = 1, title = "شروع روز", dueAt = start),
+            StudyTaskEntity(id = 2, title = "انتهای روز", dueAt = end - 1),
+            StudyTaskEntity(id = 3, title = "روز بعد", dueAt = end)
+        )
+        assertEquals(listOf(1L, 2L), PlannerPolicy.tasksForLocalDate(tasks, day, zone).map { it.id })
+        assertEquals(23 * 60 * 60 * 1000L, end - start)
+    }
+
     @Test
     fun rolloverMovesOpenTaskToNextLocalDayAndPreservesReminderOffset() {
         val zone = ZoneId.of("Europe/Berlin")
