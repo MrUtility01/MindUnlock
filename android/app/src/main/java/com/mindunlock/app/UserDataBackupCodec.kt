@@ -58,7 +58,7 @@ data class UserDataBackupDocument(
 )
 
 object UserDataBackupCodec {
-    const val CURRENT_SCHEMA_VERSION = 2
+    const val CURRENT_SCHEMA_VERSION = 3
     private val gson = Gson()
     private val requiredCollections = listOf(
         "progress", "notes", "bookmarks", "tasks", "mindDump",
@@ -212,7 +212,22 @@ object UserDataBackupCodec {
         require(payload.mindMapNodes.map { it.id }.distinct().size == payload.mindMapNodes.size) { "شناسه گره نقشه ذهنی تکراری است." }
         require(payload.mindMapEdges.map { it.id }.distinct().size == payload.mindMapEdges.size) { "شناسه رابطه نقشه ذهنی تکراری است." }
         val nodeIds = payload.mindMapNodes.map { it.id }.toSet()
-        require(payload.mindMapNodes.all { it.id > 0 && it.title.isNotBlank() && it.title.length <= 200 && it.description.length <= 4000 && it.nodeType.length <= 40 && it.createdAt > 0 && it.updatedAt > 0 }) { "اطلاعات گره نقشه ذهنی معتبر نیست." }
+        require(payload.mindMapNodes.all { node ->
+            val sourcePairValid = (node.sourceType == null && node.sourceId == null) ||
+                (node.sourceType in setOf("mind_dump", "note", "task", "later_topic", "journal") && (node.sourceId ?: 0L) > 0)
+            val sourceExists = when (node.sourceType) {
+                null -> node.sourceId == null
+                "mind_dump" -> payload.mindDump.any { it.id == node.sourceId }
+                "note" -> payload.notes.any { it.id == node.sourceId }
+                "task" -> payload.tasks.any { it.id == node.sourceId }
+                "later_topic" -> payload.laterTopics.any { it.id == node.sourceId }
+                "journal" -> payload.journalEntries.any { it.id == node.sourceId }
+                else -> false
+            }
+            node.id > 0 && node.title.isNotBlank() && node.title.length <= 200 &&
+                node.description.length <= 4000 && node.nodeType.length <= 40 &&
+                node.createdAt > 0 && node.updatedAt > 0 && sourcePairValid && sourceExists
+        }) { "اطلاعات گره یا پیوند منبع آن معتبر نیست." }
         require(payload.mindMapEdges.all { it.id > 0 && it.sourceNodeId in nodeIds && it.targetNodeId in nodeIds && it.sourceNodeId != it.targetNodeId && it.relationType.isNotBlank() && it.relationType.length <= 80 && it.createdAt > 0 }) { "رابطه نقشه ذهنی به گره معتبر متصل نیست." }
         require(payload.mindMapEdges.map { it.sourceNodeId to it.targetNodeId }.distinct().size == payload.mindMapEdges.size) { "رابطه تکراری در نقشه ذهنی وجود دارد." }
         require(payload.learningStageProgress.all { it.chapterId.isNotBlank() && it.chapterId.length <= 200 && LearningStagePolicy.stages.any { definition -> definition.id == it.stageId && definition.order == it.stageIndex } && it.completed && it.completedAt > 0 && it.updatedAt > 0 }) { "پیشرفت مرحله آموزشی معتبر نیست." }
