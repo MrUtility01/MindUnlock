@@ -54,6 +54,8 @@ fun MindDumpScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
     var isSavingDraft by remember { mutableStateOf(false) }
     var processingEntryIds by remember { mutableStateOf(emptySet<Long>()) }
     var pendingDeleteEntryId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var pendingEditEntryId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var editDraft by rememberSaveable { mutableStateOf("") }
     fun runEntryAction(entryId: Long, successMessage: String, action: suspend () -> Unit) {
         if (entryId in processingEntryIds) return
         processingEntryIds = processingEntryIds + entryId
@@ -162,6 +164,10 @@ fun MindDumpScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
                         entry = entry,
                         speech = speech,
                         busy = entry.id in processingEntryIds,
+                        onEdit = {
+                            pendingEditEntryId = entry.id
+                            editDraft = entry.content
+                        },
                         onConvertToLater = {
                             runEntryAction(entry.id, "به موضوعات برای بعد منتقل شد؛ متن اصلی حفظ شده است.") {
                                 userDatabase.withTransaction {
@@ -251,6 +257,44 @@ fun MindDumpScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
             )
         }
     }
+    pendingEditEntryId?.let { entryId ->
+        val pendingEntry = entries.firstOrNull { it.id == entryId }
+        if (pendingEntry != null) {
+            AlertDialog(
+                onDismissRequest = { pendingEditEntryId = null },
+                title = { Text("ویرایش ورودی") },
+                text = {
+                    OutlinedTextField(
+                        value = editDraft,
+                        onValueChange = { editDraft = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 4,
+                        maxLines = 10,
+                        label = { Text("متن ورودی") }
+                    )
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            val value = editDraft.trim()
+                            if (value.isNotEmpty()) {
+                                pendingEditEntryId = null
+                                runEntryAction(entryId, "ورودی ویرایش شد.") {
+                                    userDatabase.mindDumpDao().updateContent(
+                                        entryId, value, System.currentTimeMillis()
+                                    )
+                                }
+                            }
+                        },
+                        enabled = editDraft.isNotBlank() && editDraft.trim() != pendingEntry.content
+                    ) { Text("ذخیره تغییرات") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { pendingEditEntryId = null }) { Text("انصراف") }
+                }
+            )
+        }
+    }
 }
 
 @Composable
@@ -258,6 +302,7 @@ private fun MindDumpCard(
     entry: MindDumpEntity,
     speech: PersianSpeech,
     busy: Boolean,
+    onEdit: () -> Unit,
     onConvertToLater: () -> Unit,
     onConvertToTask: () -> Unit,
     onSaveAsNote: () -> Unit,
@@ -297,6 +342,7 @@ private fun MindDumpCard(
                 )
             }
             Text(entry.content, style = MaterialTheme.typography.bodyLarge)
+            OutlinedButton(onClick = onEdit, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("ویرایش متن") }
             OutlinedButton(onClick = { speech.speak(entry.content) }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("خواندن با صدا") }
             Text(statusLabel, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (entry.status == "archived") {
