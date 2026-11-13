@@ -361,3 +361,65 @@ fun MindMapScreen(userDb: UserDatabase) {
         dismissButton = { TextButton(onClick = { showEdgeDialog = false }) { Text("انصراف") } }
     )
 }
+@Composable
+private fun MindMapGraphCanvas(
+    nodes: List<MindMapNodeEntity>,
+    edges: List<com.mindunlock.app.data.local.MindMapEdgeEntity>,
+    selectedNodeId: Long?,
+    scale: Float,
+    panX: Float,
+    panY: Float,
+    onSelectNode: (Long) -> Unit,
+    onTransform: (Float, Float, Float) -> Unit
+) {
+    val scheme = MaterialTheme.colorScheme
+    val nodeRadius = 13.dp
+    Canvas(
+        Modifier.fillMaxWidth().height(250.dp)
+            .pointerInput(Unit) {
+                detectTransformGestures { _, pan, zoom, _ -> onTransform(zoom, pan.x, pan.y) }
+            }
+            .pointerInput(nodes, scale, panX, panY) {
+                detectTapGestures { tap ->
+                    if (nodes.isNotEmpty()) {
+                        val center = Offset(size.width / 2f, size.height / 2f)
+                        val local = Offset((tap.x - panX - center.x) / scale + center.x, (tap.y - panY - center.y) / scale + center.y)
+                        val orbit = minOf(size.width, size.height) * 0.34f
+                        val hitRadius = nodeRadius.toPx() * 2.2f
+                        val hit = nodes.mapIndexed { index, node ->
+                            val angle = -Math.PI / 2.0 + (2.0 * Math.PI * index / nodes.size)
+                            val point = if (nodes.size == 1) center else Offset(center.x + orbit * kotlin.math.cos(angle).toFloat(), center.y + orbit * kotlin.math.sin(angle).toFloat())
+                            node to (point - local).getDistance()
+                        }.filter { it.second <= hitRadius }.minByOrNull { it.second }
+                        hit?.first?.let { onSelectNode(it.id) }
+                    }
+                }
+            }
+    ) {
+        drawRoundRect(color = scheme.surfaceVariant, cornerRadius = androidx.compose.ui.geometry.CornerRadius(16.dp.toPx()))
+        val center = Offset(size.width / 2f, size.height / 2f)
+        val orbit = minOf(size.width, size.height) * 0.34f
+        val radiusPx = nodeRadius.toPx()
+        val positions = nodes.mapIndexed { index, node ->
+            val angle = -Math.PI / 2.0 + (2.0 * Math.PI * index / nodes.size.coerceAtLeast(1))
+            node.id to if (nodes.size == 1) center else Offset(center.x + orbit * kotlin.math.cos(angle).toFloat(), center.y + orbit * kotlin.math.sin(angle).toFloat())
+        }.toMap()
+        withTransform({
+            translate(left = panX, top = panY)
+            scale(scaleX = scale, scaleY = scale, pivot = center)
+        }) {
+            edges.forEach { edge ->
+                val from = positions[edge.sourceNodeId]
+                val to = positions[edge.targetNodeId]
+                if (from != null && to != null) drawLine(color = scheme.outline, start = from, end = to, strokeWidth = 2.dp.toPx())
+            }
+            nodes.forEach { node ->
+                val point = positions[node.id] ?: return@forEach
+                val selected = node.id == selectedNodeId
+                if (selected) drawCircle(color = scheme.tertiary.copy(alpha = 0.25f), radius = radiusPx * 1.9f, center = point)
+                drawCircle(color = if (selected) scheme.tertiary else scheme.primary, radius = radiusPx, center = point)
+                drawCircle(color = scheme.surface, radius = 3.dp.toPx(), center = point)
+            }
+        }
+    }
+}
