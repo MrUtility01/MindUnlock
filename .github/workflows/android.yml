@@ -2991,6 +2991,7 @@ jobs:
           for relative in \
             app/src/main/java/com/mindunlock/app/MainActivity.kt \
             app/src/main/java/com/mindunlock/app/MindDumpScreen.kt \
+            app/src/main/java/com/mindunlock/app/data/local/MindDumpTaskMapper.kt \
             app/src/main/java/com/mindunlock/app/LaterTopicsScreen.kt \
             app/src/main/java/com/mindunlock/app/JournalScreen.kt \
             app/src/main/java/com/mindunlock/app/LearningProfileScreen.kt \
