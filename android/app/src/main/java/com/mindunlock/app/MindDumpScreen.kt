@@ -377,12 +377,17 @@ private fun MindDumpCard(
                     OutlinedButton(onClick = onDelete, enabled = !busy) { Text("حذف") }
                 }
             } else if (entry.status == "inbox" || entry.status == "learning" || entry.status == "thought" || entry.status == "idea") {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = onConvertToTask, enabled = !busy) { Text(if (busy) "در حال انجام…" else "تبدیل به کار") }
-                    OutlinedButton(onClick = { onConvertToLater(1) }, enabled = !busy) { Text("ضروری") }
-                    OutlinedButton(onClick = { onConvertToLater(2) }, enabled = !busy) { Text("موکول") }
-                    OutlinedButton(onClick = { onConvertToLater(3) }, enabled = !busy) { Text("کنجکاوی") }
-                    OutlinedButton(onClick = onSaveAsNote, enabled = !busy) { Text("ذخیره یادداشت") }
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = onConvertToTask, enabled = !busy) { Text(if (busy) "در حال انجام…" else "تبدیل به کار") }
+                        OutlinedButton(onClick = onSaveAsNote, enabled = !busy) { Text("ذخیره یادداشت") }
+                    }
+                    Text("تصمیم برای ادامه:", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        OutlinedButton(onClick = { onConvertToLater(1) }, enabled = !busy, modifier = Modifier.weight(1f)) { Text("ضروری") }
+                        OutlinedButton(onClick = { onConvertToLater(2) }, enabled = !busy, modifier = Modifier.weight(1f)) { Text("موکول") }
+                        OutlinedButton(onClick = { onConvertToLater(3) }, enabled = !busy, modifier = Modifier.weight(1f)) { Text("کنجکاوی") }
+                    }
                 }
                 OutlinedButton(onClick = onArchive, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("بایگانی") }
             } else {
