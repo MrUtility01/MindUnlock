@@ -352,23 +352,16 @@ class UserDataBackupCodecTest {
 
 
     @Test
-    fun roundTripsMindMapSourceLinksAndRejectsOrphanedSources() {
-        val source = MindDumpEntity(id = 91, content = "یادگیری DNS")
+    fun preservesMindMapSourceReferencesAndRejectsInvalidSourceMetadata() {
         val node = MindMapNodeEntity(
-            id = 92,
-            title = "DNS",
-            description = "مطلب استخراج‌شده از صندوق ذهن",
-            nodeType = "یادگیری",
-            sourceType = "mind_dump",
-            sourceId = 91,
-            createdAt = 1_800_000_000_000L,
-            updatedAt = 1_800_000_000_100L
+            id = 92, title = "DNS", nodeType = "یادگیری",
+            sourceType = "mind_dump", sourceId = 91,
+            createdAt = 1_800_000_000_000L, updatedAt = 1_800_000_000_100L
         )
         val decoded = UserDataBackupCodec.decode(
             UserDataBackupCodec.encode(
-                UserDataBackupPayload(mindDump = listOf(source), mindMapNodes = listOf(node)),
-                1_800_000_000_200L,
-                "test"
+                UserDataBackupPayload(mindMapNodes = listOf(node)),
+                1_800_000_000_200L, "test"
             )
         )
         assertEquals("mind_dump", decoded.payload.mindMapNodes.single().sourceType)
@@ -376,9 +369,16 @@ class UserDataBackupCodecTest {
         assertThrows(IllegalArgumentException::class.java) {
             UserDataBackupCodec.decode(
                 UserDataBackupCodec.encode(
-                    UserDataBackupPayload(mindMapNodes = listOf(node)),
-                    1_800_000_000_200L,
-                    "test"
+                    UserDataBackupPayload(mindMapNodes = listOf(node.copy(sourceType = "unknown"))),
+                    1_800_000_000_200L, "test"
+                )
+            )
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            UserDataBackupCodec.decode(
+                UserDataBackupCodec.encode(
+                    UserDataBackupPayload(mindMapNodes = listOf(node.copy(sourceType = null))),
+                    1_800_000_000_200L, "test"
                 )
             )
         }
