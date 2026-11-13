@@ -16,19 +16,19 @@ object UserDataMarkdownExporter {
         val p = document.payload
         val date = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.ROOT)
         fun stamp(value: Long?): String = value?.takeIf { it > 0 }?.let { date.format(Date(it)) } ?: "—"
-        fun clean(value: String): String = value.replace("\\r", "").replace("\\n", "  ").replace("|", "\\|").trim()
+        fun clean(value: String): String = value.replace("\r", "").replace("\n", "  ").replace("|", "\\|").trim()
         fun section(title: String, rows: List<String>): String = buildString {
-            append("\\n## ").append(title).append("\\n\\n")
-            if (rows.isEmpty()) append("_موردی ثبت نشده است._\\n")
-            else rows.forEach { append("- ").append(it).append("\\n") }
+            append("\n## ").append(title).append("\n\n")
+            if (rows.isEmpty()) append("_موردی ثبت نشده است._\n")
+            else rows.forEach { append("- ").append(it).append("\n") }
         }
 
         return buildString {
-            append("# خروجی اطلاعات شخصی MindUnlock\\n\\n")
-            append("- زمان خروجی: ").append(stamp(document.exportedAt)).append("\\n")
-            append("- نسخه برنامه: ").append(clean(document.appVersion)).append("\\n")
-            append("- تعداد رکوردها: ").append(p.totalRecords).append("\\n")
-            append("> این فایل برای مطالعه و انتقال متنی است؛ برای بازیابی کامل و بدون اتلاف، از پشتیبان JSON استفاده کن.\\n")
+            append("# خروجی اطلاعات شخصی MindUnlock\n\n")
+            append("- زمان خروجی: ").append(stamp(document.exportedAt)).append("\n")
+            append("- نسخه برنامه: ").append(clean(document.appVersion)).append("\n")
+            append("- تعداد رکوردها: ").append(p.totalRecords).append("\n")
+            append("> این فایل برای مطالعه و انتقال متنی است؛ برای بازیابی کامل و بدون اتلاف، از پشتیبان JSON استفاده کن.\n")
             append(section("یادداشت‌ها", p.notes.map { "**${clean(it.title)}** — ${clean(it.body)} _(ویرایش: ${stamp(it.updatedAt)})_" }))
             append(section("وظایف", p.tasks.map { "${if (it.completed) "[x]" else "[ ]"} **${clean(it.title)}** — ${clean(it.details)} _(موعد: ${stamp(it.dueAt)})_" }))
             append(section("صندوق ورودی", p.mindDump.map { "**${clean(it.category)} · ${clean(it.status)}** — ${clean(it.content)} _(ثبت: ${stamp(it.createdAt)})_" }))
@@ -44,7 +44,7 @@ object UserDataMarkdownExporter {
             append(section("بازخورد جلسه‌ها", p.learningSessionFeedback.map { "جلسه ${it.sessionId}: درک ${it.comprehension}/5، تمرکز ${it.focus}/5، دشواری ${it.perceivedDifficulty}/5؛ ${clean(it.note.orEmpty())}" }))
             append(section("مراحل مسیر یادگیری", p.learningStageProgress.map { "${clean(it.chapterId)} — ${clean(it.stageId)}: ${if (it.completed) "تکمیل" else "ناتمام"}" }))
             append(section("پروفایل یادگیری", p.learningProfile.map { "حالت: ${clean(it.guidedMode)}؛ زمان جلسه: ${it.sessionMinutes} دقیقه؛ حداکثر موضوع: ${it.maxTopics}؛ پاسخ‌ها: ${clean(it.answersCsv)}" }))
-            append("\\n---\\n_ساخته‌شده توسط MindUnlock_\\n")
+            append("\n---\n_ساخته‌شده توسط MindUnlock_\n")
         }
     }
 }
