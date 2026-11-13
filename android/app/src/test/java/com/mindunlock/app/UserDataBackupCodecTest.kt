@@ -180,7 +180,7 @@ class UserDataBackupCodecTest {
     fun rejectsUnsupportedSchemaAndMissingCollections() {
         val json = UserDataBackupCodec.encode(UserDataBackupPayload(), 1_800_000_000_000L, "test")
         assertThrows(IllegalArgumentException::class.java) {
-            UserDataBackupCodec.decode(json.replace("\"schemaVersion\":2", "\"schemaVersion\":99"))
+            UserDataBackupCodec.decode(json.replace("\"schemaVersion\":3", "\"schemaVersion\":99"))
         }
         assertThrows(IllegalArgumentException::class.java) {
             UserDataBackupCodec.decode("""{"schemaVersion":1,"exportedAt":1800000000000,"appVersion":"test","payload":{},"sha256":"x"}""")
@@ -293,7 +293,7 @@ class UserDataBackupCodecTest {
                 "test"
             )
         )
-        assertEquals(2, decoded.schemaVersion)
+        assertEquals(3, decoded.schemaVersion)
         assertEquals(nodes, decoded.payload.mindMapNodes)
         assertEquals(edge, decoded.payload.mindMapEdges.single())
         assertEquals(3, decoded.payload.totalRecords)
