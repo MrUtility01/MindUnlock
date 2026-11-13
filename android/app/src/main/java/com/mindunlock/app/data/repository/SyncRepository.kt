@@ -75,6 +75,8 @@ class SyncRepository(context: Context) {
         .readTimeout(90, TimeUnit.SECONDS)
         .writeTimeout(45, TimeUnit.SECONDS)
         .retryOnConnectionFailure(true)
+        // Do not allow an HTTPS session to be silently downgraded by a redirect.
+        .followSslRedirects(false)
         .build()
 
     fun savedHost(): String {
