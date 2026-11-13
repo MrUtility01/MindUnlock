@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -37,11 +38,19 @@ import kotlinx.coroutines.launch
 fun MindMapScreen(userDb: UserDatabase) {
     val nodes by userDb.mindMapDao().observeNodes().collectAsState(initial = emptyList())
     val edges by userDb.mindMapDao().observeEdges().collectAsState(initial = emptyList())
+    val mindDump by userDb.mindDumpDao().observeAll().collectAsState(initial = emptyList())
+    val notes by userDb.noteDao().observeAll().collectAsState(initial = emptyList())
+    val tasks by userDb.studyTaskDao().observeAll().collectAsState(initial = emptyList())
+    val laterTopics by userDb.laterTopicDao().observeAll().collectAsState(initial = emptyList())
+    val journal by userDb.journalEntryDao().observeAll().collectAsState(initial = emptyList())
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     var query by rememberSaveable { mutableStateOf("") }
     var status by rememberSaveable { mutableStateOf("") }
     var showNodeDialog by rememberSaveable { mutableStateOf(false) }
     var showEdgeDialog by rememberSaveable { mutableStateOf(false) }
+    var showSourceDialog by rememberSaveable { mutableStateOf(false) }
+    var sourceKind by rememberSaveable { mutableStateOf("mind_dump") }
+    var sourceKindMenu by remember { mutableStateOf(false) }
     var editingId by rememberSaveable { mutableStateOf<Long?>(null) }
     var pendingDeleteId by rememberSaveable { mutableStateOf<Long?>(null) }
     var nodeTitle by rememberSaveable { mutableStateOf("") }
@@ -59,6 +68,24 @@ fun MindMapScreen(userDb: UserDatabase) {
         }
     }
     val names = remember(nodes) { nodes.associate { it.id to it.title } }
+    val sourceChoices: List<Pair<Long, String>> = remember(sourceKind, mindDump, notes, tasks, laterTopics, journal) {
+        when (sourceKind) {
+            "mind_dump" -> mindDump.filter { it.content.isNotBlank() }.map { it.id to it.content.trim().take(160) }
+            "note" -> notes.filter { it.title.isNotBlank() }.map { it.id to it.title.trim().take(160) }
+            "task" -> tasks.filter { it.title.isNotBlank() }.map { it.id to it.title.trim().take(160) }
+            "later_topic" -> laterTopics.filter { it.title.isNotBlank() }.map { it.id to it.title.trim().take(160) }
+            "journal" -> journal.map { it.id to (it.title.ifBlank { it.body }.trim().take(160)) }
+            else -> emptyList()
+        }
+    }
+    val sourceKindLabel = when (sourceKind) {
+        "mind_dump" -> "تخلیه ذهن"
+        "note" -> "یادداشت"
+        "task" -> "وظیفه"
+        "later_topic" -> "موضوع بعدی"
+        "journal" -> "ژورنال"
+        else -> "منبع"
+    }
     val relatedByNode = remember(edges) {
         buildMap<Long, MutableList<com.mindunlock.app.data.local.MindMapEdgeEntity>> {
             edges.forEach { edge ->
@@ -99,6 +126,9 @@ fun MindMapScreen(userDb: UserDatabase) {
                     modifier = Modifier.weight(1f)
                 ) { Text("ایجاد ارتباط") }
             }
+            OutlinedButton(onClick = { showSourceDialog = true }, modifier = Modifier.fillMaxWidth()) {
+                Text("افزودن گره از اطلاعات موجود")
+            }
         }
         item {
             OutlinedTextField(query, { query = it }, modifier = Modifier.fillMaxWidth(), label = { Text("جست‌وجوی گره‌ها") }, singleLine = true)
@@ -125,6 +155,17 @@ fun MindMapScreen(userDb: UserDatabase) {
                         Column(Modifier.weight(1f)) {
                             Text(node.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                             Text(node.nodeType, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                            if (node.sourceType != null && node.sourceId != null) {
+                                val sourceLabel = when (node.sourceType) {
+                                    "mind_dump" -> "تخلیه ذهن"
+                                    "note" -> "یادداشت"
+                                    "task" -> "وظیفه"
+                                    "later_topic" -> "موضوع بعدی"
+                                    "journal" -> "ژورنال"
+                                    else -> "منبع"
+                                }
+                                Text("منبع پیوندشده: $sourceLabel #${node.sourceId}", style = MaterialTheme.typography.labelSmall)
+                            }
                         }
                         Text("#${node.id}", style = MaterialTheme.typography.labelSmall)
                     }
@@ -146,6 +187,60 @@ fun MindMapScreen(userDb: UserDatabase) {
             }
         }
     }
+
+    if (showSourceDialog) AlertDialog(
+        onDismissRequest = { showSourceDialog = false },
+        title = { Text("افزودن از اطلاعات موجود") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box {
+                    OutlinedButton(onClick = { sourceKindMenu = true }, modifier = Modifier.fillMaxWidth()) {
+                        Text("نوع منبع: $sourceKindLabel")
+                    }
+                    DropdownMenu(expanded = sourceKindMenu, onDismissRequest = { sourceKindMenu = false }) {
+                        listOf(
+                            "mind_dump" to "تخلیه ذهن",
+                            "note" to "یادداشت",
+                            "task" to "وظیفه",
+                            "later_topic" to "موضوع بعدی",
+                            "journal" to "ژورنال"
+                        ).forEach { (kind, label) ->
+                            DropdownMenuItem(text = { Text(label) }, onClick = { sourceKind = kind; sourceKindMenu = false })
+                        }
+                    }
+                }
+                if (sourceChoices.isEmpty()) {
+                    Text("در این بخش داده‌ای برای افزودن وجود ندارد.")
+                } else {
+                    Text("یک مورد را انتخاب کن؛ پیوند منبع همراه گره ذخیره می‌شود.", style = MaterialTheme.typography.bodySmall)
+                    LazyColumn(Modifier.fillMaxWidth().heightIn(max = 280.dp)) {
+                        items(sourceChoices, key = { it.first }) { choice ->
+                            TextButton(
+                                onClick = {
+                                    scope.launch {
+                                        val title = choice.second.trim().ifBlank { "بدون عنوان" }.take(200)
+                                        val created = userDb.mindMapDao().createLinkedNode(
+                                            MindMapNodeEntity(
+                                                title = title,
+                                                description = "ایجادشده از بخش $sourceKindLabel",
+                                                nodeType = sourceKindLabel,
+                                                sourceType = sourceKind,
+                                                sourceId = choice.first
+                                            )
+                                        )
+                                        status = if (created > 0) "گره منبع با موفقیت افزوده شد." else "این منبع قبلاً به نقشه اضافه شده است."
+                                        showSourceDialog = false
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) { Text(choice.second, maxLines = 2) }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { showSourceDialog = false }) { Text("بستن") } }
+    )
 
     if (pendingDeleteId != null) {
         val deletingNode = nodes.firstOrNull { it.id == pendingDeleteId }
