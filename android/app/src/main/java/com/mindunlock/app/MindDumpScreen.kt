@@ -342,7 +342,7 @@ private fun MindDumpCard(
                 )
             }
             Text(entry.content, style = MaterialTheme.typography.bodyLarge)
-            OutlinedButton(onClick = onEdit, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("ویرایش متن") }
+            if (entry.status == "inbox") OutlinedButton(onClick = onEdit, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("ویرایش متن") }
             OutlinedButton(onClick = { speech.speak(entry.content) }, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("خواندن با صدا") }
             Text(statusLabel, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (entry.status == "archived") {

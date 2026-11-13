@@ -214,6 +214,26 @@ class UserDatabaseMindDumpMigrationTest {
     }
 
     @Test
+    fun mindDumpEntriesCanBeEditedWithoutChangingTheirCategoryOrInboxState() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(context, UserDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+        try {
+            val id = db.mindDumpDao().insert(
+                MindDumpEntity(content = "متن اولیه", category = "learning")
+            )
+            db.mindDumpDao().updateContent(id, "متن اصلاح‌شده", 5_000L)
+            val edited = db.mindDumpDao().getAll().single()
+            assertEquals("متن اصلاح‌شده", edited.content)
+            assertEquals("learning", edited.category)
+            assertEquals("inbox", edited.status)
+            assertEquals(5_000L, edited.updatedAt)
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test
     fun versionOneUserDataSurvivesMindDumpSchemaMigration() = runBlocking {
         val file = context.getDatabasePath(databaseName)
         file.parentFile?.mkdirs()
