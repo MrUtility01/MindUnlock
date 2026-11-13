@@ -404,7 +404,7 @@ class UserDatabaseMindDumpMigrationTest {
             context,
             UserDatabase::class.java,
             databaseName
-        ).addMigrations(UserDatabase.MIGRATION_1_2, UserDatabase.MIGRATION_2_3, UserDatabase.MIGRATION_3_4, UserDatabase.MIGRATION_4_5, UserDatabase.MIGRATION_5_6, UserDatabase.MIGRATION_6_7, UserDatabase.MIGRATION_7_8, UserDatabase.MIGRATION_8_9, UserDatabase.MIGRATION_9_10, UserDatabase.MIGRATION_10_11, UserDatabase.MIGRATION_11_12).allowMainThreadQueries().build()
+        ).addMigrations(UserDatabase.MIGRATION_1_2, UserDatabase.MIGRATION_2_3, UserDatabase.MIGRATION_3_4, UserDatabase.MIGRATION_4_5, UserDatabase.MIGRATION_5_6, UserDatabase.MIGRATION_6_7, UserDatabase.MIGRATION_7_8, UserDatabase.MIGRATION_8_9, UserDatabase.MIGRATION_9_10, UserDatabase.MIGRATION_10_11, UserDatabase.MIGRATION_11_12, UserDatabase.MIGRATION_12_13, UserDatabase.MIGRATION_13_14).allowMainThreadQueries().build()
 
         try {
             val migratedProfile = LearningProfileEntity(answersCsv = List(20) { "5" }.joinToString(","), sessionMinutes = 60, maxTopics = 3, guidedMode = "flexible", completed = true)
@@ -414,6 +414,37 @@ class UserDatabaseMindDumpMigrationTest {
             assertEquals(3, storedProfile?.maxTopics)
             assertEquals("flexible", storedProfile?.guidedMode)
             assertEquals(20, storedProfile?.answersCsv?.split(",")?.size)
+
+            // The version-1 fixture must traverse every migration, including the knowledge graph.
+            val graphFirstId = migrated.mindMapDao().insertNode(
+                MindMapNodeEntity(title = "شبکه", nodeType = "یادگیری")
+            )
+            val graphSecondId = migrated.mindMapDao().insertNode(
+                MindMapNodeEntity(title = "DNS", nodeType = "مفهوم")
+            )
+            assertEquals(true, migrated.mindMapDao().connect(graphFirstId, graphSecondId, "پیش‌نیاز"))
+            assertEquals(false, migrated.mindMapDao().connect(graphFirstId, graphSecondId, "تکراری"))
+            assertEquals(1, migrated.mindMapDao().getAllEdges().size)
+
+            val linkedGraphId = migrated.mindMapDao().createLinkedNode(
+                MindMapNodeEntity(
+                    title = "ایده مهاجرت‌شده",
+                    sourceType = "mind_dump",
+                    sourceId = 777L
+                )
+            )
+            assertEquals(true, linkedGraphId > 0L)
+            assertEquals(-1L, migrated.mindMapDao().createLinkedNode(
+                MindMapNodeEntity(
+                    title = "تکرار منبع",
+                    sourceType = "mind_dump",
+                    sourceId = 777L
+                )
+            ))
+            assertEquals("mind_dump", migrated.mindMapDao().getAllNodes().first { it.id == linkedGraphId }.sourceType)
+
+            migrated.mindMapDao().deleteNode(graphFirstId)
+            assertEquals(0, migrated.mindMapDao().getAllEdges().size)
 
             val preservedProgress = migrated.progressDao().get("old-item")
             assertEquals(true, preservedProgress?.completed)
