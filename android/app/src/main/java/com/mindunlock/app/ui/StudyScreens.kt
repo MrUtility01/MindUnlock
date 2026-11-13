@@ -350,7 +350,8 @@ fun DashboardScreen(
         activeTopicTitle = activeTopic?.title,
         lastReadItemUid = lastReadItem?.uid,
         lastReadChapterId = lastReadProgress?.chapterId ?: lastSession?.chapterId,
-        fallbackChapterId = last?.id
+        fallbackChapterId = last?.id,
+        essentialTopicCount = laterTopics.count { it.priority == 1 && it.status != "done" }
     )
     val nextActionTitle = resumeAction.title
     val nextActionDescription = PersianDate.toPersianDigits(resumeAction.description)
@@ -359,6 +360,7 @@ fun DashboardScreen(
             ResumeActionKind.REVIEW -> onNavigate("review")
             ResumeActionKind.OVERDUE_TASKS -> onNavigate("planner")
             ResumeActionKind.TODAY_TASKS -> onNavigate("planner")
+            ResumeActionKind.ESSENTIAL_TOPICS -> onNavigate("later")
             ResumeActionKind.ACTIVE_TOPIC -> onNavigate("later")
             ResumeActionKind.RESUME_ITEM -> resumeAction.targetId?.let { onContinue("item:$it") }
             ResumeActionKind.RESUME_CHAPTER -> resumeAction.targetId?.let { onContinue("chapter:$it") }
