@@ -157,7 +157,7 @@ class UserDatabaseMindDumpMigrationTest {
             .allowMainThreadQueries()
             .build()
         try {
-            val sourceText = "\\n  موضوع برنامه‌ریزی شبکه  \\nشرح کامل و چندخطی موضوع"
+            val sourceText = "\n  موضوع برنامه‌ریزی شبکه  \nشرح کامل و چندخطی موضوع"
             val sourceId = db.mindDumpDao().insert(
                 MindDumpEntity(content = sourceText, category = "idea")
             )

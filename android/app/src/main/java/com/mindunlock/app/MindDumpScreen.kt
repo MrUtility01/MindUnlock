@@ -35,7 +35,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.room.withTransaction
-import com.mindunlock.app.data.local.LaterTopicEntity
 import com.mindunlock.app.data.local.MindDumpEntity
 import com.mindunlock.app.data.local.NoteEntity
 import com.mindunlock.app.data.local.UserDatabase
