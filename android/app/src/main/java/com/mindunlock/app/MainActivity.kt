@@ -287,6 +287,31 @@ private fun MindUnlockRoot(
                                 onClick = { showTopMenu = false; screen = "sync" }
                             )
                             DropdownMenuItem(
+                                text = { Text("صندوق ورودی") },
+                                leadingIcon = { Icon(Icons.Default.Notes, contentDescription = null) },
+                                onClick = { showTopMenu = false; screen = "inbox" }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("یادداشت‌ها") },
+                                leadingIcon = { Icon(Icons.Default.Bookmark, contentDescription = null) },
+                                onClick = { showTopMenu = false; screen = "notes" }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("دفتر روزانه") },
+                                leadingIcon = { Icon(Icons.Default.Book, contentDescription = null) },
+                                onClick = { showTopMenu = false; screen = "journal" }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("موضوعات برای بعد") },
+                                leadingIcon = { Icon(Icons.Default.MoreHoriz, contentDescription = null) },
+                                onClick = { showTopMenu = false; screen = "later" }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("نقشه ذهنی و گراف دانش") },
+                                leadingIcon = { Icon(Icons.Default.Dashboard, contentDescription = null) },
+                                onClick = { showTopMenu = false; screen = "mindmap" }
+                            )
+                            DropdownMenuItem(
                                 text = { Text("تنظیمات") },
                                 leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) },
                                 onClick = { showTopMenu = false; screen = "settings" }
