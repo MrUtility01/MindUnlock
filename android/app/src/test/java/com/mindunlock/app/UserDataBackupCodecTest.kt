@@ -42,7 +42,7 @@ class UserDataBackupCodecTest {
         )
         val json = UserDataBackupCodec.encode(payload, 1_800_000_000_000L, "0.6.5")
         val restored = UserDataBackupCodec.decode(json)
-        assertEquals(2, restored.schemaVersion)
+        assertEquals(3, restored.schemaVersion)
         assertEquals(1_800_000_000_000L, restored.exportedAt)
         assertEquals("0.6.5", restored.appVersion)
         assertEquals(10, restored.payload.totalRecords)
@@ -347,6 +347,40 @@ class UserDataBackupCodecTest {
         val node = MindMapNodeEntity(id = 81, title = "گره", createdAt = 1_800_000_000_000L, updatedAt = 1_800_000_000_000L)
         assertThrows(IllegalArgumentException::class.java) {
             UserDataBackupCodec.decode(UserDataBackupCodec.encode(UserDataBackupPayload(mindMapNodes = listOf(node, node.copy(title = "گره دوم"))), 1_800_000_000_100L, "test"))
+        }
+    }
+
+
+    @Test
+    fun roundTripsMindMapSourceLinksAndRejectsOrphanedSources() {
+        val source = MindDumpEntity(id = 91, content = "یادگیری DNS")
+        val node = MindMapNodeEntity(
+            id = 92,
+            title = "DNS",
+            description = "مطلب استخراج‌شده از صندوق ذهن",
+            nodeType = "یادگیری",
+            sourceType = "mind_dump",
+            sourceId = 91,
+            createdAt = 1_800_000_000_000L,
+            updatedAt = 1_800_000_000_100L
+        )
+        val decoded = UserDataBackupCodec.decode(
+            UserDataBackupCodec.encode(
+                UserDataBackupPayload(mindDump = listOf(source), mindMapNodes = listOf(node)),
+                1_800_000_000_200L,
+                "test"
+            )
+        )
+        assertEquals("mind_dump", decoded.payload.mindMapNodes.single().sourceType)
+        assertEquals(91L, decoded.payload.mindMapNodes.single().sourceId)
+        assertThrows(IllegalArgumentException::class.java) {
+            UserDataBackupCodec.decode(
+                UserDataBackupCodec.encode(
+                    UserDataBackupPayload(mindMapNodes = listOf(node)),
+                    1_800_000_000_200L,
+                    "test"
+                )
+            )
         }
     }
 
