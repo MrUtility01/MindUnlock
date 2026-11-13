@@ -291,14 +291,16 @@ jobs:
                           Text(if (speech.ready.value) "وضعیت: آماده" else "وضعیت: در حال بارگذاری یا دارای خطا", style = MaterialTheme.typography.bodySmall)
                       }
                   }'''
-          if old not in s:
-              raise SystemExit("Expected legacy TTS voice selector block not found; refusing unsafe partial edit")
-          s = s.replace(old, new, 1)
+          if old in s:
+              s = s.replace(old, new, 1)
+          elif not ("speech.ready.value" in s and "speech.stop()" in s):
+              raise SystemExit("Neither the legacy TTS selector nor the verified in-app speech controls were found")
           old2 = '''        OutlinedButton(onClick = { runCatching { context.startActivity(Intent("android.speech.tts.engine.INSTALL_TTS_DATA").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }, modifier = Modifier.fillMaxWidth()) { Text("مدیریت / نصب داده‌های گفتار گوشی") }'''
           new2 = '''        OutlinedButton(onClick = { speech.stop() }, modifier = Modifier.fillMaxWidth()) { Text("توقف موتور گفتار") }'''
-          if old2 not in s:
-              raise SystemExit("Expected Android TTS settings action not found; refusing unsafe partial edit")
-          s = s.replace(old2, new2, 1)
+          if old2 in s:
+              s = s.replace(old2, new2, 1)
+          elif "speech.stop()" not in s:
+              raise SystemExit("Neither the legacy Android TTS action nor the in-app stop control was found")
           p.write_text(s, encoding="utf-8")
           PY
 
