@@ -298,6 +298,7 @@ fun MindDumpScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
                         value = editDraft,
                         onValueChange = { editDraft = it },
                         modifier = Modifier.fillMaxWidth(),
+                        enabled = entryId !in processingEntryIds,
                         minLines = 4,
                         maxLines = 10,
                         label = { Text("متن ورودی") }
@@ -327,7 +328,10 @@ fun MindDumpScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
                     ) { Text(if (entryId in processingEntryIds) "در حال ذخیره…" else "ذخیره تغییرات") }
                 },
                 dismissButton = {
-                    TextButton(onClick = { pendingEditEntryId = null }) { Text("انصراف") }
+                    TextButton(
+                        onClick = { if (entryId !in processingEntryIds) pendingEditEntryId = null },
+                        enabled = entryId !in processingEntryIds
+                    ) { Text("انصراف") }
                 }
             )
         }
