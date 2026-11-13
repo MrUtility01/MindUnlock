@@ -194,6 +194,36 @@ class UserDatabaseMindDumpMigrationTest {
     }
 
     @Test
+    fun inboxConversionStoresSelectedEssentialDeferredOrCuriosityPriority() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(context, UserDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+        try {
+            val expected = listOf(1, 2, 3)
+            expected.forEachIndexed { index, priority ->
+                val sourceId = db.mindDumpDao().insert(
+                    MindDumpEntity(content = "ورودی اولویت $priority", category = "learning")
+                )
+                val topicId = db.mindDumpDao().convertToLaterTopic(sourceId, priority)
+                val topic = db.laterTopicDao().getAll().single { it.id == topicId }
+                assertEquals(priority, topic.priority)
+                assertEquals(sourceId, topic.sourceMindDumpId)
+                assertEquals("ورودی اولویت $priority", topic.details)
+                assertEquals("later", db.mindDumpDao().getById(sourceId)?.status)
+            }
+
+            val invalidSourceId = db.mindDumpDao().insert(
+                MindDumpEntity(content = "اولویت خارج از محدوده", category = "idea")
+            )
+            val invalidTopicId = db.mindDumpDao().convertToLaterTopic(invalidSourceId, 99)
+            val normalized = db.laterTopicDao().getAll().single { it.id == invalidTopicId }
+            assertEquals(3, normalized.priority)
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test
     fun convertingMissingMindDumpToLaterTopicReturnsNullWithoutCreatingTopic() = runBlocking {
         val db = Room.inMemoryDatabaseBuilder(context, UserDatabase::class.java)
             .allowMainThreadQueries()
