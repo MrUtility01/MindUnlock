@@ -11,11 +11,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -182,7 +185,7 @@ fun MindMapScreen(userDb: UserDatabase) {
         } else if (visibleNodes.isEmpty()) {
             item { Text("گرهی با این عبارت پیدا نشد.") }
         }
-        items(visibleNodes, key = { it.id }) { node ->
+        itemsIndexed(visibleNodes, key = { _, node -> node.id }) { index, node ->
             val related = relatedByNode[node.id].orEmpty()
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
@@ -202,7 +205,7 @@ fun MindMapScreen(userDb: UserDatabase) {
                                 Text("منبع پیوندشده: $sourceLabel #${node.sourceId}", style = MaterialTheme.typography.labelSmall)
                             }
                         }
-                        Text("#${node.id}", style = MaterialTheme.typography.labelSmall)
+                        Text("${index + 1} · #${node.id}", style = MaterialTheme.typography.labelSmall)
                     }
                     if (node.description.isNotBlank()) Text(node.description)
                     Text("ارتباط‌ها: ${related.size}", style = MaterialTheme.typography.labelMedium)
