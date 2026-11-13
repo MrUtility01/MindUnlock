@@ -221,9 +221,11 @@ interface MindDumpDao {
      * Retries reuse the existing linked topic instead of overwriting user edits.
      */
     @Transaction
-    suspend fun convertToLaterTopic(entryId: Long): Long? {
+    suspend fun convertToLaterTopic(entryId: Long, priority: Int = 2): Long? {
         val entry = getById(entryId) ?: return null
         val existing = getLaterTopicBySourceMindDumpId(entryId)
+        // Preserve edits and classification on retries; apply the selected priority only
+        // when the source is first converted into a Later Topic.
         val topicId = existing?.id ?: insertLaterTopic(
             LaterTopicEntity(
                 title = entry.content.lineSequence()
@@ -232,6 +234,7 @@ interface MindDumpDao {
                     ?.take(120)
                     ?: "موضوع جدید",
                 details = entry.content,
+                priority = priority.coerceIn(1, 3),
                 sourceMindDumpId = entry.id
             )
         )
