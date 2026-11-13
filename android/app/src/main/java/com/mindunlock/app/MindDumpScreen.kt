@@ -50,6 +50,7 @@ fun MindDumpScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
     var draft by rememberSaveable { mutableStateOf("") }
     var category by rememberSaveable { mutableStateOf("thought") }
     var showArchived by rememberSaveable { mutableStateOf(false) }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
     var message by remember { mutableStateOf("") }
     var isSavingDraft by remember { mutableStateOf(false) }
     var processingEntryIds by remember { mutableStateOf(emptySet<Long>()) }
@@ -72,7 +73,12 @@ fun MindDumpScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
             }
         }
     }
-    val visibleEntries = entries.filter { (it.status == "archived") == showArchived }
+    val visibleEntries = entries.filter { entry ->
+        (entry.status == "archived") == showArchived &&
+            (searchQuery.isBlank() ||
+                entry.content.contains(searchQuery.trim(), ignoreCase = true) ||
+                entry.category.contains(searchQuery.trim(), ignoreCase = true))
+    }
 
     Column(
         modifier = Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(16.dp),
@@ -151,9 +157,30 @@ fun MindDumpScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
             FilterChip(selected = showArchived, onClick = { showArchived = true }, label = { Text("بایگانی (" + entries.count { it.status == "archived" } + ")") })
         }
         }
+        OutlinedTextField(
+            value = searchQuery,
+            onValueChange = { searchQuery = it },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            label = { Text(if (showArchived) "جست‌وجو در بایگانی" else "جست‌وجو در ورودی‌ها") },
+            placeholder = { Text("بخشی از متن یا نوع ورودی را بنویس…") },
+            trailingIcon = {
+                if (searchQuery.isNotEmpty()) {
+                    TextButton(onClick = { searchQuery = "" }) { Text("پاک‌کردن") }
+                }
+            }
+        )
+        Text(
+            "نمایش " + visibleEntries.size + " مورد از " +
+                entries.count { (it.status == "archived") == showArchived } + " مورد",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
         if (visibleEntries.isEmpty()) {
             Text(
-                if (showArchived) "هنوز موردی بایگانی نشده است." else "صندوق ورودی خالی است. هرچه در ذهن داری اینجا ثبت کن.",
+                if (searchQuery.isNotBlank()) "موردی با این عبارت پیدا نشد."
+                else if (showArchived) "هنوز موردی بایگانی نشده است."
+                else "صندوق ورودی خالی است. هرچه در ذهن داری اینجا ثبت کن.",
                 modifier = Modifier.fillMaxWidth().padding(vertical = 18.dp),
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
