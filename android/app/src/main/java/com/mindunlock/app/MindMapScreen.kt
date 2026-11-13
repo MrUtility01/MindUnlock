@@ -147,11 +147,11 @@ fun MindMapScreen(userDb: UserDatabase) {
         }
         if (visibleNodes.isNotEmpty()) {
             item {
-                val graphIds = remember(visibleNodes) { visibleNodes.take(80).map { it.id }.toSet() }
+                val graphIds = remember(visibleNodes) { visibleNodes.take(16).map { it.id }.toSet() }
                 val graphEdges = remember(edges, graphIds) { edges.filter { it.sourceNodeId in graphIds && it.targetNodeId in graphIds } }
                 Text("نمای گراف", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Text("برای جابه‌جایی بکش؛ برای بزرگ‌نمایی از دو انگشت استفاده کن؛ روی گره بزن تا انتخاب شود.", style = MaterialTheme.typography.bodySmall)
-                MindMapGraphCanvas(nodes = visibleNodes.take(80), edges = graphEdges, selectedNodeId = selectedGraphNodeId, scale = graphScale, panX = graphPanX, panY = graphPanY, onSelectNode = { selectedGraphNodeId = it }, onTransform = { zoom, dx, dy -> graphScale = (graphScale * zoom).coerceIn(0.65f, 2.8f); graphPanX += dx; graphPanY += dy })
+                MindMapGraphCanvas(nodes = visibleNodes.take(16), edges = graphEdges, selectedNodeId = selectedGraphNodeId, scale = graphScale, panX = graphPanX, panY = graphPanY, onSelectNode = { selectedGraphNodeId = it }, onTransform = { zoom, dx, dy -> graphScale = (graphScale * zoom).coerceIn(0.65f, 2.8f); graphPanX += dx; graphPanY += dy })
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text("بزرگ‌نمایی: " + (graphScale * 100).toInt() + "٪", style = MaterialTheme.typography.labelSmall)
                     TextButton(onClick = { graphScale = 1f; graphPanX = 0f; graphPanY = 0f }) { Text("بازنشانی نما") }
@@ -165,7 +165,7 @@ fun MindMapScreen(userDb: UserDatabase) {
                         TextButton(onClick = { edit(selected) }) { Text("ویرایش گره انتخاب‌شده") }
                     }
                 }
-                if (visibleNodes.size > 80) Text("برای حفظ سرعت، حداکثر ۸۰ گره در نمای گراف نمایش داده می‌شود؛ فهرست پایین همه گره‌ها را دارد.", style = MaterialTheme.typography.bodySmall)
+                if (visibleNodes.size > 16) Text("برای حفظ سرعت، حداکثر ۱۶ گره در نمای گراف نمایش داده می‌شود؛ فهرست پایین همه گره‌ها را دارد.", style = MaterialTheme.typography.bodySmall)
             }
         }
         if (nodes.isEmpty()) {
