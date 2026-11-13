@@ -325,4 +325,29 @@ class UserDataBackupCodecTest {
             UserDataBackupCodec.decode(json)
         }
     }
+
+    @Test
+    fun rejectsDuplicateMindMapEdgesAndInvalidNodeFields() {
+        val first = MindMapNodeEntity(id = 61, title = "شبکه", createdAt = 1_800_000_000_000L, updatedAt = 1_800_000_000_000L)
+        val second = MindMapNodeEntity(id = 62, title = "DNS", createdAt = 1_800_000_000_000L, updatedAt = 1_800_000_000_000L)
+        val edge = MindMapEdgeEntity(id = 71, sourceNodeId = 61, targetNodeId = 62, createdAt = 1_800_000_000_000L)
+        assertThrows(IllegalArgumentException::class.java) {
+            UserDataBackupCodec.decode(UserDataBackupCodec.encode(UserDataBackupPayload(mindMapNodes = listOf(first, second), mindMapEdges = listOf(edge, edge.copy(id = 72))), 1_800_000_000_100L, "test"))
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            UserDataBackupCodec.decode(UserDataBackupCodec.encode(UserDataBackupPayload(mindMapNodes = listOf(first.copy(title = " ".repeat(4_001)))), 1_800_000_000_100L, "test"))
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            UserDataBackupCodec.decode(UserDataBackupCodec.encode(UserDataBackupPayload(mindMapNodes = listOf(first.copy(nodeType = "x".repeat(41)))), 1_800_000_000_100L, "test"))
+        }
+    }
+
+    @Test
+    fun rejectsDuplicateMindMapNodeIds() {
+        val node = MindMapNodeEntity(id = 81, title = "گره", createdAt = 1_800_000_000_000L, updatedAt = 1_800_000_000_000L)
+        assertThrows(IllegalArgumentException::class.java) {
+            UserDataBackupCodec.decode(UserDataBackupCodec.encode(UserDataBackupPayload(mindMapNodes = listOf(node, node.copy(title = "گره دوم"))), 1_800_000_000_100L, "test"))
+        }
+    }
+
 }
