@@ -114,7 +114,10 @@ fun MindMapScreen(userDb: UserDatabase) {
                     related.forEach { edge ->
                         val otherId = if (edge.sourceNodeId == node.id) edge.targetNodeId else edge.sourceNodeId
                         val direction = if (edge.sourceNodeId == node.id) "به" else "از"
-                        Text("• ${direction} «${names[otherId] ?: "گره حذف‌شده"}» — ${edge.relationType}", style = MaterialTheme.typography.bodySmall)
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("• ${direction} «${names[otherId] ?: "گره حذف‌شده"}» — ${edge.relationType}", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+                            TextButton(onClick = { scope.launch { userDb.mindMapDao().deleteEdge(edge.id); status = "ارتباط حذف شد." } }) { Text("حذف") }
+                        }
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         TextButton(onClick = { edit(node) }) { Text("ویرایش") }
