@@ -31,6 +31,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -42,18 +43,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.mindunlock.app.data.local.MindMapNodeEntity
+import com.mindunlock.app.data.local.MindMapSourceItem
 import com.mindunlock.app.data.local.UserDatabase
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Composable
 fun MindMapScreen(userDb: UserDatabase) {
     val nodes by userDb.mindMapDao().observeNodes().collectAsState(initial = emptyList())
     val edges by userDb.mindMapDao().observeEdges().collectAsState(initial = emptyList())
-    val mindDump by userDb.mindDumpDao().observeAll().collectAsState(initial = emptyList())
-    val notes by userDb.noteDao().observeAll().collectAsState(initial = emptyList())
-    val tasks by userDb.studyTaskDao().observeAll().collectAsState(initial = emptyList())
-    val laterTopics by userDb.laterTopicDao().observeAll().collectAsState(initial = emptyList())
-    val journal by userDb.journalEntryDao().observeAll().collectAsState(initial = emptyList())
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     var query by rememberSaveable { mutableStateOf("") }
     var selectedGraphNodeId by rememberSaveable { mutableStateOf<Long?>(null) }
@@ -83,16 +82,8 @@ fun MindMapScreen(userDb: UserDatabase) {
         }
     }
     val names = remember(nodes) { nodes.associate { it.id to it.title } }
-    val sourceChoices: List<Pair<Long, String>> = remember(sourceKind, mindDump, notes, tasks, laterTopics, journal) {
-        when (sourceKind) {
-            "mind_dump" -> mindDump.filter { it.content.isNotBlank() }.map { it.id to it.content.trim().take(160) }
-            "note" -> notes.filter { it.title.isNotBlank() }.map { it.id to it.title.trim().take(160) }
-            "task" -> tasks.filter { it.title.isNotBlank() }.map { it.id to it.title.trim().take(160) }
-            "later_topic" -> laterTopics.filter { it.title.isNotBlank() }.map { it.id to it.title.trim().take(160) }
-            "journal" -> journal.map { it.id to (it.title.ifBlank { it.body }.trim().take(160)) }
-            else -> emptyList()
-        }
-    }
+    var sourceSearch by rememberSaveable { mutableStateOf("") }
+    var sourceChoices by remember { mutableStateOf<List<MindMapSourceItem>>(emptyList()) }
     val sourceKindLabel = when (sourceKind) {
         "mind_dump" -> "تخلیه ذهن"
         "note" -> "یادداشت"
@@ -100,6 +91,32 @@ fun MindMapScreen(userDb: UserDatabase) {
         "later_topic" -> "موضوع بعدی"
         "journal" -> "ژورنال"
         else -> "منبع"
+    }
+
+    // Query only while the picker is visible. SQL returns a bounded projection,
+    // not complete journal/note/task bodies; typing is debounced to avoid query churn.
+    LaunchedEffect(showSourceDialog, sourceKind, sourceSearch) {
+        if (!showSourceDialog) {
+            sourceChoices = emptyList()
+            return@LaunchedEffect
+        }
+        if (sourceSearch.isNotBlank()) delay(250)
+        val term = sourceSearch.trim().take(120)
+        sourceChoices = try {
+            when (sourceKind) {
+                "mind_dump" -> userDb.mindDumpDao().searchMindMapSources(term, 100)
+                "note" -> userDb.noteDao().searchMindMapSources(term, 100)
+                "task" -> userDb.studyTaskDao().searchMindMapSources(term, 100)
+                "later_topic" -> userDb.laterTopicDao().searchMindMapSources(term, 100)
+                "journal" -> userDb.journalEntryDao().searchMindMapSources(term, 100)
+                else -> emptyList()
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            status = "منابع برای افزودن بارگذاری نشدند؛ دوباره تلاش کن."
+            emptyList()
+        }
     }
     val relatedByNode = remember(edges) {
         buildMap<Long, MutableList<com.mindunlock.app.data.local.MindMapEdgeEntity>> {
@@ -267,23 +284,31 @@ fun MindMapScreen(userDb: UserDatabase) {
                         }
                     }
                 }
+                OutlinedTextField(
+                    value = sourceSearch,
+                    onValueChange = { sourceSearch = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("جست‌وجو در منابع") },
+                    singleLine = true
+                )
+                Text("حداکثر ۱۰۰ نتیجهٔ مرتبط؛ برای یافتن موارد قدیمی‌تر، عبارت دقیق‌تری جست‌وجو کن.", style = MaterialTheme.typography.bodySmall)
                 if (sourceChoices.isEmpty()) {
-                    Text("در این بخش داده‌ای برای افزودن وجود ندارد.")
+                    Text(if (sourceSearch.isBlank()) "در این بخش داده‌ای برای افزودن وجود ندارد." else "موردی با این عبارت پیدا نشد.")
                 } else {
-                    Text("یک مورد را انتخاب کن؛ پیوند منبع همراه گره ذخیره می‌شود.", style = MaterialTheme.typography.bodySmall)
+                    Text("یک مورد را انتخاب کن؛ فقط عنوان و شناسه از پایگاه داده خوانده می‌شود.", style = MaterialTheme.typography.bodySmall)
                     LazyColumn(Modifier.fillMaxWidth().heightIn(max = 280.dp)) {
-                        items(sourceChoices, key = { it.first }) { choice ->
+                        items(sourceChoices, key = { it.id }) { choice ->
                             TextButton(
                                 onClick = {
                                     scope.launch {
-                                        val title = choice.second.trim().ifBlank { "بدون عنوان" }.take(200)
+                                        val title = choice.title.trim().ifBlank { "بدون عنوان" }.take(200)
                                         val created = userDb.mindMapDao().createLinkedNode(
                                             MindMapNodeEntity(
                                                 title = title,
                                                 description = "ایجادشده از بخش $sourceKindLabel",
                                                 nodeType = sourceKindLabel,
                                                 sourceType = sourceKind,
-                                                sourceId = choice.first
+                                                sourceId = choice.id
                                             )
                                         )
                                         status = if (created > 0) "گره منبع با موفقیت افزوده شد." else "این منبع قبلاً به نقشه اضافه شده است."
@@ -291,7 +316,7 @@ fun MindMapScreen(userDb: UserDatabase) {
                                     }
                                 },
                                 modifier = Modifier.fillMaxWidth()
-                            ) { Text(choice.second, maxLines = 2) }
+                            ) { Text(choice.title, maxLines = 2) }
                         }
                     }
                 }
