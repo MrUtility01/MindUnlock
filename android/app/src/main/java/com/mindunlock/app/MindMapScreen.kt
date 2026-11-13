@@ -406,6 +406,12 @@ private fun MindMapGraphCanvas(
         val center = Offset(size.width / 2f, size.height / 2f)
         val orbit = minOf(size.width, size.height) * 0.34f
         val radiusPx = nodeRadius.toPx()
+        val labelPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            color = scheme.onPrimary.toArgb()
+            textSize = 10.dp.toPx()
+            textAlign = android.graphics.Paint.Align.CENTER
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+        }
         val positions = nodes.mapIndexed { index, node ->
             val angle = -Math.PI / 2.0 + (2.0 * Math.PI * index / nodes.size.coerceAtLeast(1))
             node.id to if (nodes.size == 1) center else Offset(center.x + orbit * kotlin.math.cos(angle).toFloat(), center.y + orbit * kotlin.math.sin(angle).toFloat())
@@ -419,12 +425,13 @@ private fun MindMapGraphCanvas(
                 val to = positions[edge.targetNodeId]
                 if (from != null && to != null) drawLine(color = scheme.outline, start = from, end = to, strokeWidth = 2.dp.toPx())
             }
-            nodes.forEach { node ->
-                val point = positions[node.id] ?: return@forEach
+            nodes.forEachIndexed { index, node ->
+                val point = positions[node.id] ?: return@forEachIndexed
                 val selected = node.id == selectedNodeId
                 if (selected) drawCircle(color = scheme.tertiary.copy(alpha = 0.25f), radius = radiusPx * 1.9f, center = point)
                 drawCircle(color = if (selected) scheme.tertiary else scheme.primary, radius = radiusPx, center = point)
                 drawCircle(color = scheme.surface, radius = 3.dp.toPx(), center = point)
+                drawContext.canvas.nativeCanvas.drawText((index + 1).toString(), point.x, point.y + labelPaint.textSize * 0.34f, labelPaint)
             }
         }
     }
