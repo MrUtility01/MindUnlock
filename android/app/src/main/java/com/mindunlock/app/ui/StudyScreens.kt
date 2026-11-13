@@ -2361,6 +2361,7 @@ fun BookmarksScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeech
 @Composable
 fun SettingsScreen(
     speech: PersianSpeech,
+    userDb: UserDatabase,
     preferences: android.content.SharedPreferences,
     theme: String,
     onThemeChange: (String) -> Unit,
