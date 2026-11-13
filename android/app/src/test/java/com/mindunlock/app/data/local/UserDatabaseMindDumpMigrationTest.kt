@@ -214,20 +214,29 @@ class UserDatabaseMindDumpMigrationTest {
     }
 
     @Test
-    fun mindDumpEntriesCanBeEditedWithoutChangingTheirCategoryOrInboxState() = runBlocking {
+    fun mindDumpEntriesCanBeEditedWithoutChangingTheirCategoryInboxStateOrLinks() = runBlocking {
         val db = Room.inMemoryDatabaseBuilder(context, UserDatabase::class.java)
             .allowMainThreadQueries()
             .build()
         try {
             val id = db.mindDumpDao().insert(
-                MindDumpEntity(content = "متن اولیه", category = "learning")
+                MindDumpEntity(
+                    content = "متن اولیه",
+                    category = "learning",
+                    status = "inbox",
+                    createdAt = 1_000L,
+                    updatedAt = 2_000L,
+                    linkedTaskId = 17L
+                )
             )
             db.mindDumpDao().updateContent(id, "متن اصلاح‌شده", 5_000L)
             val edited = db.mindDumpDao().getAll().single()
             assertEquals("متن اصلاح‌شده", edited.content)
             assertEquals("learning", edited.category)
             assertEquals("inbox", edited.status)
+            assertEquals(1_000L, edited.createdAt)
             assertEquals(5_000L, edited.updatedAt)
+            assertEquals(17L, edited.linkedTaskId)
         } finally {
             db.close()
         }
