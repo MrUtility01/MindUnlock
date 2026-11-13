@@ -2997,6 +2997,7 @@ jobs:
             app/src/main/java/com/mindunlock/app/LearningProfileScreen.kt \
             app/src/main/java/com/mindunlock/app/LearningPersonalization.kt \
             app/src/main/java/com/mindunlock/app/LearningEngineScreen.kt \
+            app/src/main/java/com/mindunlock/app/LearningPersonalTopicPolicy.kt \
             app/src/main/java/com/mindunlock/app/ui/StudyScreens.kt \
             app/src/main/java/com/mindunlock/app/PlannerPolicy.kt \
             app/src/main/java/com/mindunlock/app/LearningPathPolicy.kt \
@@ -3022,6 +3023,7 @@ jobs:
             app/src/test/java/com/mindunlock/app/LabScenarioParserTest.kt \
             app/src/test/java/com/mindunlock/app/LearningAnalyticsTest.kt \
             app/src/test/java/com/mindunlock/app/LearningPersonalizationTest.kt \
+            app/src/test/java/com/mindunlock/app/data/local/LearningPersonalTopicPolicyTest.kt \
             app/src/test/java/com/mindunlock/app/UserDataBackupCodecTest.kt \
             app/src/test/java/com/mindunlock/app/UserDataBackupRestoreTransactionTest.kt
           do
