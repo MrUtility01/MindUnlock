@@ -32,9 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.mindunlock.app.data.local.LaterTopicEntity
-import com.mindunlock.app.data.local.MindDumpEntity
 import com.mindunlock.app.data.local.UserDatabase
-import androidx.room.withTransaction
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import java.time.Instant
