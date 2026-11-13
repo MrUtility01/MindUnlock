@@ -3152,278 +3152,39 @@ jobs:
           done
           echo "Planner daily focus policy, Mind Dump, Jalali calendar source and all registered JVM tests are included in the effective APK build."
 
-      - name: Expand dashboard into the complete app control center
+      - name: Preserve tracked dashboard and verify complete Persian voice coverage
         shell: bash
         run: |
           set -euo pipefail
-          python3 - <<'PY'
+          SCREENS_FILE="$(find android-build/app/src/main/java -type f -name StudyScreens.kt -print -quit)"
+          test -n "$SCREENS_FILE"
+          python3 - "$SCREENS_FILE" <<'PY'
           from pathlib import Path
-          import re
-          path = next(Path("android-build/app/src/main/java").rglob("StudyScreens.kt"))
+          import sys
+          path = Path(sys.argv[1])
           source = path.read_text(encoding="utf-8")
-          if "import com.mindunlock.app.data.local.MindDumpEntity" not in source:
-              source = source.replace("import com.mindunlock.app.data.local.UserDatabase", "import com.mindunlock.app.data.local.UserDatabase\nimport com.mindunlock.app.data.local.MindDumpEntity")
-          if "import com.mindunlock.app.PersianSpeech" not in source:
-              source = source.replace("import com.mindunlock.app.data.local.UserDatabase", "import com.mindunlock.app.PersianSpeech\nimport com.mindunlock.app.data.local.UserDatabase")
-          start = source.index("@Composable\nfun DashboardScreen(")
-          next_screen = source.find("\n@Composable", start + 20)
-          if next_screen < 0:
-              raise SystemExit("Could not locate the end of DashboardScreen")
-          dashboard = r'''@Composable
-          fun DashboardScreen(
-              db: AppDatabase,
-              userDb: UserDatabase,
-              speech: PersianSpeech,
-              onNavigate: (String) -> Unit,
-              onContinue: (String) -> Unit
-          ) {
-              val chapters by db.chapterDao().observeAll().collectAsState(initial = emptyList())
-              val itemCount by db.contentItemDao().observeItemCount().collectAsState(initial = 0)
-              val flashcardCount by db.contentItemDao().observeFlashcardCount().collectAsState(initial = 0)
-              val progress by userDb.progressDao().observeAll().collectAsState(initial = emptyList())
-              val tasks by userDb.studyTaskDao().observeAll().collectAsState(initial = emptyList())
-              val inboxEntries by userDb.mindDumpDao().observeAll().collectAsState(initial = emptyList())
-              val journalEntries by userDb.journalEntryDao().observeAll().collectAsState(initial = emptyList())
-              val sessions by userDb.learningSessionDao().observeAll().collectAsState(initial = emptyList())
-              val sessionFeedback by userDb.learningSessionFeedbackDao().observeAll().collectAsState(initial = emptyList())
-              val laterTopics by userDb.laterTopicDao().observeAll().collectAsState(initial = emptyList())
-              var quickCapture by rememberSaveable { mutableStateOf("") }
-              var captureMessage by remember { mutableStateOf("") }
-              val scope = rememberCoroutineScope()
-              val completed = progress.count { it.completed }
-              val progressRate = if (progress.isEmpty()) 0f else completed.toFloat() / progress.size.toFloat()
-              val pendingTasks = tasks.count { !it.completed }
-              val inboxCount = inboxEntries.count { it.status == "inbox" }
-              val now = System.currentTimeMillis()
-              val todayStart = java.time.LocalDate.now().atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
-              val tomorrowStart = java.time.LocalDate.now().plusDays(1).atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
-              val todayTaskCount = tasks.count { !it.completed && it.dueAt != null && it.dueAt >= todayStart && it.dueAt < tomorrowStart }
-              val dueReviewCount = progress.count { !it.completed && it.dueAt != null && it.dueAt <= now }
-              val activeTopic = laterTopics.firstOrNull { it.status == "active" }
-              val lastCompletedSession = sessions.firstOrNull { session -> session.endedAt != null && session.endedAt > session.startedAt }
-              val lastCompletedSessionDurationSeconds = lastCompletedSession?.let { ((it.endedAt ?: it.startedAt) - it.startedAt).coerceAtLeast(0L) / 1000L } ?: 0L
-              val lastSessionReflection = lastCompletedSession?.let { session -> sessionFeedback.firstOrNull { it.sessionId == session.id } }
-              val last = chapters.firstOrNull()
-              Column(
-                  Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-                  verticalArrangement = Arrangement.spacedBy(12.dp)
-              ) {
-                  Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                      Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                          Text("MindUnlock", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                          Text("مرکز کنترل یادگیری و مدیریت ذهن", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                          Text("امروز · " + PersianDate.format(System.currentTimeMillis(), includeTime = false), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                      }
-                      Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.primaryContainer) {
-                          Icon(Icons.Default.Bookmark, contentDescription = null, modifier = Modifier.padding(12.dp), tint = MaterialTheme.colorScheme.primary)
-                      }
-                  }
-                  Card(
-                      modifier = Modifier.fillMaxWidth(),
-                      shape = MaterialTheme.shapes.extraLarge,
-                      colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-                      elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
-                  ) {
-                      Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                          Text("قدم بعدی تو مهم‌تر از برنامه کامل است ✨", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                          Text("پیشرفت ثبت‌شده در مسیر یادگیری", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                          LinearProgressIndicator(progress = progressRate, modifier = Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.primary)
-                          Text("$completed از ${progress.size} مورد تکمیل شده", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                      }
-                  }
-                  Text("نمای کلی امروز", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                  Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                      MetricCard("فصل‌ها", chapters.size.toString(), Modifier.weight(1f))
-                      MetricCard("مطالب", itemCount.toString(), Modifier.weight(1f))
-                      MetricCard("تکمیل‌شده", completed.toString(), Modifier.weight(1f))
-                  }
-                  Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                      MetricCard("کارهای باز", pendingTasks.toString(), Modifier.weight(1f))
-                      MetricCard("ورودی ذهن", inboxCount.toString(), Modifier.weight(1f))
-                      MetricCard("نوشته‌ها", journalEntries.size.toString(), Modifier.weight(1f))
-                  }
-                  val resumeAction = ResumeActionPolicy.select(
-                      dueReviewCount = dueReviewCount,
-                      overdueTaskCount = tasks.count { !it.completed && it.dueAt != null && it.dueAt < todayStart },
-                      todayTaskCount = todayTaskCount,
-                      activeTopicTitle = activeTopic?.title,
-                      lastReadItemUid = lastReadProgress?.itemUid,
-                      lastReadChapterId = lastReadProgress?.chapterId ?: lastCompletedSession?.chapterId,
-                      fallbackChapterId = last?.id
-                  )
-                  val nextAction = {
-                      when (resumeAction.kind) {
-                          ResumeActionKind.REVIEW -> onNavigate("review")
-                          ResumeActionKind.OVERDUE_TASKS -> onNavigate("planner")
-                          ResumeActionKind.TODAY_TASKS -> onNavigate("planner")
-                          ResumeActionKind.ACTIVE_TOPIC -> onNavigate("later")
-                          ResumeActionKind.RESUME_ITEM -> resumeAction.targetId?.let { onContinue("item:$it") }
-                          ResumeActionKind.RESUME_CHAPTER -> resumeAction.targetId?.let { onContinue("chapter:$it") }
-                          ResumeActionKind.START_LEARNING -> onNavigate("courses")
-                      }
-                  }
-                  Card(Modifier.fillMaxWidth()) {
-                      Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                          if (lastCompletedSession != null) {
-                              Text("خلاصه آخرین جلسه", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                              Text(lastCompletedSession.topicTitle, fontWeight = FontWeight.SemiBold)
-                              Text(
-                                  PersianDate.format(lastCompletedSession.startedAt) + " · مدت " +
-                                      (lastCompletedSessionDurationSeconds / 60) + " دقیقه و " +
-                                      (lastCompletedSessionDurationSeconds % 60) + " ثانیه",
-                                  style = MaterialTheme.typography.bodySmall,
-                                  color = MaterialTheme.colorScheme.onSurfaceVariant
-                              )
-                              if (lastSessionReflection != null) {
-                                  Text(
-                                      "بازخورد شخصی · درک " + lastSessionReflection.comprehension + "/۵ · تمرکز " +
-                                          lastSessionReflection.focus + "/۵ · دشواری " + lastSessionReflection.perceivedDifficulty + "/۵",
-                                      style = MaterialTheme.typography.bodySmall
-                                  )
-                                  if (lastSessionReflection.energyBefore != null && lastSessionReflection.energyAfter != null) {
-                                      val energyDelta = lastSessionReflection.energyAfter - lastSessionReflection.energyBefore
-                                      Text("تغییر انرژی: " + PersianDate.toPersianDigits(energyDelta.toString()), style = MaterialTheme.typography.labelSmall)
-                                  }
-                                  lastSessionReflection.note?.takeIf { it.isNotBlank() }?.let { Text("یادداشت: " + it, style = MaterialTheme.typography.bodySmall) }
-                              } else {
-                                  Text("برای این جلسه هنوز بازخوردی ثبت نشده است.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                              }
-                              Text("گام بعدی پیشنهادی", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
-                          } else {
-                              Text("اولویت بعدی", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                          }
-                          Text(resumeAction.title, fontWeight = FontWeight.SemiBold)
-                          Text(PersianDate.toPersianDigits(resumeAction.description), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                          OutlinedButton(onClick = { nextAction() }, modifier = Modifier.fillMaxWidth()) {
-                              Text(if (lastCompletedSession != null) "ادامه از همین مسیر" else "شروع قدم بعدی")
-                          }
-                      }
-                  }
-                  Card(
-                      Modifier.fillMaxWidth(),
-                      shape = MaterialTheme.shapes.extraLarge,
-                      elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-                  ) {
-                      Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                          Text("ثبت سریع فکر یا سؤال", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                          OutlinedTextField(
-                              value = quickCapture,
-                              onValueChange = { quickCapture = it },
-                              modifier = Modifier.fillMaxWidth(),
-                              label = { Text("هر چیزی که می‌خواهی ثبت کنی…") },
-                              minLines = 2,
-                              maxLines = 4
-                          )
-                          Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                              PersianVoiceInputButton { spoken -> quickCapture = listOf(quickCapture, spoken).filter { it.isNotBlank() }.joinToString("\\n") }
-                              OutlinedButton(onClick = { speech.speak(quickCapture) }, enabled = quickCapture.isNotBlank()) { Text("خواندن متن") }
-                          }
-                          Button(
-                              onClick = {
-                                  val value = quickCapture.trim()
-                                  if (value.isNotEmpty()) {
-                                      scope.launch {
-                                          userDb.mindDumpDao().insert(MindDumpEntity(content = value))
-                                      }
-                                      quickCapture = ""
-                                      captureMessage = "در صندوق ورودی ذخیره شد."
-                                  }
-                              },
-                              enabled = quickCapture.isNotBlank(),
-                              modifier = Modifier.fillMaxWidth()
-                          ) { Text("ذخیره در صندوق ورودی") }
-                          if (captureMessage.isNotBlank()) Text(captureMessage, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
-                      }
-                  }
-                  Text("تمام بخش‌های برنامه", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                  Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                      ActionTile("صندوق ورودی ذهن", "inbox", onNavigate, Modifier.weight(1f))
-                      ActionTile("دفتر روزانه", "journal", onNavigate, Modifier.weight(1f))
-                  }
-                  Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                      ActionTile("وظایف و برنامه روزانه", "planner", onNavigate, Modifier.weight(1f))
-                      ActionTile("آرشیو دانش و یادداشت‌ها", "notes", onNavigate, Modifier.weight(1f))
-                  }
-                  Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                      ActionTile("مسیرهای آموزشی", "courses", onNavigate, Modifier.weight(1f))
-                      ActionTile("فلش‌کارت‌ها", "flashcards", onNavigate, Modifier.weight(1f))
-                  }
-                  Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                      ActionTile("مرور فاصله‌دار", "review", onNavigate, Modifier.weight(1f))
-                      ActionTile("تمرین", "quiz", onNavigate, Modifier.weight(1f))
-                  }
-                  Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                      ActionTile("آزمون", "exam", onNavigate, Modifier.weight(1f))
-                      ActionTile("آزمایشگاه و پروژه‌ها", "labs", onNavigate, Modifier.weight(1f))
-                  }
-                  Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                      ActionTile("نشانک‌ها", "bookmarks", onNavigate, Modifier.weight(1f))
-                      ActionTile("گزارش پیشرفت", "progress", onNavigate, Modifier.weight(1f))
-                  }
-                  Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                      ActionTile("تنظیمات و صدا", "settings", onNavigate, Modifier.weight(1f))
-                      ActionTile("ابزارهای بیشتر", "more", onNavigate, Modifier.weight(1f))
-                  }
-                  Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                      ActionTile("دریافت محتوا و اتصال", "sync", onNavigate, Modifier.weight(1f))
-                      ActionTile("مدیریت یادگیری", "courses", onNavigate, Modifier.weight(1f))
-                  }
-                  Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                      ActionTile("موضوعات برای بعد", "later", onNavigate, Modifier.weight(1f))
-                      ActionTile("تخلیه ذهن", "inbox", onNavigate, Modifier.weight(1f))
-                  }
-                  Text("تعداد فلش‌کارت‌ها: $flashcardCount", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-              }
-          }'''
-          source = source[:start] + dashboard + source[next_screen:]
-          source = source.replace("fun NotesScreen(userDb: UserDatabase)", "fun NotesScreen(userDb: UserDatabase, speech: PersianSpeech)")
-          source = source.replace(
-              'Text(note.body, maxLines = 4, overflow = TextOverflow.Ellipsis)',
-              'Text(note.body, maxLines = 4, overflow = TextOverflow.Ellipsis)\n                        OutlinedButton(onClick = { speech.speak(note.title + ". " + note.body) }, modifier = Modifier.fillMaxWidth()) { Text("خواندن یادداشت") }'
+          start = source.index("fun DashboardScreen(")
+          end = source.find("\\n@Composable", start + 5)
+          dashboard = source[start:end if end >= 0 else len(source)]
+          routes = ("courses", "flashcards", "review", "quiz", "exam", "labs", "notes", "planner", "inbox", "later", "archive", "progress", "journal", "bookmarks", "learning", "profile", "backup", "settings", "sync", "about")
+          missing_routes = [route for route in routes if f'"{route}"' not in dashboard]
+          if missing_routes:
+              raise SystemExit("Tracked dashboard is missing routes: " + ", ".join(missing_routes))
+          required = (
+              'ResumeActionKind.ESSENTIAL_TOPICS -> onNavigate("later")',
+              'ResumeActionKind.START_LEARNING -> onNavigate("learning")',
+              'fun NotesScreen(userDb: UserDatabase, speech: PersianSpeech)',
+              'Text("خواندن یادداشت")',
+              'Text("خواندن کار")',
+              'Text("خواندن گزارش پیشرفت")',
+              'Text("خواندن سؤال و گزینه‌ها")',
+              'Text("خواندن راهنمای آزمایشگاه")',
+              'Text("خواندن نشانک")',
           )
-          source = source.replace("fun PlannerScreen(userDb: UserDatabase)", "fun PlannerScreen(userDb: UserDatabase, speech: PersianSpeech)")
-          source = source.replace(
-              'if (task.details.isNotBlank()) Text(task.details, style = MaterialTheme.typography.bodySmall)',
-              'if (task.details.isNotBlank()) Text(task.details, style = MaterialTheme.typography.bodySmall)\n                        OutlinedButton(onClick = { speech.speak(task.title + ". " + task.details) }) { Text("خواندن کار") }'
-          )
-          source = source.replace("fun ProgressScreen(db: AppDatabase, userDb: UserDatabase)", "fun ProgressScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeech)")
-          source = source.replace(
-              'Text("این آمار فقط روی همین گوشی ذخیره می‌شود و با ویندوز ادغام نشده است.", style = MaterialTheme.typography.bodySmall)',
-              'Text("این آمار فقط روی همین گوشی ذخیره می‌شود و با ویندوز ادغام نشده است.", style = MaterialTheme.typography.bodySmall)\n        OutlinedButton(onClick = { speech.speak("گزارش پیشرفت. " + completed + " از " + total + " مطلب تکمیل شده. " + tasks.count { !it.completed } + " کار باز.") }, modifier = Modifier.fillMaxWidth()) { Text("خواندن گزارش") }'
-          )
-          source = source.replace("fun QuizScreen(db: AppDatabase, userDb: UserDatabase, examMode: Boolean = false)", "fun QuizScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeech, examMode: Boolean = false)")
-          source = source.replace(
-              'val options = readStringArray(item.optionsJson ?: meta?.get("options")?.toString())',
-              'val options = readStringArray(item.optionsJson ?: meta?.get("options")?.toString())\n            OutlinedButton(onClick = { speech.speak(item.title.orEmpty() + ". " + cleanHtml(item.content.orEmpty()) + ". " + options.joinToString(". ")) }, modifier = Modifier.fillMaxWidth()) { Text("خواندن سؤال و گزینه‌ها") }'
-          )
-          source = source.replace("fun LabsScreen(db: AppDatabase, userDb: UserDatabase, onOpenItem: (String) -> Unit)", "fun LabsScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeech, onOpenItem: (String) -> Unit)")
-          source = source.replace(
-              'items(visible, key = { it.uid }) { item -> ContentItemCard(item) { onOpenItem(item.uid) } }',
-              'items(visible, key = { it.uid }) { item ->\n                Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {\n                    ContentItemCard(item) { onOpenItem(item.uid) }\n                    OutlinedButton(onClick = { speech.speak(item.title.orEmpty() + ". " + cleanHtml(item.summary.orEmpty()) + ". " + cleanHtml(item.content.orEmpty())) }, modifier = Modifier.fillMaxWidth()) { Text("خواندن راهنمای آزمایشگاه") }\n                }\n            }'
-          )
-          source = source.replace("fun BookmarksScreen(db: AppDatabase, userDb: UserDatabase, onOpenItem: (String) -> Unit)", "fun BookmarksScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeech, onOpenItem: (String) -> Unit)")
-          source = source.replace(
-              'Text(cleanHtml(item.summary), maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)',
-              'Text(cleanHtml(item.summary), maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)\n                            OutlinedButton(onClick = { speech.speak(item.title.orEmpty() + ". " + cleanHtml(item.summary.orEmpty())) }) { Text("خواندن") }'
-          )
-          required = [
-              "speech: PersianSpeech,",
-              "PersianVoiceInputButton { spoken -> quickCapture",
-              "val scope = rememberCoroutineScope()",
-              "fun NotesScreen(userDb: UserDatabase, speech: PersianSpeech)",
-              "fun PlannerScreen(userDb: UserDatabase, speech: PersianSpeech)",
-              "fun ProgressScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeech)",
-              "fun QuizScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeech, examMode: Boolean = false)",
-              "fun LabsScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeech, onOpenItem: (String) -> Unit)",
-              "fun BookmarksScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeech, onOpenItem: (String) -> Unit)",
-              "خواندن سؤال و گزینه‌ها",
-              "خواندن راهنمای آزمایشگاه"
-          ]
           missing = [token for token in required if token not in source]
           if missing:
-              raise SystemExit("Dashboard/voice integration incomplete: " + ", ".join(missing))
-          path.write_text(source, encoding="utf-8")
-          print("Dashboard expanded and Persian read-aloud wired into notes, tasks, reports, quizzes, labs and bookmarks.")
+              raise SystemExit("Tracked dashboard/voice integration is incomplete: " + ", ".join(missing))
+          print("Preserved the tracked 20-route dashboard, exact resume actions and complete Persian read-aloud controls.")
           PY
 
       - name: Preserve exact last-item resume after dashboard generation
