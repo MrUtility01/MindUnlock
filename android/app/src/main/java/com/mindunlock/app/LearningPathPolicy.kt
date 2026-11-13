@@ -19,19 +19,33 @@ object LearningPathPolicy {
         return StudySessionPlan(learn, practice, total - learn - practice)
     }
 
+    /**
+     * Returns the first unfinished chapter in curriculum order.
+     * Progress is indexed once (rather than rescanning the complete progress list
+     * for every chapter), and a fully completed curriculum has no resume target.
+     */
     fun nextIncompleteChapter(
         chapters: List<ChapterEntity>,
         progress: List<ProgressEntity>
     ): ChapterEntity? {
-        val ordered = chapters.sortedBy { it.orderIndex }
-        return ordered.firstOrNull { chapter ->
-            val chapterProgress = progress.filter { it.chapterId == chapter.id }
-            if (chapter.itemCount <= 0) {
-                chapterProgress.isEmpty() || chapterProgress.any { !it.completed }
-            } else {
-                chapterProgress.count { it.completed } < chapter.itemCount
+        if (chapters.isEmpty()) return null
+
+        val completedByChapter = progress.asSequence()
+            .filter { it.completed }
+            .groupBy { it.chapterId }
+            .mapValues { (_, records) -> records.asSequence().map { it.itemUid }.toHashSet().size }
+
+        return chapters.asSequence()
+            .sortedBy { it.orderIndex }
+            .firstOrNull { chapter ->
+                val completedCount = completedByChapter[chapter.id] ?: 0
+                if (chapter.itemCount <= 0) {
+                    progress.none { it.chapterId == chapter.id } ||
+                        progress.any { it.chapterId == chapter.id && !it.completed }
+                } else {
+                    completedCount < chapter.itemCount
+                }
             }
-        } ?: ordered.firstOrNull()
     }
 }
 
