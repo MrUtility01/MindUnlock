@@ -15,6 +15,26 @@ import androidx.room.RoomDatabase
 import kotlinx.coroutines.flow.Flow
 
 @Dao
+interface MindMapDao {
+    @Query("SELECT * FROM mind_map_nodes ORDER BY updatedAt DESC, id DESC") fun observeNodes(): Flow<List<MindMapNodeEntity>>
+    @Query("SELECT * FROM mind_map_edges ORDER BY createdAt DESC, id DESC") fun observeEdges(): Flow<List<MindMapEdgeEntity>>
+    @Query("SELECT * FROM mind_map_nodes") suspend fun getAllNodes(): List<MindMapNodeEntity>
+    @Query("SELECT * FROM mind_map_edges") suspend fun getAllEdges(): List<MindMapEdgeEntity>
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun insertNode(node: MindMapNodeEntity): Long
+    @Update suspend fun updateNode(node: MindMapNodeEntity)
+    @Query("DELETE FROM mind_map_nodes WHERE id = :id") suspend fun deleteNode(id: Long)
+    @Insert(onConflict = OnConflictStrategy.IGNORE) suspend fun insertEdge(edge: MindMapEdgeEntity): Long
+    @Query("DELETE FROM mind_map_edges WHERE id = :id") suspend fun deleteEdge(id: Long)
+    @Query("SELECT EXISTS(SELECT 1 FROM mind_map_nodes WHERE id = :id)") suspend fun nodeExists(id: Long): Boolean
+    @Transaction
+    suspend fun connect(sourceId: Long, targetId: Long, relationType: String): Boolean {
+        if (sourceId <= 0 || targetId <= 0 || sourceId == targetId) return false
+        if (!nodeExists(sourceId) || !nodeExists(targetId)) return false
+        return insertEdge(MindMapEdgeEntity(sourceNodeId = sourceId, targetNodeId = targetId, relationType = relationType.trim().take(80).ifBlank { "مرتبط با" })) != -1L
+    }
+}
+
+@Dao
 interface LearningProfileDao {
     @Query("SELECT * FROM learning_profile WHERE id = 1 LIMIT 1") suspend fun get(): LearningProfileEntity?
     @Query("SELECT * FROM learning_profile WHERE id = 1 LIMIT 1") fun observe(): Flow<LearningProfileEntity?>
@@ -270,7 +290,7 @@ interface LaterTopicDao {
     suspend fun delete(id: Long)
 }
 
-@Database(entities = [ProgressEntity::class, NoteEntity::class, BookmarkEntity::class, StudyTaskEntity::class, MindDumpEntity::class, JournalEntryEntity::class, LaterTopicEntity::class, LabStepProgressEntity::class, LearningSessionEntity::class, LabQuestionResponseEntity::class, LearningProfileEntity::class, LearningSessionFeedbackEntity::class, LearningStageProgressEntity::class], version = 12, exportSchema = false)
+@Database(entities = [ProgressEntity::class, NoteEntity::class, BookmarkEntity::class, StudyTaskEntity::class, MindDumpEntity::class, JournalEntryEntity::class, LaterTopicEntity::class, LabStepProgressEntity::class, LearningSessionEntity::class, LabQuestionResponseEntity::class, LearningProfileEntity::class, LearningSessionFeedbackEntity::class, LearningStageProgressEntity::class, MindMapNodeEntity::class, MindMapEdgeEntity::class], version = 13, exportSchema = false)
 abstract class UserDatabase : RoomDatabase() {
     abstract fun progressDao(): ProgressDao
     abstract fun noteDao(): NoteDao
@@ -285,6 +305,7 @@ abstract class UserDatabase : RoomDatabase() {
     abstract fun learningProfileDao(): LearningProfileDao
     abstract fun learningSessionFeedbackDao(): LearningSessionFeedbackDao
     abstract fun learningStageProgressDao(): LearningStageProgressDao
+    abstract fun mindMapDao(): MindMapDao
 
     companion object {
         val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -354,9 +375,20 @@ abstract class UserDatabase : RoomDatabase() {
                 db.execSQL("UPDATE learning_sessions SET resumedAt = startedAt WHERE endedAt IS NULL")
             }
         }
+                val MIGRATION_12_13 = object : Migration(12, 13) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS mind_map_nodes (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, title TEXT NOT NULL, description TEXT NOT NULL, nodeType TEXT NOT NULL, createdAt INTEGER NOT NULL, updatedAt INTEGER NOT NULL)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_mind_map_nodes_updatedAt ON mind_map_nodes(updatedAt)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_mind_map_nodes_nodeType ON mind_map_nodes(nodeType)")
+                db.execSQL("CREATE TABLE IF NOT EXISTS mind_map_edges (id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, sourceNodeId INTEGER NOT NULL, targetNodeId INTEGER NOT NULL, relationType TEXT NOT NULL, createdAt INTEGER NOT NULL, FOREIGN KEY(sourceNodeId) REFERENCES mind_map_nodes(id) ON UPDATE NO ACTION ON DELETE CASCADE, FOREIGN KEY(targetNodeId) REFERENCES mind_map_nodes(id) ON UPDATE NO ACTION ON DELETE CASCADE)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_mind_map_edges_sourceNodeId ON mind_map_edges(sourceNodeId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_mind_map_edges_targetNodeId ON mind_map_edges(targetNodeId)")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_mind_map_edges_sourceNodeId_targetNodeId ON mind_map_edges(sourceNodeId, targetNodeId)")
+            }
+        }
         @Volatile private var instance: UserDatabase? = null
         fun getInstance(context: Context): UserDatabase = instance ?: synchronized(this) {
-            instance ?: Room.databaseBuilder(context.applicationContext, UserDatabase::class.java, "mindunlock-user.db").addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12).build().also { instance = it }
+            instance ?: Room.databaseBuilder(context.applicationContext, UserDatabase::class.java, "mindunlock-user.db").addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13).build().also { instance = it }
         }
     }
 }
