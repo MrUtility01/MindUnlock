@@ -84,6 +84,7 @@ fun LearningEngineScreen(
             onDispose { sessionLifecycle.removeObserver(observer) }
         }
     }
+    var sessionStartMessage by rememberSaveable { mutableStateOf("") }
     var search by rememberSaveable { mutableStateOf("") }
     var selectedId by rememberSaveable {
         mutableStateOf(preferences.getString("learning_engine_selected_chapter", null).orEmpty())
@@ -136,11 +137,14 @@ fun LearningEngineScreen(
                     Text("ثبت زمان واقعی یادگیری", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     if (activeSession == null) {
                         Text("زمان شروع با زدن دکمه ثبت می‌شود؛ با خروج از برنامه یا پایان دستی، زمان پایان ثبت و مدت جلسه محاسبه می‌شود.")
+                        if (sessionStartMessage.isNotBlank()) {
+                            Text(sessionStartMessage, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                        }
                         Button(
                             onClick = {
                                 val target = selected ?: nextChapter
                                 scope.launch {
-                                    userDb.learningSessionDao().insert(
+                                    val startedId = userDb.learningSessionDao().startIfNone(
                                         LearningSessionEntity(
                                             chapterId = target?.id,
                                             topicTitle = target?.title ?: "مطالعه آزاد",
@@ -148,6 +152,11 @@ fun LearningEngineScreen(
                                             startedAt = System.currentTimeMillis()
                                         )
                                     )
+                                    sessionStartMessage = if (startedId == null) {
+                                        "یک جلسهٔ یادگیری فعال وجود دارد؛ ابتدا همان جلسه را پایان بده."
+                                    } else {
+                                        ""
+                                    }
                                 }
                             },
                             modifier = Modifier.fillMaxWidth()
