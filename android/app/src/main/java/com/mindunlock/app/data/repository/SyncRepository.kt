@@ -77,7 +77,10 @@ class SyncRepository(context: Context) {
         .retryOnConnectionFailure(true)
         .build()
 
-    fun savedHost(): String = prefs.getString("host", "") ?: ""
+    fun savedHost(): String {
+        val host = prefs.getString("host", "") ?: ""
+        return if (host.isNotBlank() && prefs.getBoolean("https", false)) "https://$host" else host
+    }
     fun savedPort(): Int = prefs.getInt("port", 82)
 
     /** Runs explicit network, HTTP service, authentication and manifest checks. */
@@ -92,7 +95,7 @@ class SyncRepository(context: Context) {
             true
         } catch (_: Exception) { false }
         if (!tcp) return@withContext ConnectionDiagnostics(false, false, false, false, "اتصال TCP برقرار نشد. IP، پورت، روشن بودن برنامه ویندوز، شبکه مشترک و Firewall را بررسی کن.")
-        val base = baseUrl(clean, port)
+        val base = baseUrl(host, port)
         val http = try {
             val req = Request.Builder().url("$base/api/auth/status").get().build()
             client.newCall(req).execute().use { it.isSuccessful }
@@ -146,7 +149,9 @@ class SyncRepository(context: Context) {
         database.serverConfigDao().upsert(
             ServerConfigEntity(host = cleanHost(host), port = port, lastConnectedAt = System.currentTimeMillis())
         )
-        prefs.edit().putString("host", cleanHost(host)).putInt("port", port).apply()
+        prefs.edit().putString("host", cleanHost(host))
+            .putBoolean("https", baseUrl(host, port).startsWith("https://"))
+            .putInt("port", port).apply()
         result
     }
 
@@ -296,16 +301,11 @@ class SyncRepository(context: Context) {
             normalized.split('/').none { it.isBlank() || it == "." || it == ".." }
     }
 
-    private fun baseUrl(host: String, port: Int): String {
-        val clean = cleanHost(host)
-        require(clean.isNotBlank()) { "آدرس رایانه را وارد کن." }
-        require(port in 1..65535) { "پورت باید بین ۱ تا ۶۵۵۳۵ باشد." }
-        require(!clean.contains('/') && !clean.contains('@')) { "فقط IP یا نام میزبان را وارد کن؛ بدون مسیر یا اطلاعات ورود." }
-        return "http://$clean:$port"
-    }
+    private fun baseUrl(host: String, port: Int): String =
+        SyncEndpointPolicy.baseUrl(host, port)
 
-    private fun cleanHost(host: String): String = host.trim()
-        .removePrefix("http://").removePrefix("https://").trimEnd('/')
+    private fun cleanHost(host: String): String =
+        SyncEndpointPolicy.cleanHost(host)
 
     private fun getJson(url: String): JsonElement = request(url, null)
 
