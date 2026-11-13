@@ -1792,7 +1792,10 @@ jobs:
           }
           '''
 
-          source = source[:start] + settings + "\n\n" + source[end:]
+          if "var showDeletePersonalDataDialog" not in source or "userDb: UserDatabase" not in source:
+              source = source[:start] + settings + "\n\n" + source[end:]
+          else:
+              print("Preserving tracked privacy-aware SettingsScreen instead of replacing it.")
           required_imports = [
               "import androidx.compose.foundation.clickable",
               "import androidx.compose.foundation.layout.Arrangement",
@@ -1835,9 +1838,12 @@ jobs:
 
           main = main_path.read_text(encoding="utf-8")
           old_call = '"settings" -> SettingsScreen(speech, preferences, initialTheme, onThemeChange, onFontScaleChange)'
-          new_call = '"settings" -> SettingsScreen(speech, preferences, initialTheme, onThemeChange, onFontScaleChange, onLockApp, { screen = "sync" })'
+          new_call = '"settings" -> SettingsScreen(speech, userDatabase, preferences, initialTheme, onThemeChange, onFontScaleChange, onLockApp, { screen = "sync" })'
+          legacy_call = '"settings" -> SettingsScreen(speech, preferences, initialTheme, onThemeChange, onFontScaleChange, onLockApp, { screen = "sync" })'
           if old_call in main:
               main = main.replace(old_call, new_call, 1)
+          elif legacy_call in main:
+              main = main.replace(legacy_call, new_call, 1)
           elif new_call not in main:
               raise SystemExit("Could not update SettingsScreen navigation call")
           main_path.write_text(main, encoding="utf-8")
