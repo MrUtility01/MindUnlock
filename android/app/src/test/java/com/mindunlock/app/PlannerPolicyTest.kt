@@ -82,7 +82,7 @@ class PlannerPolicyTest {
             StudyTaskEntity(id = 1, title = "انجام‌شده", dueAt = 1000L, completed = true)
         ))
         assertEquals(null, PlannerPolicy.moveIncompleteTaskToTomorrow(
-            StudyTaskEntity(id = 2, title = "بدون موعد"), 0L
+            StudyTaskEntity(id = 2, title = "بدون موعد")
         ))
     }
 }
