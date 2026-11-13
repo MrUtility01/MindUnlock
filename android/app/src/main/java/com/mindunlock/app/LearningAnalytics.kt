@@ -85,7 +85,22 @@ object LearningAnalytics {
     ): LearningAnalyticsSnapshot {
         val verified = items.filter { it.sourceStatus == "verified" }
         val validIds = verified.mapTo(HashSet()) { it.uid }
-        val records = progress.filter { it.itemUid in validIds }
+        // Guard analytics against malformed or legacy rows without changing persisted learning data.
+        val records = progress.asSequence()
+            .filter { it.itemUid in validIds }
+            .map { record ->
+                val attempts = record.attempts.coerceAtLeast(0)
+                val correct = record.correct.coerceIn(0, attempts)
+                val wrong = record.wrong.coerceIn(0, attempts - correct)
+                record.copy(
+                    attempts = attempts,
+                    correct = correct,
+                    wrong = wrong,
+                    quality = record.quality.coerceIn(0, 5),
+                    intervalDays = record.intervalDays.coerceAtLeast(0)
+                )
+            }
+            .toList()
         val byItem = records.associateBy { it.itemUid }
         val totalAttempts = records.sumOf { it.attempts }
         val totalCorrect = records.sumOf { it.correct }
@@ -128,7 +143,8 @@ object LearningAnalytics {
         }
         val completedSessions = sessions.filter { session ->
             val endedAt = session.endedAt
-            endedAt != null && endedAt >= session.startedAt
+            session.startedAt <= now && endedAt != null &&
+                endedAt >= session.startedAt && endedAt <= now
         }
         val totalStudySeconds = completedSessions.sumOf(::elapsedSessionSeconds)
         val totalStudyMinutes = totalStudySeconds / 60L
