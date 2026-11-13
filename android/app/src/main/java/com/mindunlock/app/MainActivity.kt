@@ -381,6 +381,10 @@ private fun MoreScreen(onNavigate: (String) -> Unit) {
             ActionTile("تمرین", "quiz", onNavigate, Modifier.weight(1f))
             ActionTile("آزمون", "exam", onNavigate, Modifier.weight(1f))
         }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ActionTile("آزمایشگاه عملی", "labs", onNavigate, Modifier.weight(1f))
+            ActionTile("مرور هوشمند", "review", onNavigate, Modifier.weight(1f))
+        }
         Text("مدیریت ذهن و برنامه‌ریزی", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ActionTile("برنامه‌ریز", "planner", onNavigate, Modifier.weight(1f))
