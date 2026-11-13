@@ -57,7 +57,7 @@ fun MindDumpScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
     var pendingDeleteEntryId by rememberSaveable { mutableStateOf<Long?>(null) }
     var pendingEditEntryId by rememberSaveable { mutableStateOf<Long?>(null) }
     var editDraft by rememberSaveable { mutableStateOf("") }
-    fun runEntryAction(entryId: Long, successMessage: String, action: suspend () -> Unit, onSuccess: () -> Unit = {}) {
+    fun runEntryAction(entryId: Long, successMessage: String, onSuccess: () -> Unit = {}, action: suspend () -> Unit) {
         if (entryId in processingEntryIds) return
         processingEntryIds = processingEntryIds + entryId
         scope.launch {
