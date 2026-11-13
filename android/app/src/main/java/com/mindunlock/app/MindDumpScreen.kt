@@ -73,8 +73,10 @@ fun MindDumpScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
             }
         }
     }
+    val inboxCount = entries.count { it.status == "inbox" }
+    val archivedCount = entries.count { it.status == "archived" }
     val visibleEntries = entries.filter { entry ->
-        (entry.status == "archived") == showArchived &&
+        (if (showArchived) entry.status == "archived" else entry.status == "inbox") &&
             (searchQuery.isBlank() ||
                 entry.content.contains(searchQuery.trim(), ignoreCase = true) ||
                 entry.category.contains(searchQuery.trim(), ignoreCase = true))
@@ -153,8 +155,8 @@ fun MindDumpScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
         ) { Text(if (isSavingDraft) "در حال ثبت…" else "ثبت در صندوق ورودی") }
         if (message.isNotBlank()) Text(message, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(selected = !showArchived, onClick = { showArchived = false }, label = { Text("ورودی‌ها (" + entries.count { it.status != "archived" } + ")") })
-            FilterChip(selected = showArchived, onClick = { showArchived = true }, label = { Text("بایگانی (" + entries.count { it.status == "archived" } + ")") })
+            FilterChip(selected = !showArchived, onClick = { showArchived = false }, label = { Text("صندوق ورودی (" + inboxCount + ")") })
+            FilterChip(selected = showArchived, onClick = { showArchived = true }, label = { Text("بایگانی (" + archivedCount + ")") })
         }
         }
         OutlinedTextField(
@@ -172,7 +174,8 @@ fun MindDumpScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
         )
         Text(
             "نمایش " + visibleEntries.size + " مورد از " +
-                entries.count { (it.status == "archived") == showArchived } + " مورد",
+                if (showArchived) archivedCount else inboxCount
+                + " مورد",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
