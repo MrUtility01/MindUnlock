@@ -295,23 +295,11 @@ fun LaterTopicsScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
                                 topicId,
                                 if (pendingTopic.sourceMindDumpId == null) "موضوع حذف شد." else "موضوع حذف شد و ورودی اصلی به صندوق بازگشت."
                             ) {
-                                userDatabase.withTransaction {
-                                    val sourceId = pendingTopic.sourceMindDumpId
-                                    val sourceExists = sourceId != null &&
-                                        userDatabase.mindDumpDao().getAll().any { it.id == sourceId }
-                                    if (sourceExists) {
-                                        userDatabase.mindDumpDao().updateStatus(
-                                            sourceId!!, "inbox", System.currentTimeMillis(), null
-                                        )
-                                    } else if (sourceId != null) {
-                                        userDatabase.mindDumpDao().insert(
-                                            MindDumpEntity(
-                                                content = listOf(pendingTopic.title, pendingTopic.details)
-                                                    .filter { it.isNotBlank() }.joinToString("\n\n"),
-                                                category = "learning"
-                                            )
-                                        )
+                                if (pendingTopic.sourceMindDumpId != null) {
+                                    check(userDatabase.mindDumpDao().returnLaterTopicToInbox(topicId) != null) {
+                                        "Later Topic no longer exists"
                                     }
+                                } else {
                                     userDatabase.laterTopicDao().delete(topicId)
                                 }
                             }
