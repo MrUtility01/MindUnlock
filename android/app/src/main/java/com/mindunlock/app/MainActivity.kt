@@ -400,10 +400,7 @@ private fun MoreScreen(onNavigate: (String) -> Unit) {
             ActionTile("موضوع‌ها", "courses", onNavigate, Modifier.weight(1f))
             ActionTile("آرشیو دانش", "archive", onNavigate, Modifier.weight(1f))
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            ActionTile("نقشه ذهنی و گراف دانش", "mindmap", onNavigate, Modifier.weight(1f))
-            ActionTile("گزارش پیشرفت", "progress", onNavigate, Modifier.weight(1f))
-        }
+        ActionTile("نقشه ذهنی و گراف دانش", "mindmap", onNavigate, Modifier.fillMaxWidth())
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ActionTile("تخلیه ذهن / صندوق ورودی", "inbox", onNavigate, Modifier.weight(1f))
             ActionTile("دفتر یادداشت", "notes", onNavigate, Modifier.weight(1f))
