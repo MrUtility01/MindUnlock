@@ -388,7 +388,8 @@ fun DashboardScreen(
         }
         val lastCompletedSession = sessions.firstOrNull { session ->
             val endedAt = session.endedAt
-            endedAt != null && endedAt > session.startedAt
+            session.startedAt <= now && endedAt != null &&
+                endedAt >= session.startedAt && endedAt <= now
         }
         val lastSessionReflection = lastCompletedSession?.let { session -> sessionFeedback.firstOrNull { it.sessionId == session.id } }
         if (lastCompletedSession == null) {
@@ -2046,7 +2047,12 @@ fun ProgressScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeech)
         }
         Text("بازخورد تجربه یادگیری", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         Text("این بازخورد خوداظهاری است و از امتیاز آزمون یا سنجش عملکرد جدا نگه داشته می‌شود.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        val completedSessionsForFeedback = sessions.filter { it.endedAt != null }.take(5)
+        val completedSessionsForFeedback = sessions.filter { session ->
+            val endedAt = session.endedAt
+            session.startedAt <= System.currentTimeMillis() &&
+                endedAt != null && endedAt >= session.startedAt &&
+                endedAt <= System.currentTimeMillis()
+        }.take(5)
         if (completedSessionsForFeedback.isEmpty()) {
             EmptyMessage("پس از پایان اولین جلسه، می‌توانی تجربه یادگیری را ثبت کنی.")
         } else {
