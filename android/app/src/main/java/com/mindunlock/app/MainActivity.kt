@@ -53,11 +53,13 @@ import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Notes
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -104,7 +106,7 @@ class MainActivity : ComponentActivity() {
         val userDatabase = UserDatabase.getInstance(this)
         
         setContent {
-            var theme by remember { mutableStateOf(preferences.getString("theme", "dark") ?: "dark") }
+            var theme by remember { mutableStateOf(preferences.getString("theme", "light") ?: "light") }
             var fontScale by remember { mutableStateOf(preferences.getFloat("font_scale", 1f)) }
             val density = LocalDensity.current
             var unlocked by rememberSaveable { mutableStateOf(false) }
@@ -229,6 +231,7 @@ private fun MindUnlockRoot(
         "backup" -> "پشتیبان‌گیری و بازیابی"
         "bookmarks" -> "نشانک‌ها"
         "settings" -> "تنظیمات"
+        "about" -> "درباره ما"
         "profile" -> "پروفایل یادگیری"
         "learning" -> "موتور یادگیری"
         "sync" -> "اتصال و دریافت محتوا"
@@ -240,7 +243,7 @@ private fun MindUnlockRoot(
             "reader" -> previousScreen
             "chapter" -> "subject"
             "subject" -> "courses"
-            "sync", "settings", "profile", "learning", "more", "quiz", "exam", "review", "labs", "planner", "progress", "bookmarks", "inbox", "journal", "later", "backup", "archive" -> "home"
+            "sync", "settings", "profile", "learning", "more", "quiz", "exam", "review", "labs", "planner", "progress", "bookmarks", "inbox", "journal", "later", "backup", "archive", "about" -> "home"
             else -> "home"
         }
     }
@@ -286,6 +289,11 @@ private fun MindUnlockRoot(
                                 text = { Text("تنظیمات") },
                                 leadingIcon = { Icon(Icons.Default.Settings, contentDescription = null) },
                                 onClick = { showTopMenu = false; screen = "settings" }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("درباره ما") },
+                                leadingIcon = { Icon(Icons.Default.Info, contentDescription = null) },
+                                onClick = { showTopMenu = false; screen = "about" }
                             )
                             DropdownMenuItem(
                                 text = { Text("قفل برنامه") },
@@ -350,6 +358,7 @@ private fun MindUnlockRoot(
                 "backup" -> BackupRestoreScreen(userDatabase)
                 "bookmarks" -> BookmarksScreen(repository.database, userDatabase, speech, onOpenItem = { uid -> selectedItem = uid; previousScreen = "bookmarks"; screen = "reader" })
                 "settings" -> SettingsScreen(speech, preferences, initialTheme, onThemeChange, onFontScaleChange, onLockApp, { screen = "sync" })
+                "about" -> AboutScreen()
                 "profile" -> LearningProfileScreen(preferences, userDatabase)
                 "learning" -> LearningEngineScreen(repository.database, userDatabase, preferences, onOpenChapter = { id -> selectedChapter = id; screen = "chapter" }, onNavigate = { screen = it })
                 "sync" -> SyncScreen(repository, onDone = { screen = "courses" })
@@ -397,6 +406,9 @@ private fun MoreScreen(onNavigate: (String) -> Unit) {
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ActionTile("پشتیبان‌گیری و بازیابی", "backup", onNavigate, Modifier.weight(1f))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ActionTile("درباره MindUnlock", "about", onNavigate, Modifier.weight(1f))
         }
     }
 }
@@ -646,5 +658,47 @@ internal object OfflinePersianSpeech {
         } finally {
             connection.disconnect()
         }
+    }
+}
+
+
+@Composable
+private fun AboutScreen() {
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("MindUnlock", style = MaterialTheme.typography.headlineLarge, color = MaterialTheme.colorScheme.primary)
+                Text("فضایی برای بازسازی تمرکز، سامان‌دهی ذهن و یادگیری پیوسته", style = MaterialTheme.typography.titleMedium)
+                Text("MindUnlock یک ابزار شخصیِ آفلاین‌محور است که یادگیری، ثبت افکار، برنامه‌ریزی و بازبینی پیشرفت را در یک محیط یکپارچه کنار هم قرار می‌دهد.", style = MaterialTheme.typography.bodyMedium)
+            }
+        }
+        Text("درباره سازنده", style = MaterialTheme.typography.titleLarge)
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                Text("Mr Utility", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
+                Text("متخصص فناوری اطلاعات، شبکه و زیرساخت", style = MaterialTheme.typography.titleMedium)
+                Text("بیش از ۱۵ سال سابقه تخصصی در حوزه فناوری اطلاعات و زیرساخت‌های شبکه", style = MaterialTheme.typography.bodyLarge)
+                androidx.compose.material3.HorizontalDivider()
+                Text("سوابق تحصیلی", style = MaterialTheme.typography.titleMedium)
+                Text("• کاردانی اینترنت و فناوری شبکه‌های گسترده", style = MaterialTheme.typography.bodyMedium)
+                Text("• کارشناسی مهندسی فناوری شبکه‌های گسترده", style = MaterialTheme.typography.bodyMedium)
+                androidx.compose.material3.HorizontalDivider()
+                Text("حوزه‌های تخصصی", style = MaterialTheme.typography.titleMedium)
+                Text("شبکه و زیرساخت سازمانی، سرویس‌های ویندوز و اکتیو دایرکتوری، لینوکس، امنیت و نگهداری سامانه‌های فناوری اطلاعات", style = MaterialTheme.typography.bodyMedium)
+            }
+        }
+        Text("اصول محصول", style = MaterialTheme.typography.titleLarge)
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("• حفظ حریم خصوصی و نگهداری محلی اطلاعات شخصی")
+                Text("• طراحی فارسی و راست‌چین")
+                Text("• امکان استفاده آفلاین پس از دریافت محتوای موردنیاز")
+                Text("• توسعه مرحله‌ای، ماژولار و قابل آزمون")
+            }
+        }
+        Text("این برنامه برای کمک به تمرکز، یادگیری عمیق و تبدیل آموخته‌ها به اقدام عملی ساخته می‌شود.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
