@@ -21,7 +21,6 @@ internal object SyncEndpointPolicy {
     }
 
     fun cleanHost(input: String): String = input.trim()
-        .removePrefix("http://").removePrefix("https://")
-        .removePrefix("HTTP://").removePrefix("HTTPS://")
+        .replaceFirst(Regex("(?i)^https?://"), "")
         .trimEnd('/')
 }
