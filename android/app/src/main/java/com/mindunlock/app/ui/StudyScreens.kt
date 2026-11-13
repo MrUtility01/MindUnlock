@@ -364,7 +364,7 @@ fun DashboardScreen(
             ResumeActionKind.ACTIVE_TOPIC -> onNavigate("later")
             ResumeActionKind.RESUME_ITEM -> resumeAction.targetId?.let { onContinue("item:$it") }
             ResumeActionKind.RESUME_CHAPTER -> resumeAction.targetId?.let { onContinue("chapter:$it") }
-            ResumeActionKind.START_LEARNING -> onNavigate("courses")
+            ResumeActionKind.START_LEARNING -> onNavigate("learning")
         }
     }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -493,6 +493,22 @@ fun DashboardScreen(
         Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
             ActionTile("آرشیو دانش", "archive", onNavigate, Modifier.weight(1f))
             ActionTile("گزارش پیشرفت", "progress", onNavigate, Modifier.weight(1f))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+            ActionTile("دفتر روزانه", "journal", onNavigate, Modifier.weight(1f))
+            ActionTile("نشانک‌ها", "bookmarks", onNavigate, Modifier.weight(1f))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+            ActionTile("موتور یادگیری", "learning", onNavigate, Modifier.weight(1f))
+            ActionTile("پروفایل یادگیری", "profile", onNavigate, Modifier.weight(1f))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+            ActionTile("پشتیبان‌گیری و بازیابی", "backup", onNavigate, Modifier.weight(1f))
+            ActionTile("تنظیمات", "settings", onNavigate, Modifier.weight(1f))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+            ActionTile("اتصال و دریافت محتوا", "sync", onNavigate, Modifier.weight(1f))
+            ActionTile("درباره ما", "about", onNavigate, Modifier.weight(1f))
         }
         if (feedbackSession != null) {
             Card(Modifier.fillMaxWidth()) {
