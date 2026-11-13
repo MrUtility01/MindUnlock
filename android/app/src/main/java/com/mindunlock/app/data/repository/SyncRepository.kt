@@ -185,7 +185,9 @@ class SyncRepository(context: Context) {
                 failures += "${chapter.title}: ${error.message ?: "خطای نامشخص"}"
             }
         }
-        prefs.edit().putString("host", cleanHost(host)).putInt("port", port).apply()
+        prefs.edit().putString("host", cleanHost(host))
+            .putBoolean("https", baseUrl(host, port).startsWith("https://"))
+            .putInt("port", port).apply()
         SyncResult(downloaded, skipped, failures)
     }
 
