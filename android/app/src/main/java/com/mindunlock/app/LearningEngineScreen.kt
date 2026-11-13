@@ -36,6 +36,7 @@ import com.mindunlock.app.data.local.AppDatabase
 import com.mindunlock.app.data.local.UserDatabase
 import com.mindunlock.app.data.local.LearningSessionEntity
 import com.mindunlock.app.data.local.LearningStageProgressEntity
+import com.mindunlock.app.data.local.LaterTopicEntity
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.LifecycleEventObserver
@@ -53,6 +54,11 @@ fun LearningEngineScreen(
     val progress by userDb.progressDao().observeAll().collectAsState(initial = emptyList())
     val activeSession by userDb.learningSessionDao().observeActive().collectAsState(initial = null)
     val sessions by userDb.learningSessionDao().observeAll().collectAsState(initial = emptyList())
+    val mindDumpEntries by userDb.mindDumpDao().observeAll().collectAsState(initial = emptyList())
+    val laterTopics by userDb.laterTopicDao().observeAll().collectAsState(initial = emptyList())
+    val personalLearningTopics = remember(mindDumpEntries, laterTopics) {
+        LearningPersonalTopicPolicy.topicsForLearningEntries(laterTopics, mindDumpEntries)
+    }
     val learningProfile by userDb.learningProfileDao().observe().collectAsState(initial = null)
     val scope = rememberCoroutineScope()
     val learningStrategy = remember(learningProfile) {
@@ -196,6 +202,73 @@ fun LearningEngineScreen(
                                 val elapsedSeconds = ((session.endedAt ?: session.startedAt) - session.startedAt).coerceAtLeast(0L) / 1000L
                                 Text("مدت: " + formatSessionDuration(elapsedSeconds), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                             }
+                        }
+                    }
+                }
+            }
+        }
+        item {
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("موضوعات یادگیری شخصی", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text(
+                        "ورودی‌های دسته‌بندی‌شدهٔ یادگیری که به «موضوع برای بعد» تبدیل شده‌اند، اینجا در دسترس‌اند.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    if (personalLearningTopics.isEmpty()) {
+                        Text("هنوز موضوع یادگیری شخصی ثبت نشده است. در تخلیه ذهن، دستهٔ «یادگیری» را انتخاب و ورودی را به موضوع برای بعد تبدیل کن.")
+                    } else {
+                        Text("تعداد موضوع‌های باز: ${personalLearningTopics.size}", style = MaterialTheme.typography.labelMedium)
+                        personalLearningTopics.take(5).forEach { topic ->
+                            Card(Modifier.fillMaxWidth()) {
+                                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Text(topic.title, fontWeight = FontWeight.SemiBold)
+                                    if (topic.details.isNotBlank()) {
+                                        Text(
+                                            topic.details,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 2
+                                        )
+                                    }
+                                    Text(
+                                        if (topic.status == "active") "در حال پیگیری" else "برای مطالعه بعدی",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    Button(
+                                        onClick = {
+                                            val sourceId = topic.sourceMindDumpId ?: return@Button
+                                            scope.launch {
+                                                val startedId = userDb.learningSessionDao().startIfNone(
+                                                    LearningSessionEntity(
+                                                        topicTitle = topic.title,
+                                                        source = "mind_dump:$sourceId",
+                                                        startedAt = System.currentTimeMillis()
+                                                    )
+                                                )
+                                                sessionStartMessage = if (startedId == null) {
+                                                    "یک جلسهٔ یادگیری فعال وجود دارد؛ ابتدا همان جلسه را پایان بده."
+                                                } else {
+                                                    ""
+                                                }
+                                            }
+                                        },
+                                        enabled = activeSession == null,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text(if (activeSession == null) "شروع جلسه برای این موضوع" else "ابتدا جلسه فعلی را پایان بده")
+                                    }
+                                }
+                            }
+                        }
+                        if (personalLearningTopics.size > 5) {
+                            Text(
+                                "برای مدیریت همهٔ موضوع‌ها، از بخش «موضوعات برای بعد» استفاده کن.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                     }
                 }

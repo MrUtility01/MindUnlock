@@ -612,4 +612,55 @@ class UserDatabaseMindDumpMigrationTest {
             migrated.close()
         }
     }
+
+    @Test
+    fun personalLearningTopicStartsAtMostOneActiveSessionAndKeepsSourceTrace() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(context, UserDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+        try {
+            val sourceId = db.mindDumpDao().insert(
+                MindDumpEntity(
+                    content = "مرور DNS داخلی",
+                    category = "learning",
+                    status = "later"
+                )
+            )
+            val topicId = db.laterTopicDao().insert(
+                LaterTopicEntity(
+                    title = "مرور DNS داخلی",
+                    details = "بررسی رکوردهای A و PTR",
+                    sourceMindDumpId = sourceId
+                )
+            )
+            val topic = db.laterTopicDao().getAll().single()
+            assertEquals(topicId, topic.id)
+            assertEquals(sourceId, topic.sourceMindDumpId)
+
+            val firstSessionId = db.learningSessionDao().startIfNone(
+                LearningSessionEntity(
+                    topicTitle = topic.title,
+                    source = "mind_dump:$sourceId",
+                    startedAt = 30_000L
+                )
+            )
+            val duplicateSessionId = db.learningSessionDao().startIfNone(
+                LearningSessionEntity(
+                    topicTitle = topic.title,
+                    source = "mind_dump:$sourceId",
+                    startedAt = 31_000L
+                )
+            )
+
+            assertEquals(true, firstSessionId != null)
+            assertEquals(null, duplicateSessionId)
+            val active = db.learningSessionDao().getActive()
+            assertEquals(firstSessionId, active?.id)
+            assertEquals("مرور DNS داخلی", active?.topicTitle)
+            assertEquals("mind_dump:$sourceId", active?.source)
+            assertEquals(1, db.learningSessionDao().getAll().size)
+        } finally {
+            db.close()
+        }
+    }
 }
