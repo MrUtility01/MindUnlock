@@ -1286,6 +1286,14 @@ jobs:
           if start < 0 or end < 0:
               raise SystemExit("Could not isolate SettingsScreen safely")
           settings = source[start:end]
+          if (
+              "showResetDialog" in settings
+              and "appVersion" in settings
+              and "CrashDiagnostics" in settings
+              and "کپی اطلاعات فنی" in settings
+          ):
+              print("Settings reset and diagnostics are already implemented; skipping legacy settings patch.")
+              raise SystemExit(0)
 
           state_marker = "    val voices = speech.voiceOptions\n"
           state_code = """    val voices = speech.voiceOptions
