@@ -7,9 +7,15 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -45,6 +51,10 @@ fun MindMapScreen(userDb: UserDatabase) {
     val journal by userDb.journalEntryDao().observeAll().collectAsState(initial = emptyList())
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     var query by rememberSaveable { mutableStateOf("") }
+    var selectedGraphNodeId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var graphScale by rememberSaveable { mutableStateOf(1f) }
+    var graphPanX by rememberSaveable { mutableStateOf(0f) }
+    var graphPanY by rememberSaveable { mutableStateOf(0f) }
     var status by rememberSaveable { mutableStateOf("") }
     var showNodeDialog by rememberSaveable { mutableStateOf(false) }
     var showEdgeDialog by rememberSaveable { mutableStateOf(false) }
