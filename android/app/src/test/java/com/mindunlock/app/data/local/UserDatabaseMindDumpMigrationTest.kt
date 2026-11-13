@@ -756,4 +756,30 @@ class UserDatabaseMindDumpMigrationTest {
             db.close()
         }
     }
+    @Test
+    fun inboxClarificationUpdatesTextAndCategoryTogether() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(context, UserDatabase::class.java)
+            .allowMainThreadQueries()
+            .build()
+        try {
+            val id = db.mindDumpDao().insert(
+                MindDumpEntity(content = "ایده اولیه", category = "thought")
+            )
+            db.mindDumpDao().updateContentAndCategory(
+                id = id,
+                content = "بررسی و پیاده‌سازی DNS داخلی",
+                category = "learning",
+                updatedAt = 42_000L
+            )
+            val updated = db.mindDumpDao().getById(id)
+            assertEquals("بررسی و پیاده‌سازی DNS داخلی", updated?.content)
+            assertEquals("learning", updated?.category)
+            assertEquals(42_000L, updated?.updatedAt)
+            assertEquals("inbox", updated?.status)
+        } finally {
+            db.close()
+        }
+    }
+
+
 }
