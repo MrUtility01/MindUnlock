@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.room.withTransaction
 import com.mindunlock.app.data.local.MindDumpEntity
 import com.mindunlock.app.data.local.NoteEntity
+import com.mindunlock.app.data.local.MindDumpWorkflow
 import com.mindunlock.app.data.local.UserDatabase
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
@@ -218,14 +219,16 @@ fun MindDumpScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
                             }
                         },
                         onSaveAsNote = {
-                            runEntryAction(entry.id, "در دفتر یادداشت ذخیره شد.") {
-                                userDatabase.withTransaction {
-                                    userDatabase.noteDao().upsert(
-                                        NoteEntity(title = "یادداشت از تخلیه ذهن", body = entry.content)
-                                    )
-                                    userDatabase.mindDumpDao().updateStatus(
-                                        entry.id, "note", System.currentTimeMillis(), null
-                                    )
+                            runEntryAction(entry.id, "در دفتر یادداشت ذخیره شد؛ پیوند منبع حفظ شد.") {
+                                check(MindDumpWorkflow.convertToNote(userDatabase, entry.id) != null) {
+                                    "Mind Dump entry no longer exists"
+                                }
+                            }
+                        },
+                        onSaveAsJournal = {
+                            runEntryAction(entry.id, "در دفتر روزانه ذخیره شد؛ پیوند منبع حفظ شد.") {
+                                check(MindDumpWorkflow.convertToJournal(userDatabase, entry.id) != null) {
+                                    "Mind Dump entry no longer exists"
                                 }
                             }
                         },
@@ -357,6 +360,7 @@ private fun MindDumpCard(
     onConvertToLater: (Int) -> Unit,
     onConvertToTask: () -> Unit,
     onSaveAsNote: () -> Unit,
+    onSaveAsJournal: () -> Unit,
     onArchive: () -> Unit,
     onRestore: () -> Unit,
     onDelete: () -> Unit
@@ -378,6 +382,7 @@ private fun MindDumpCard(
     val statusLabel = when (entry.status) {
         "task" -> "منتقل‌شده به برنامه‌ریز"
         "note" -> "ذخیره‌شده در یادداشت‌ها"
+        "journal" -> "ذخیره‌شده در دفتر روزانه"
         "archived" -> "بایگانی‌شده"
         "later" -> "ذخیره‌شده در موضوعات برای بعد"
         else -> "در صندوق ورودی"
@@ -404,8 +409,11 @@ private fun MindDumpCard(
             } else if (entry.status == "inbox" || entry.status == "learning" || entry.status == "thought" || entry.status == "idea") {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick = onConvertToTask, enabled = !busy) { Text(if (busy) "در حال انجام…" else "تبدیل به کار") }
-                        OutlinedButton(onClick = onSaveAsNote, enabled = !busy) { Text("ذخیره یادداشت") }
+                        OutlinedButton(onClick = onConvertToTask, enabled = !busy, modifier = Modifier.weight(1f)) { Text(if (busy) "در حال انجام…" else "تبدیل به کار") }
+                        OutlinedButton(onClick = onSaveAsNote, enabled = !busy, modifier = Modifier.weight(1f)) { Text("ذخیره یادداشت") }
+                    }
+                    OutlinedButton(onClick = onSaveAsJournal, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                        Text("ثبت در دفتر روزانه")
                     }
                     Text("تصمیم برای ادامه:", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
