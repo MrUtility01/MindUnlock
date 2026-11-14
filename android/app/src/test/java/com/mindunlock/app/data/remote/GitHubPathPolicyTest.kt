@@ -22,6 +22,14 @@ class GitHubPathPolicyTest {
     }
 
     @Test
+    fun onlyAllowsKnownTextFileTypesForPreview() {
+        assertEquals(true, GitHubPathPolicy.isPreviewableTextPath("docs/guide.md"))
+        assertEquals(true, GitHubPathPolicy.isPreviewableTextPath("README"))
+        assertEquals(false, GitHubPathPolicy.isPreviewableTextPath("assets/photo.png"))
+        assertEquals(false, GitHubPathPolicy.isPreviewableTextPath("archive.zip"))
+    }
+
+    @Test
     fun rejectsTraversalAndEmptySegments() {
         assertThrows(IllegalArgumentException::class.java) {
             GitHubPathPolicy.normalize("docs/../secrets.txt")
