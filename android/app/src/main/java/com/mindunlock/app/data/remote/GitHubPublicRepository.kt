@@ -7,6 +7,8 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.net.URLEncoder
+import java.nio.ByteBuffer
+import java.nio.charset.CodingErrorAction
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.TimeUnit
 
@@ -65,6 +67,7 @@ class GitHubPublicRepository(
     suspend fun readTextFile(path: String): GitHubPublicFile = withContext(Dispatchers.IO) {
         val safePath = GitHubPathPolicy.normalize(path)
         require(safePath.isNotBlank()) { "مسیر فایل خالی است." }
+        require(GitHubPathPolicy.isPreviewableTextPath(safePath)) { "پیش‌نمایش این نوع فایل متنی پشتیبانی نمی‌شود." }
         val url = "https://api.github.com/repos/$owner/$repository/contents/${GitHubPathPolicy.encodePath(safePath)}?ref=${encode(branch)}"
         val json = getJson(url)
         require(json.isJsonObject) { "پاسخ فایل معتبر نیست." }
@@ -77,7 +80,14 @@ class GitHubPublicRepository(
         val encoded = item.get("content")?.asString ?: throw IllegalStateException("محتوای فایل در پاسخ GitHub وجود ندارد.")
         val bytes = Base64.decode(encoded.filterNot(Char::isWhitespace), Base64.DEFAULT)
         require(bytes.size.toLong() == size) { "اندازه محتوای دریافت‌شده با اندازه اعلام‌شده یکسان نیست." }
-        val text = String(bytes, StandardCharsets.UTF_8)
+        val text = try {
+            StandardCharsets.UTF_8.newDecoder()
+                .onMalformedInput(CodingErrorAction.REPORT)
+                .onUnmappableCharacter(CodingErrorAction.REPORT)
+                .decode(ByteBuffer.wrap(bytes)).toString()
+        } catch (_: Exception) {
+            throw IllegalArgumentException("فایل UTF-8 معتبر نیست و به‌عنوان متن باز نمی‌شود.")
+        }
         require(!text.contains('\u0000')) { "فایل باینری است و به‌عنوان متن باز نمی‌شود." }
         GitHubPublicFile(
             name = item.get("name")?.asString ?: safePath.substringAfterLast('/'),
@@ -131,6 +141,17 @@ internal object GitHubPathPolicy {
         }
         require(value.none { it.code < 32 || it == '?' || it == '#' }) { "مسیر فایل دارای نویسه نامعتبر است." }
         return value
+    }
+
+    fun isPreviewableTextPath(path: String): Boolean {
+        val name = normalize(path).substringAfterLast('/').lowercase()
+        val extensions = listOf(
+            ".md", ".markdown", ".txt", ".json", ".yaml", ".yml", ".xml",
+            ".kt", ".kts", ".gradle", ".properties", ".toml", ".csv",
+            ".py", ".sh", ".html", ".css", ".js", ".java", ".sql",
+            ".log", ".ini", ".conf"
+        )
+        return name == "readme" || extensions.any { name.endsWith(it) }
     }
 
     fun encodePath(path: String): String = normalize(path).split('/')
