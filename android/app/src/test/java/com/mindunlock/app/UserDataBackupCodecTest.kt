@@ -8,6 +8,7 @@ import com.mindunlock.app.data.local.LearningProfileEntity
 import com.mindunlock.app.data.local.LearningSessionFeedbackEntity
 import com.mindunlock.app.data.local.LearningStageProgressEntity
 import com.mindunlock.app.data.local.MindDumpEntity
+import com.mindunlock.app.data.local.NoteEntity
 import com.mindunlock.app.data.local.MindMapNodeEntity
 import com.mindunlock.app.data.local.MindMapEdgeEntity
 import com.mindunlock.app.data.local.ProgressEntity
@@ -384,6 +385,38 @@ class UserDataBackupCodecTest {
         }
     }
 
+
+    @Test
+    fun preservesReversibleInboxSourceLinksAcrossBackupRestore() {
+        val payload = UserDataBackupPayload(
+            notes = listOf(NoteEntity(id = 11, title = "یادداشت", body = "متن ویرایش‌شده", sourceMindDumpId = 21)),
+            tasks = listOf(StudyTaskEntity(id = 12, title = "کار", details = "جزئیات", sourceMindDumpId = 22)),
+            journalEntries = listOf(JournalEntryEntity(id = 13, title = "روزانه", body = "متن", sourceMindDumpId = 23))
+        )
+        val decoded = UserDataBackupCodec.decode(
+            UserDataBackupCodec.encode(payload, 1_800_000_000_300L, "test")
+        )
+        assertEquals(21L, decoded.payload.notes.single().sourceMindDumpId)
+        assertEquals(22L, decoded.payload.tasks.single().sourceMindDumpId)
+        assertEquals(23L, decoded.payload.journalEntries.single().sourceMindDumpId)
+    }
+
+    @Test
+    fun rejectsDuplicateInboxSourceLinksInBackupPayload() {
+        val duplicateNotes = listOf(
+            NoteEntity(id = 21, title = "اول", body = "متن", sourceMindDumpId = 51),
+            NoteEntity(id = 22, title = "دوم", body = "متن", sourceMindDumpId = 51)
+        )
+        assertThrows(IllegalArgumentException::class.java) {
+            UserDataBackupCodec.decode(
+                UserDataBackupCodec.encode(
+                    UserDataBackupPayload(notes = duplicateNotes),
+                    1_800_000_000_300L,
+                    "test"
+                )
+            )
+        }
+    }
 
     @Test
     fun rejectsDuplicateMindMapSourceReferences() {
