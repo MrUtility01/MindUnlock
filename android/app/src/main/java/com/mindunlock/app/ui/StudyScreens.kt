@@ -122,6 +122,7 @@ import com.mindunlock.app.data.local.LabQuestionResponseEntity
 import com.mindunlock.app.data.local.LearningSessionFeedbackEntity
 import com.mindunlock.app.data.local.ContentItemListEntry
 import com.mindunlock.app.data.local.NoteEntity
+import com.mindunlock.app.data.local.MindDumpWorkflow
 import com.mindunlock.app.data.local.ProgressEntity
 import com.mindunlock.app.data.local.StudyTaskEntity
 import com.mindunlock.app.data.repository.ManifestChapter
@@ -1493,6 +1494,22 @@ fun NotesScreen(userDb: UserDatabase, speech: PersianSpeech) {
                         }
                         Text(note.body, maxLines = 4, overflow = TextOverflow.Ellipsis)
                         OutlinedButton(onClick = { speech.speak(note.title + ". " + note.body) }, enabled = speech.ready.value) { Text("خواندن یادداشت") }
+                        if (note.sourceMindDumpId != null) {
+                            Text("منبع: صندوق ورودی #${note.sourceMindDumpId}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                            OutlinedButton(
+                                onClick = {
+                                    scope.launch {
+                                        try {
+                                            MindDumpWorkflow.restoreNoteToInbox(userDb, note.id)
+                                            exportMessage = "نسخه ویرایش‌شده به صندوق ورودی بازگشت."
+                                        } catch (_: Exception) {
+                                            exportMessage = "بازگردانی به صندوق انجام نشد."
+                                        }
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) { Text("بازگردانی نسخه به صندوق ورودی") }
+                        }
                         if (!note.chapterId.isNullOrBlank()) Text("متصل به فصل", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                     }
                 }
@@ -1521,7 +1538,8 @@ fun NotesScreen(userDb: UserDatabase, speech: PersianSpeech) {
                             chapterId = old?.chapterId,
                             title = title.ifBlank { "یادداشت" },
                             body = body.trim(),
-                            updatedAt = System.currentTimeMillis()
+                            updatedAt = System.currentTimeMillis(),
+                            sourceMindDumpId = old?.sourceMindDumpId
                         )
                     )
                 }
@@ -1881,6 +1899,19 @@ fun PlannerScreen(userDb: UserDatabase, speech: PersianSpeech) {
                         ) { Text("انتقال به فردا") }
                     }
                     if (task.details.isNotBlank()) Text(task.details, style = MaterialTheme.typography.bodySmall)
+                    if (task.sourceMindDumpId != null) {
+                        Text("منبع: صندوق ورودی #${task.sourceMindDumpId}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                        OutlinedButton(
+                            enabled = task.id !in busyTaskIds,
+                            onClick = {
+                                runTaskAction(task.id) {
+                                    check(MindDumpWorkflow.restoreTaskToInbox(userDb, task.id) != null) { "Task restore failed" }
+                                    message = "نسخه ویرایش‌شده به صندوق ورودی بازگشت؛ کار اصلی در برنامه حفظ شد."
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("بازگردانی نسخه به صندوق ورودی") }
+                    }
                     OutlinedButton(onClick = { speech.speak(task.title + ". " + task.details) }, enabled = speech.ready.value) { Text("خواندن کار") }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(
