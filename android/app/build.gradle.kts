@@ -14,8 +14,8 @@ android {
         applicationId = "com.mindunlock.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 42
-        versionName = "0.6.27"
+        versionCode = 43
+        versionName = "0.6.28"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
