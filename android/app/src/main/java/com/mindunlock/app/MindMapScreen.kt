@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -188,13 +190,19 @@ fun MindMapScreen(userDb: UserDatabase) {
                     Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("نمای گراف", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                         Text("نام هر گره داخل خود گره نمایش داده می‌شود. برای حرکت در صفحه، عمودی اسکرول کن؛ لمس گره آن را انتخاب می‌کند.", style = MaterialTheme.typography.bodySmall)
-                        MindMapGraphCanvas(
-                            nodes = graphNodes,
-                            edges = graphEdges,
-                            selectedNodeId = selectedGraphNodeId,
-                            scale = graphScale,
-                            onSelectNode = { selectedGraphNodeId = it }
-                        )
+                        Box(
+                            Modifier.fillMaxWidth()
+                                .heightIn(max = 340.dp)
+                                .verticalScroll(rememberScrollState())
+                        ) {
+                            MindMapGraphCanvas(
+                                nodes = graphNodes,
+                                edges = graphEdges,
+                                selectedNodeId = selectedGraphNodeId,
+                                scale = graphScale,
+                                onSelectNode = { selectedGraphNodeId = it }
+                            )
+                        }
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             TextButton(onClick = { graphScale = (graphScale - 0.1f).coerceAtLeast(0.8f) }, enabled = graphScale > 0.8f) { Text("کوچک‌تر") }
                             Text("اندازه: ${(graphScale * 100).toInt()}٪", style = MaterialTheme.typography.labelSmall)
