@@ -53,6 +53,11 @@ class GitHubDeviceAuth(
             .add("scope", "offline_access")
             .build()
         val json = postJson("https://github.com/login/device/code", body)
+        when (json.optString("error")) {
+            "device_flow_disabled" -> error("Device Flow در تنظیمات GitHub App فعال نشده است.")
+            "incorrect_client_credentials" -> error("Client ID اشتباه است یا متعلق به این GitHub App نیست.")
+            "unsupported_grant_type" -> error("GitHub این روش ورود را برای برنامه نپذیرفت.")
+        }
         GitHubDeviceCode(
             userCode = json.getString("user_code"),
             verificationUri = json.getString("verification_uri"),
