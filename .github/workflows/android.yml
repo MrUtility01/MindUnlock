@@ -518,11 +518,17 @@ jobs:
           PACKAGE_DIR="$(dirname "$MAIN_FILE")"
           SPEECH_FILE="$PACKAGE_DIR/PersianSpeech.kt"
           SCREENS_FILE="$PACKAGE_DIR/ui/StudyScreens.kt"
-          if grep -Fq 'expectedLength == spec.archiveBytes' "$SPEECH_FILE" && \
-             grep -Fq 'received == expectedLength' "$SPEECH_FILE" && \
-             grep -Fq 'stagedInstall' "$SPEECH_FILE" && \
-             grep -Fq 'speech.downloadProgress.value' "$SCREENS_FILE" && \
-             grep -Fq 'speech.isVoiceDownloaded' "$SCREENS_FILE"; then
+          if { \
+               grep -Fq 'expectedLength == spec.archiveBytes' "$SPEECH_FILE" && grep -Fq 'received == expectedLength' "$SPEECH_FILE"; \
+             } || { \
+               grep -Fq 'downloadArchiveWithFallback' "$SPEECH_FILE" && \
+               grep -Fq 'SpeechDownloadMirrors.candidates' "$SPEECH_FILE" && \
+               grep -Fq 'announcedLength == spec.archiveBytes' "$SPEECH_FILE" && \
+               grep -Fq 'received == spec.archiveBytes' "$SPEECH_FILE"; \
+             }; then
+            grep -Fq 'stagedInstall' "$SPEECH_FILE"
+            grep -Fq 'speech.downloadProgress.value' "$SCREENS_FILE"
+            grep -Fq 'speech.isVoiceDownloaded' "$SCREENS_FILE"
             echo "Verified: tracked source already has validated, staged voice downloads and per-voice progress UI."
           else
             python3 - "$PACKAGE_DIR" <<'PY'
