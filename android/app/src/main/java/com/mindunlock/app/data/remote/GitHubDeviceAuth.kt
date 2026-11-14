@@ -55,6 +55,7 @@ class GitHubDeviceAuth(
     }
 
     suspend fun authorize(
+        context: Context,
         code: GitHubDeviceCode,
         onWaiting: (String) -> Unit = {}
     ): GitHubAccount = withContext(Dispatchers.IO) {
@@ -82,7 +83,7 @@ class GitHubDeviceAuth(
                     val token = response.optString("access_token")
                     if (token.isNotBlank()) {
                         val account = fetchAccount(token)
-                        GitHubTokenVault.save(context = appContext, token = token)
+                        GitHubTokenVault.save(context.applicationContext, token)
                         return@withContext account
                     }
                     if (response.has("error")) {
@@ -93,18 +94,6 @@ class GitHubDeviceAuth(
             }
         }
         error("زمان تأیید ورود تمام شد؛ دوباره تلاش کن.")
-    }
-
-    // Set only during the authorize call; no token or device code is written to logs.
-    @Volatile private var appContext: Context? = null
-
-    suspend fun authorize(
-        context: Context,
-        code: GitHubDeviceCode,
-        onWaiting: (String) -> Unit = {}
-    ): GitHubAccount {
-        appContext = context.applicationContext
-        return try { authorize(code, onWaiting) } finally { appContext = null }
     }
 
     private fun fetchAccount(token: String): GitHubAccount {
