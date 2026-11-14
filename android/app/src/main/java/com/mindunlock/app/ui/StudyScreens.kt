@@ -2520,12 +2520,14 @@ fun SettingsScreen(
     var hfMirrorAddresses by remember {
         mutableStateOf(
             preferences.getString(SpeechDownloadMirrors.PREF_HF_MIRRORS, null)
+                ?.takeIf { it.isNotBlank() }
                 ?: SpeechDownloadMirrors.defaultEditableText(SpeechMirrorSource.HUGGING_FACE)
         )
     }
     var githubMirrorAddresses by remember {
         mutableStateOf(
             preferences.getString(SpeechDownloadMirrors.PREF_GITHUB_MIRRORS, null)
+                ?.takeIf { it.isNotBlank() }
                 ?: SpeechDownloadMirrors.defaultEditableText(SpeechMirrorSource.GITHUB_RELEASE)
         )
     }
