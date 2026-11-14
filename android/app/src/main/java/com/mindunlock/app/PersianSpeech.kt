@@ -17,6 +17,7 @@ import java.io.FileInputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicLong
 
 class PersianSpeech(context: Context) {
     private val appContext = context.applicationContext
@@ -26,6 +27,12 @@ class PersianSpeech(context: Context) {
     @Volatile private var loadingId: String? = null
     @Volatile private var audioTrack: AudioTrack? = null
     @Volatile private var activeId = "gyro"
+    @Volatile private var pendingUtterance: PendingUtterance? = null
+    @Volatile private var closed = false
+    private val playbackGeneration = AtomicLong(0L)
+    private val voiceGeneration = AtomicLong(0L)
+    private val audioLock = Any()
+    private data class PendingUtterance(val id: String, val text: String, val speed: Float, val generation: Long)
     val ready = mutableStateOf(false)
     val loading = mutableStateOf(false)
     val downloadProgress = mutableStateOf(0f)
@@ -49,26 +56,67 @@ class PersianSpeech(context: Context) {
     }
 
     fun selectVoice(id: String) {
+        if (closed) return
         val target = voiceOptions.firstOrNull { it.first == id }?.first ?: "gyro"
+        activeId = target
+        activeVoice.value = target
+
         if (loadedId == target && tts != null) {
-            activeId = target; activeVoice.value = target; ready.value = true; loading.value = false
-            status.value = "گویندهٔ ${voiceOptions.first { it.first == target }.second} آماده است."; error.value = null
+            // Invalidate any queued load of a different voice.
+            voiceGeneration.incrementAndGet()
+            loadingId = null
+            loading.value = false
+            ready.value = true
+            error.value = null
+            status.value = "گویندهٔ ${voiceOptions.first { it.first == target }.second} آماده است."
             return
         }
         if (loadingId == target) return
-        loadingId = target; loading.value = true; ready.value = false; error.value = null
+
+        val request = voiceGeneration.incrementAndGet()
+        loadingId = target
+        loading.value = true
+        ready.value = false
+        error.value = null
         status.value = "در حال بررسی یا دریافت مدل ${voiceOptions.first { it.first == target }.second}…"
+
+        // A voice switch must stop already queued audio, but it must not discard
+        // the utterance that caused the model to be loaded.
+        releaseActiveTrack()
         executor.execute {
-            runCatching { buildEngine(target) }.onSuccess { engine ->
-                val previous = tts; tts = engine; loadedId = target; activeId = target; activeVoice.value = target
-                runCatching { previous?.release() }
-                ready.value = true; loading.value = false; error.value = null
-                status.value = "گویندهٔ ${voiceOptions.first { it.first == target }.second} آماده است."
-            }.onFailure { e ->
-                loading.value = false; ready.value = tts != null
-                error.value = "دریافت یا بارگذاری مدل ناموفق بود: ${e.message ?: e.javaClass.simpleName}"; status.value = error.value!!
+            val result = runCatching { buildEngine(target) }
+            if (request != voiceGeneration.get() || closed) {
+                result.getOrNull()?.let { runCatching { it.release() } }
+                return@execute
             }
-            loadingId = null
+
+            result.onSuccess { engine ->
+                val previous = tts
+                tts = engine
+                loadedId = target
+                runCatching { previous?.release() }
+
+                loadingId = null
+                loading.value = false
+                ready.value = true
+                error.value = null
+                status.value = "گویندهٔ ${voiceOptions.first { it.first == target }.second} آماده است."
+
+                val queued = pendingUtterance
+                if (queued != null && queued.id == target &&
+                    queued.generation == playbackGeneration.get()) {
+                    pendingUtterance = null
+                    generateAndPlay(engine, queued.id, queued.text, queued.speed, queued.generation)
+                }
+            }.onFailure { failure ->
+                loadingId = null
+                loading.value = false
+                ready.value = loadedId == target && tts != null
+                val message = "دریافت یا بارگذاری مدل ناموفق بود: ${failure.message ?: failure.javaClass.simpleName}"
+                error.value = message
+                status.value = message
+                if (pendingUtterance?.id == target) pendingUtterance = null
+            }
         }
     }
 
@@ -259,26 +307,144 @@ class PersianSpeech(context: Context) {
     }
 
     fun speak(text: String, speed: Float = 1f, voiceName: String? = null) {
-        if (text.isBlank()) return
-        val id = voiceName?.takeIf { n -> voiceOptions.any { it.first == n } } ?: activeId
+        if (closed || text.isBlank()) return
+        val id = voiceName?.takeIf { name -> voiceOptions.any { it.first == name } } ?: activeId
+        val request = playbackGeneration.incrementAndGet()
+        val utterance = PendingUtterance(id, text, speed.coerceIn(0.75f, 1.35f), request)
+        pendingUtterance = utterance
+        error.value = null
+
         val engine = tts?.takeIf { loadedId == id }
-        if (engine == null) { selectVoice(id); error.value = "مدل این گوینده آماده نیست؛ پس از تکمیل دریافت دوباره پخش را بزن."; return }
-        stop(); error.value = null; status.value = "در حال تولید صدای فارسی آفلاین…"
+        if (engine == null) {
+            status.value = "مدل گوینده آماده نیست؛ دریافت/بارگذاری آغاز شد و متن پس از آماده‌شدن خودکار پخش می‌شود."
+            selectVoice(id)
+            return
+        }
+
+        pendingUtterance = null
+        selectVoice(id) // Synchronize the selected voice and invalidate stale model loads.
+        ready.value = true
+        status.value = "در حال آماده‌سازی صدای فارسی…"
         executor.execute {
-            try {
-                val audio = engine.generate(text = text, sid = 0, speed = speed.coerceIn(0.75f, 1.35f))
-                check(audio.samples.isNotEmpty()) { "مدل خروجی صوتی تولید نکرد." }
-                val buffer = AudioTrack.getMinBufferSize(audio.sampleRate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_FLOAT).coerceAtLeast(audio.samples.size * 4)
-                val track = AudioTrack.Builder().setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
-                    .setAudioFormat(AudioFormat.Builder().setSampleRate(audio.sampleRate).setChannelMask(AudioFormat.CHANNEL_OUT_MONO).setEncoding(AudioFormat.ENCODING_PCM_FLOAT).build())
-                    .setBufferSizeInBytes(buffer).setTransferMode(AudioTrack.MODE_STATIC).build()
-                audioTrack = track; track.write(audio.samples, 0, audio.samples.size, AudioTrack.WRITE_BLOCKING); track.play()
-                status.value = "در حال پخش: ${voiceOptions.first { it.first == id }.second}"
-                while (track.playState == AudioTrack.PLAYSTATE_PLAYING && track.playbackHeadPosition < audio.samples.size) Thread.sleep(80)
-                track.release(); if (audioTrack === track) audioTrack = null; status.value = "پخش صدا تمام شد."
-            } catch (e: Throwable) { error.value = "خطا در تولید یا پخش صدا: ${e.message ?: e.javaClass.simpleName}"; status.value = error.value!! }
+            generateAndPlay(engine, id, text, utterance.speed, request)
         }
     }
-    fun stop() { try { audioTrack?.pause(); audioTrack?.flush(); audioTrack?.release() } catch (_: Throwable) {}; audioTrack = null; status.value = "پخش متوقف شد." }
-    fun close() { stop(); executor.shutdownNow(); try { tts?.release() } catch (_: Throwable) {}; tts = null; loadedId = null }
+
+    private fun generateAndPlay(
+        engine: OfflineTts,
+        id: String,
+        text: String,
+        speed: Float,
+        request: Long
+    ) {
+        var track: AudioTrack? = null
+        try {
+            if (closed || request != playbackGeneration.get()) return
+            val audio = engine.generate(text = text, sid = 0, speed = speed)
+            check(audio.samples.isNotEmpty()) { "مدل خروجی صوتی تولید نکرد." }
+            if (closed || request != playbackGeneration.get()) return
+
+            val minBuffer = AudioTrack.getMinBufferSize(
+                audio.sampleRate,
+                AudioFormat.CHANNEL_OUT_MONO,
+                AudioFormat.ENCODING_PCM_FLOAT
+            )
+            val requiredBytes = audio.samples.size.toLong() * 4L
+            val bufferBytes = maxOf(
+                if (minBuffer > 0) minBuffer.toLong() else 0L,
+                requiredBytes
+            ).coerceAtMost(Int.MAX_VALUE.toLong()).toInt().coerceAtLeast(4)
+
+            track = AudioTrack.Builder()
+                .setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_MEDIA)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                        .build()
+                )
+                .setAudioFormat(
+                    AudioFormat.Builder()
+                        .setSampleRate(audio.sampleRate)
+                        .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                        .setEncoding(AudioFormat.ENCODING_PCM_FLOAT)
+                        .build()
+                )
+                .setBufferSizeInBytes(bufferBytes)
+                .setTransferMode(AudioTrack.MODE_STATIC)
+                .build()
+
+            check(track.state == AudioTrack.STATE_INITIALIZED) { "راه‌اندازی خروجی صوتی گوشی ناموفق بود." }
+            val written = track.write(audio.samples, 0, audio.samples.size, AudioTrack.WRITE_BLOCKING)
+            check(written == audio.samples.size) { "نوشتن داده صوتی کامل انجام نشد (کد $written)." }
+            if (closed || request != playbackGeneration.get()) return
+
+            synchronized(audioLock) {
+                if (closed || request != playbackGeneration.get()) return
+                audioTrack = track
+                track.play()
+            }
+            status.value = "در حال پخش: ${voiceOptions.first { it.first == id }.second}"
+            while (!closed &&
+                request == playbackGeneration.get() &&
+                track.playState == AudioTrack.PLAYSTATE_PLAYING &&
+                track.playbackHeadPosition < audio.samples.size
+            ) {
+                Thread.sleep(40)
+            }
+            if (!closed && request == playbackGeneration.get()) {
+                status.value = "پخش صدا تمام شد."
+            }
+        } catch (failure: Throwable) {
+            if (!closed && request == playbackGeneration.get()) {
+                val message = "خطا در تولید یا پخش صدا: ${failure.message ?: failure.javaClass.simpleName}"
+                error.value = message
+                status.value = message
+            }
+        } finally {
+            track?.let { completed ->
+                synchronized(audioLock) {
+                    if (audioTrack === completed) audioTrack = null
+                }
+                runCatching { completed.pause() }
+                runCatching { completed.flush() }
+                runCatching { completed.release() }
+            }
+        }
+    }
+
+    private fun releaseActiveTrack() {
+        val current = synchronized(audioLock) {
+            val value = audioTrack
+            audioTrack = null
+            value
+        }
+        current?.let { track ->
+            runCatching { track.pause() }
+            runCatching { track.flush() }
+            runCatching { track.release() }
+        }
+    }
+
+    fun stop() {
+        playbackGeneration.incrementAndGet()
+        pendingUtterance = null
+        releaseActiveTrack()
+        status.value = "پخش متوقف شد."
+    }
+
+    fun close() {
+        if (closed) return
+        closed = true
+        stop()
+        voiceGeneration.incrementAndGet()
+        loadingId = null
+        loading.value = false
+        executor.shutdownNow()
+        val engine = tts
+        tts = null
+        loadedId = null
+        ready.value = false
+        runCatching { engine?.release() }
+    }
+
 }
