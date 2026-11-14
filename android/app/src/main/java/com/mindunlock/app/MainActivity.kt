@@ -578,6 +578,31 @@ internal object OfflinePersianSpeech {
         return !dir.exists() || dir.deleteRecursively()
     }
 
+    fun modelSizeBytes(context: Context): Long {
+        val dir = File(context.filesDir, "offline-asr/shenava-rizeh-v1")
+        return if (!dir.exists()) 0L else dir.walkTopDown().filter { it.isFile }.sumOf { it.length() }
+    }
+
+    suspend fun downloadModel(context: Context, onProgress: (Int) -> Unit = {}): Long =
+        withContext(Dispatchers.IO) { ensureModelFiles(context, onProgress) }
+
+    private fun ensureModelFiles(context: Context, onProgress: (Int) -> Unit = {}): Long {
+        val modelDir = File(context.filesDir, "offline-asr/shenava-rizeh-v1").apply { mkdirs() }
+        val modelFile = File(modelDir, "model.onnx")
+        val tokensFile = File(modelDir, "tokens.txt")
+        if (!modelFile.isFile || modelFile.length() < 1_000_000L) {
+            onProgress(0)
+            download(MODEL_URL, modelFile) { percent -> onProgress((percent * 0.9f).toInt().coerceIn(0, 90)) }
+        } else onProgress(90)
+        if (!tokensFile.isFile || tokensFile.length() < 100L) {
+            download(TOKENS_URL, tokensFile) { percent -> onProgress(90 + (percent / 10).coerceIn(0, 10)) }
+        }
+        check(modelFile.isFile && modelFile.length() >= 1_000_000L) { "فایل مدل تشخیص گفتار ناقص است." }
+        check(tokensFile.isFile && tokensFile.length() >= 100L) { "فایل واژگان مدل تشخیص گفتار ناقص است." }
+        onProgress(100)
+        return modelSizeBytes(context)
+    }
+
     suspend fun transcribe(
         context: Context,
         stopSignal: AtomicBoolean,
@@ -588,17 +613,9 @@ internal object OfflinePersianSpeech {
         val tokensFile = File(modelDir, "tokens.txt")
         modelDir.mkdirs()
 
-        if (!modelFile.exists() || modelFile.length() < 1_000_000L || !tokensFile.exists()) {
-            withContext(Dispatchers.Main) { onStatus("دریافت یک‌باره مدل فارسی؛ پس از آن تشخیص بدون اینترنت انجام می‌شود.") }
-            if (!modelFile.exists() || modelFile.length() < 1_000_000L) {
-                download(MODEL_URL, modelFile) { percent ->
-                    android.os.Handler(android.os.Looper.getMainLooper()).post {
-                        onStatus("دریافت مدل فارسی: $percent٪")
-                    }
-                }
-            }
-            if (!tokensFile.exists() || tokensFile.length() < 100L) {
-                download(TOKENS_URL, tokensFile) { }
+        ensureModelFiles(context) { percent ->
+            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                onStatus("آماده‌سازی مدل تشخیص گفتار فارسی: $percent٪")
             }
         }
 
@@ -687,9 +704,15 @@ internal object OfflinePersianSpeech {
                     }
                 }
             }
-            if (partial.length() < 1024L) error("فایل مدل ناقص دریافت شد.")
-            if (target.exists()) target.delete()
+            if (total > 0L && partial.length() != total) {
+                error("دریافت فایل کامل نیست: ${partial.length()} از $total بایت.")
+            }
+            if (partial.length() < 100L) error("فایل مدل ناقص دریافت شد.")
+            if (target.exists() && !target.delete()) error("جایگزینی فایل مدل قبلی انجام نشد.")
             if (!partial.renameTo(target)) error("ذخیره فایل مدل انجام نشد.")
+        } catch (error: Throwable) {
+            partial.delete()
+            throw error
         } finally {
             connection.disconnect()
         }

@@ -2408,6 +2408,11 @@ fun SettingsScreen(
     var showResetDialog by remember { mutableStateOf(false) }
     var showDeleteVoiceDialog by remember { mutableStateOf(false) }
     var asrModelPresent by remember { mutableStateOf(OfflinePersianSpeech.isInstalled(context)) }
+    var asrDownloading by remember { mutableStateOf(false) }
+    var asrDownloadProgress by remember { mutableIntStateOf(0) }
+    var asrDownloadMessage by remember { mutableStateOf("") }
+    var diagnosticsRunning by remember { mutableStateOf(false) }
+    var diagnosticsReport by remember { mutableStateOf("") }
     var showDeleteAsrDialog by remember { mutableStateOf(false) }
     var showDeletePersonalDataDialog by remember { mutableStateOf(false) }
     var deletingPersonalData by remember { mutableStateOf(false) }
@@ -2431,6 +2436,51 @@ fun SettingsScreen(
     }
     val selectedVoice = voiceName.ifBlank { "gyro" }
     val selectedVoiceLabel = voices.firstOrNull { it.first == selectedVoice }?.second ?: "نیما · مرد · Gyro"
+
+    fun runHealthCheck() {
+        if (diagnosticsRunning) return
+        diagnosticsRunning = true
+        settingsScope.launch {
+            try {
+                val report = withContext(Dispatchers.IO) {
+                    val databaseOk = runCatching {
+                        userDb.openHelper.readableDatabase.query("SELECT 1").use { it.moveToFirst() }
+                    }.getOrDefault(false)
+                    val storageOk = runCatching {
+                        val probe = java.io.File(context.cacheDir, "mindunlock-health-" + System.currentTimeMillis() + ".tmp")
+                        probe.writeText("ok", Charsets.UTF_8)
+                        val readable = probe.readText(Charsets.UTF_8) == "ok"
+                        val removed = probe.delete()
+                        readable && removed
+                    }.getOrDefault(false)
+                    val microphonePermission = androidx.core.content.ContextCompat.checkSelfPermission(
+                        context, android.Manifest.permission.RECORD_AUDIO
+                    ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                    val audioBuffer = android.media.AudioRecord.getMinBufferSize(
+                        16_000, android.media.AudioFormat.CHANNEL_IN_MONO, android.media.AudioFormat.ENCODING_PCM_16BIT
+                    )
+                    buildList {
+                        add("پایگاه‌داده محلی: " + if (databaseOk) "سالم" else "خطا در اجرای Query")
+                        add("ذخیره‌سازی خصوصی: " + if (storageOk) "خواندن/نوشتن موفق" else "خطا در خواندن یا نوشتن")
+                        add("میکروفون: " + if (microphonePermission) "مجوز صادر شده" else "مجوز صادر نشده")
+                        add("سازگاری ضبط ۱۶ کیلوهرتز: " + if (audioBuffer > 0) "پشتیبانی می‌شود" else "در این دستگاه پشتیبانی نشد")
+                        add("مدل تشخیص گفتار آفلاین: " + if (OfflinePersianSpeech.isInstalled(context)) "نصب و فایل‌های اصلی موجود" else "نصب نشده یا ناقص")
+                        voices.forEach { voice ->
+                            val size = speech.downloadedVoiceBytes(voice.first)
+                            add("مدل گفتار ${voice.second}: " + if (size > 0L) "نصب‌شده · ${String.format(java.util.Locale.US, "%.1f", size / (1024.0 * 1024.0))} MB" else "نصب نشده")
+                        }
+                        add("گزارش کرش قبلی: " + if (CrashDiagnostics.readLastReport(context).isBlank()) "گزارشی ثبت نشده" else "گزارش موجود است")
+                        add("نسخه: $appVersion · Android ${android.os.Build.VERSION.RELEASE} · API ${android.os.Build.VERSION.SDK_INT}")
+                    }
+                }
+                diagnosticsReport = report.joinToString("\n")
+            } catch (error: Exception) {
+                diagnosticsReport = "اجرای عیب‌یابی کامل نشد: ${error.message ?: error.javaClass.simpleName}"
+            } finally {
+                diagnosticsRunning = false
+            }
+        }
+    }
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
@@ -2552,6 +2602,11 @@ fun SettingsScreen(
                                     if (speech.isVoiceDownloaded(voice.first)) "مدل نصب شده روی دستگاه" else "مدل دریافت نشده · با انتخاب، دانلود می‌شود",
                                     style = MaterialTheme.typography.labelSmall
                                 )
+                                Text(
+                                    "حجم نصب‌شده: " + String.format(java.util.Locale.US, "%.1f", speech.downloadedVoiceBytes(voice.first) / (1024.0 * 1024.0)) +
+                                        " MB · حجم بسته: " + String.format(java.util.Locale.US, "%.1f", speech.expectedArchiveBytes(voice.first) / (1024.0 * 1024.0)) + " MB",
+                                    style = MaterialTheme.typography.labelSmall
+                                )
                             }
                         }
                     }
@@ -2595,18 +2650,49 @@ fun SettingsScreen(
                 Text("تشخیص گفتار فارسی آفلاین", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(
                     if (asrModelPresent) "مدل Shenava روی همین گوشی نصب است؛ تبدیل گفتار بدون اینترنت و بدون ارسال صدا انجام می‌شود."
-                    else "مدل فارسی هنوز دریافت نشده است. با اولین استفاده از میکروفون، حدود ۱۱۷ مگابایت دریافت می‌شود؛ پس از آن تشخیص گفتار کاملاً محلی است.",
+                    else "مدل فارسی هنوز نصب نشده است. می‌توانی همین‌جا آن را دانلود و اعتبارسنجی کنی؛ پس از نصب، تایپ صوتی آفلاین می‌شود.",
                     style = MaterialTheme.typography.bodySmall
                 )
                 Text("موتور: sherpa-onnx · مدل فارسی Shenava Rizeh · مجوز Apache 2.0", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (asrModelPresent) {
+                    Text(
+                        "فضای اشغال‌شده توسط مدل: " + String.format(java.util.Locale.US, "%.1f", OfflinePersianSpeech.modelSizeBytes(context) / (1024.0 * 1024.0)) + " MB",
+                        style = MaterialTheme.typography.labelSmall
+                    )
                     OutlinedButton(onClick = { showDeleteAsrDialog = true }, modifier = Modifier.fillMaxWidth()) {
                         Icon(Icons.Default.Delete, contentDescription = null)
                         Text("حذف مدل تشخیص گفتار و آزادسازی فضا")
                     }
                 } else {
-                    Text("برای دریافت مدل، از دکمه «گفتار آفلاین» کنار یکی از فیلدهای متنی استفاده کن.", style = MaterialTheme.typography.labelSmall)
+                    Button(
+                        enabled = !asrDownloading,
+                        onClick = {
+                            settingsScope.launch {
+                                asrDownloading = true
+                                asrDownloadProgress = 0
+                                asrDownloadMessage = "آماده‌سازی دانلود مدل تشخیص گفتار…"
+                                try {
+                                    OfflinePersianSpeech.downloadModel(context) { percent ->
+                                        android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                            asrDownloadProgress = percent
+                                            asrDownloadMessage = "دریافت و بررسی مدل: $percent٪"
+                                        }
+                                    }
+                                    asrModelPresent = OfflinePersianSpeech.isInstalled(context)
+                                    asrDownloadMessage = if (asrModelPresent) "مدل تشخیص گفتار با موفقیت نصب و بررسی شد." else "فایل‌های مدل ناقص هستند."
+                                    storageBytes = privateDataSize()
+                                } catch (error: Exception) {
+                                    asrDownloadMessage = "دانلود یا نصب مدل ناموفق بود: ${error.message ?: error.javaClass.simpleName}"
+                                } finally {
+                                    asrDownloading = false
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text(if (asrDownloading) "در حال دریافت مدل…" else "دانلود و نصب مدل تایپ صوتی") }
+                    if (asrDownloading) LinearProgressIndicator(progress = asrDownloadProgress / 100f, modifier = Modifier.fillMaxWidth())
                 }
+                if (asrDownloadMessage.isNotBlank()) Text(asrDownloadMessage, color = if (asrDownloadMessage.contains("ناموفق") || asrDownloadMessage.contains("ناقص")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
             }
         }
         if (showDeleteAsrDialog) {
@@ -2726,6 +2812,26 @@ fun SettingsScreen(
 
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("آزمون سلامت اجزای برنامه", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text("این آزمون، پایگاه‌داده، ذخیره‌سازی، مجوز و توانایی ضبط، وضعیت فایل مدل‌های صوتی و گزارش کرش را بررسی می‌کند. صدایی ضبط یا به سرور ارسال نمی‌شود.", style = MaterialTheme.typography.bodySmall)
+                Button(onClick = { runHealthCheck() }, enabled = !diagnosticsRunning, modifier = Modifier.fillMaxWidth()) {
+                    Text(if (diagnosticsRunning) "در حال بررسی اجزا…" else "اجرای بررسی سلامت")
+                }
+                if (diagnosticsRunning) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                if (diagnosticsReport.isNotBlank()) {
+                    Text(diagnosticsReport, style = MaterialTheme.typography.bodySmall)
+                    OutlinedButton(
+                        onClick = {
+                            val clipboard = context.getSystemService(android.content.ClipboardManager::class.java)
+                            if (clipboard != null) {
+                                clipboard.setPrimaryClip(android.content.ClipData.newPlainText("MindUnlock health check", diagnosticsReport))
+                                settingsMessage = "نتیجه بررسی سلامت کپی شد."
+                            } else settingsMessage = "دسترسی به کلیپ‌بورد ممکن نشد."
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("کپی نتیجه بررسی سلامت") }
+                }
+                HorizontalDivider()
                 Text("گزارش آخرین کرش", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                 Text("خطاهای برنامه به‌صورت محلی ذخیره می‌شوند؛ گزارش شامل زمان، نسخه اندروید، دستگاه و Stack trace است.", style = MaterialTheme.typography.bodySmall)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {

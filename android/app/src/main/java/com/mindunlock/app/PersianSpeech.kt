@@ -79,6 +79,16 @@ class PersianSpeech(context: Context) {
             File(dir, "tokens.txt").isFile && File(dir, "espeak-ng-data").isDirectory
     }
 
+    fun expectedArchiveBytes(id: String): Long =
+        voiceOptions.firstOrNull { it.first == id }?.let { spec(it.first).archiveBytes } ?: 0L
+
+    fun downloadedVoiceBytes(id: String): Long {
+        val validId = voiceOptions.firstOrNull { it.first == id }?.first ?: return 0L
+        val dir = File(appContext.filesDir, "speech/" + spec(validId).directory)
+        if (!isVoiceDownloaded(validId)) return 0L
+        return dir.walkTopDown().filter { it.isFile }.sumOf { it.length() }
+    }
+
     private fun buildEngine(id: String): OfflineTts {
         val spec = spec(id)
         val speechRoot = File(appContext.filesDir, "speech").apply { mkdirs() }

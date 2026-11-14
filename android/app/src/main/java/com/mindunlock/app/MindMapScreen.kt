@@ -56,6 +56,8 @@ fun MindMapScreen(userDb: UserDatabase) {
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     var query by rememberSaveable { mutableStateOf("") }
     var selectedGraphNodeId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var graphPage by rememberSaveable { mutableStateOf(0) }
+    val graphPageSize = 16
     var graphScale by rememberSaveable { mutableStateOf(1f) }
     var graphPanX by rememberSaveable { mutableStateOf(0f) }
     var graphPanY by rememberSaveable { mutableStateOf(0f) }
@@ -87,6 +89,13 @@ fun MindMapScreen(userDb: UserDatabase) {
         }
     }
     val names = remember(nodes) { nodes.associate { it.id to it.title } }
+    val graphPageCount = ((visibleNodes.size + graphPageSize - 1) / graphPageSize).coerceAtLeast(1)
+    LaunchedEffect(graphPageCount) {
+        if (graphPage >= graphPageCount) graphPage = (graphPageCount - 1).coerceAtLeast(0)
+    }
+    val graphNodes = remember(visibleNodes, graphPage) {
+        visibleNodes.drop(graphPage * graphPageSize).take(graphPageSize)
+    }
     var sourceSearch by rememberSaveable { mutableStateOf("") }
     var sourceChoices by remember { mutableStateOf<List<MindMapSourceItem>>(emptyList()) }
     val sourceKindLabel = when (sourceKind) {
@@ -175,14 +184,21 @@ fun MindMapScreen(userDb: UserDatabase) {
         }
         if (visibleNodes.isNotEmpty()) {
             item {
-                val graphIds = remember(visibleNodes) { visibleNodes.take(16).map { it.id }.toSet() }
+                val graphIds = remember(graphNodes) { graphNodes.map { it.id }.toSet() }
                 val graphEdges = remember(edges, graphIds) { edges.filter { it.sourceNodeId in graphIds && it.targetNodeId in graphIds } }
                 Text("نمای گراف", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Text("برای جابه‌جایی بکش؛ برای بزرگ‌نمایی از دو انگشت استفاده کن؛ روی گره بزن تا انتخاب شود.", style = MaterialTheme.typography.bodySmall)
-                MindMapGraphCanvas(nodes = visibleNodes.take(16), edges = graphEdges, selectedNodeId = selectedGraphNodeId, scale = graphScale, panX = graphPanX, panY = graphPanY, onSelectNode = { selectedGraphNodeId = it }, onTransform = { zoom, dx, dy -> graphScale = (graphScale * zoom).coerceIn(0.65f, 2.8f); graphPanX += dx; graphPanY += dy })
+                MindMapGraphCanvas(nodes = graphNodes, edges = graphEdges, selectedNodeId = selectedGraphNodeId, scale = graphScale, panX = graphPanX, panY = graphPanY, onSelectNode = { selectedGraphNodeId = it }, onTransform = { zoom, dx, dy -> graphScale = (graphScale * zoom).coerceIn(0.65f, 2.8f); graphPanX += dx; graphPanY += dy })
+                if (graphPageCount > 1) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        TextButton(onClick = { graphPage = (graphPage - 1).coerceAtLeast(0) }, enabled = graphPage > 0) { Text("صفحه قبل") }
+                        Text("نمایش ${graphPage * graphPageSize + 1} تا ${minOf((graphPage + 1) * graphPageSize, visibleNodes.size)} از ${visibleNodes.size} گره", style = MaterialTheme.typography.labelSmall)
+                        TextButton(onClick = { graphPage = (graphPage + 1).coerceAtMost(graphPageCount - 1) }, enabled = graphPage < graphPageCount - 1) { Text("صفحه بعد") }
+                    }
+                }
                 // Compose text labels keep Persian shaping, accessibility and selection reliable;
                 // the Canvas itself only renders compact numeric markers for performance.
-                visibleNodes.take(16).chunked(2).forEachIndexed { rowIndex, pair ->
+                graphNodes.chunked(2).forEachIndexed { rowIndex, pair ->
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         pair.forEachIndexed { columnIndex, node ->
                             val number = rowIndex * 2 + columnIndex + 1
@@ -213,7 +229,7 @@ fun MindMapScreen(userDb: UserDatabase) {
                         TextButton(onClick = { edit(selected) }) { Text("ویرایش گره انتخاب‌شده") }
                     }
                 }
-                if (visibleNodes.size > 16) Text("برای حفظ سرعت، حداکثر ۱۶ گره در نمای گراف نمایش داده می‌شود؛ فهرست پایین همه گره‌ها را دارد.", style = MaterialTheme.typography.bodySmall)
+                if (visibleNodes.size > graphPageSize) Text("برای مرور همه گره‌ها از صفحه‌بندی گراف استفاده کن؛ فهرست پایین نیز همه گره‌ها را در اختیار دارد.", style = MaterialTheme.typography.bodySmall)
             }
         }
         if (nodes.isEmpty()) {
@@ -261,6 +277,10 @@ fun MindMapScreen(userDb: UserDatabase) {
                         }
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TextButton(onClick = {
+                            selectedGraphNodeId = node.id
+                            graphPage = index / graphPageSize
+                        }) { Text("نمایش در گراف") }
                         TextButton(onClick = { edit(node) }) { Text("ویرایش") }
                         TextButton(onClick = { pendingDeleteId = node.id }) { Text("حذف") }
                     }
