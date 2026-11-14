@@ -6,6 +6,12 @@ import org.junit.Test
 
 class GitHubPathPolicyTest {
     @Test
+    fun acceptsRepositoryRoot() {
+        assertEquals("", GitHubPathPolicy.normalize(""))
+        assertEquals("", GitHubPathPolicy.normalize("/"))
+    }
+
+    @Test
     fun normalizesRelativeRepositoryPaths() {
         assertEquals("docs/guide fa.md", GitHubPathPolicy.normalize("/docs/guide fa.md/"))
     }
