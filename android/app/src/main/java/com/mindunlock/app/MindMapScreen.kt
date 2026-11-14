@@ -2,6 +2,7 @@ package com.mindunlock.app
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -14,7 +15,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.nativeCanvas
@@ -59,8 +59,6 @@ fun MindMapScreen(userDb: UserDatabase) {
     var graphPage by rememberSaveable { mutableStateOf(0) }
     val graphPageSize = 16
     var graphScale by rememberSaveable { mutableStateOf(1f) }
-    var graphPanX by rememberSaveable { mutableStateOf(0f) }
-    var graphPanY by rememberSaveable { mutableStateOf(0f) }
     var status by rememberSaveable { mutableStateOf("") }
     var showNodeDialog by rememberSaveable { mutableStateOf(false) }
     var showEdgeDialog by rememberSaveable { mutableStateOf(false) }
@@ -186,39 +184,30 @@ fun MindMapScreen(userDb: UserDatabase) {
             item {
                 val graphIds = remember(graphNodes) { graphNodes.map { it.id }.toSet() }
                 val graphEdges = remember(edges, graphIds) { edges.filter { it.sourceNodeId in graphIds && it.targetNodeId in graphIds } }
-                Text("نمای گراف", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                Text("برای جابه‌جایی بکش؛ برای بزرگ‌نمایی از دو انگشت استفاده کن؛ روی گره بزن تا انتخاب شود.", style = MaterialTheme.typography.bodySmall)
-                MindMapGraphCanvas(nodes = graphNodes, edges = graphEdges, selectedNodeId = selectedGraphNodeId, scale = graphScale, panX = graphPanX, panY = graphPanY, onSelectNode = { selectedGraphNodeId = it }, onTransform = { zoom, dx, dy -> graphScale = (graphScale * zoom).coerceIn(0.65f, 2.8f); graphPanX += dx; graphPanY += dy })
+                Card(Modifier.fillMaxWidth()) {
+                    Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("نمای گراف", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        Text("نام هر گره داخل خود گره نمایش داده می‌شود. برای حرکت در صفحه، عمودی اسکرول کن؛ لمس گره آن را انتخاب می‌کند.", style = MaterialTheme.typography.bodySmall)
+                        MindMapGraphCanvas(
+                            nodes = graphNodes,
+                            edges = graphEdges,
+                            selectedNodeId = selectedGraphNodeId,
+                            scale = graphScale,
+                            onSelectNode = { selectedGraphNodeId = it }
+                        )
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            TextButton(onClick = { graphScale = (graphScale - 0.1f).coerceAtLeast(0.8f) }, enabled = graphScale > 0.8f) { Text("کوچک‌تر") }
+                            Text("اندازه: ${(graphScale * 100).toInt()}٪", style = MaterialTheme.typography.labelSmall)
+                            TextButton(onClick = { graphScale = (graphScale + 0.1f).coerceAtMost(1.25f) }, enabled = graphScale < 1.25f) { Text("بزرگ‌تر") }
+                        }
+                    }
+                }
                 if (graphPageCount > 1) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         TextButton(onClick = { graphPage = (graphPage - 1).coerceAtLeast(0) }, enabled = graphPage > 0) { Text("صفحه قبل") }
                         Text("نمایش ${graphPage * graphPageSize + 1} تا ${minOf((graphPage + 1) * graphPageSize, visibleNodes.size)} از ${visibleNodes.size} گره", style = MaterialTheme.typography.labelSmall)
                         TextButton(onClick = { graphPage = (graphPage + 1).coerceAtMost(graphPageCount - 1) }, enabled = graphPage < graphPageCount - 1) { Text("صفحه بعد") }
                     }
-                }
-                // Compose text labels keep Persian shaping, accessibility and selection reliable;
-                // the Canvas itself only renders compact numeric markers for performance.
-                graphNodes.chunked(2).forEachIndexed { rowIndex, pair ->
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        pair.forEachIndexed { columnIndex, node ->
-                            val number = rowIndex * 2 + columnIndex + 1
-                            TextButton(
-                                onClick = { selectedGraphNodeId = node.id },
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text(
-                                    text = "$number · ${node.title}",
-                                    maxLines = 1,
-                                    color = if (node.id == selectedGraphNodeId) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurface
-                                )
-                            }
-                        }
-                        if (pair.size == 1) androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
-                    }
-                }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("بزرگ‌نمایی: " + (graphScale * 100).toInt() + "٪", style = MaterialTheme.typography.labelSmall)
-                    TextButton(onClick = { graphScale = 1f; graphPanX = 0f; graphPanY = 0f }) { Text("بازنشانی نما") }
                 }
                 val selected = visibleNodes.firstOrNull { it.id == selectedGraphNodeId }
                 if (selected != null) Card(Modifier.fillMaxWidth()) {
@@ -229,7 +218,7 @@ fun MindMapScreen(userDb: UserDatabase) {
                         TextButton(onClick = { edit(selected) }) { Text("ویرایش گره انتخاب‌شده") }
                     }
                 }
-                if (visibleNodes.size > graphPageSize) Text("برای مرور همه گره‌ها از صفحه‌بندی گراف استفاده کن؛ فهرست پایین نیز همه گره‌ها را در اختیار دارد.", style = MaterialTheme.typography.bodySmall)
+                if (visibleNodes.size > graphPageSize) Text("برای دیدن همه گره‌ها از صفحه‌بندی استفاده کن؛ فهرست پایین نیز جزئیات و ارتباط‌ها را نشان می‌دهد.", style = MaterialTheme.typography.bodySmall)
             }
         }
         if (nodes.isEmpty()) {
@@ -444,72 +433,114 @@ private fun MindMapGraphCanvas(
     edges: List<com.mindunlock.app.data.local.MindMapEdgeEntity>,
     selectedNodeId: Long?,
     scale: Float,
-    panX: Float,
-    panY: Float,
-    onSelectNode: (Long) -> Unit,
-    onTransform: (Float, Float, Float) -> Unit
+    onSelectNode: (Long) -> Unit
 ) {
     val scheme = MaterialTheme.colorScheme
-    val currentOnTransform by rememberUpdatedState(onTransform)
-    val nodeRadius = 13.dp
-    Canvas(
-        Modifier.fillMaxWidth().height(250.dp)
-            .pointerInput(Unit) {
-                detectTransformGestures { _, pan, zoom, _ -> currentOnTransform(zoom, pan.x, pan.y) }
-            }
-            .pointerInput(nodes, scale, panX, panY) {
-                detectTapGestures { tap ->
-                    if (nodes.isNotEmpty()) {
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val columns = when {
+            maxWidth >= 600.dp -> 4
+            maxWidth >= 320.dp -> 3
+            else -> 2
+        }
+        val rows = (nodes.size + columns - 1) / columns
+        val cellHeight = 64.dp
+        val gap = 8.dp
+        val canvasHeight = cellHeight * rows + gap * (rows + 1)
+        Canvas(
+            Modifier.fillMaxWidth().height(canvasHeight)
+                // Tap only: vertical drags are deliberately left to the parent LazyColumn.
+                .pointerInput(nodes, columns, scale) {
+                    detectTapGestures { tap ->
+                        val gapPx = gap.toPx()
+                        val cellHeightPx = cellHeight.toPx()
+                        val cellWidthPx = (size.width - gapPx * (columns + 1)) / columns
                         val center = Offset(size.width / 2f, size.height / 2f)
-                        val local = Offset((tap.x - panX - center.x) / scale + center.x, (tap.y - panY - center.y) / scale + center.y)
-                        val orbit = minOf(size.width, size.height) * 0.34f
-                        val hitRadius = nodeRadius.toPx() * 2.2f
-                        var nearestNode: MindMapNodeEntity? = null
-                        var nearestDistance = hitRadius
-                        nodes.forEachIndexed { index, node ->
-                            val angle = -Math.PI / 2.0 + (2.0 * Math.PI * index / nodes.size)
-                            val point = if (nodes.size == 1) center else Offset(center.x + orbit * kotlin.math.cos(angle).toFloat(), center.y + orbit * kotlin.math.sin(angle).toFloat())
-                            val distance = (point - local).getDistance()
-                            if (distance <= nearestDistance) {
-                                nearestNode = node
-                                nearestDistance = distance
-                            }
+                        val local = Offset(
+                            (tap.x - center.x) / scale + center.x,
+                            (tap.y - center.y) / scale + center.y
+                        )
+                        val x = local.x - gapPx
+                        val y = local.y - gapPx
+                        if (x >= 0f && y >= 0f) {
+                            val column = (x / (cellWidthPx + gapPx)).toInt()
+                            val row = (y / (cellHeightPx + gapPx)).toInt()
+                            val insideCell = x % (cellWidthPx + gapPx) <= cellWidthPx &&
+                                y % (cellHeightPx + gapPx) <= cellHeightPx
+                            val index = row * columns + column
+                            if (insideCell && column in 0 until columns) nodes.getOrNull(index)?.let { onSelectNode(it.id) }
                         }
-                        nearestNode?.let { onSelectNode(it.id) }
                     }
                 }
-            }
-    ) {
-        drawRoundRect(color = scheme.surfaceVariant, cornerRadius = androidx.compose.ui.geometry.CornerRadius(16.dp.toPx()))
-        val center = Offset(size.width / 2f, size.height / 2f)
-        val orbit = minOf(size.width, size.height) * 0.34f
-        val radiusPx = nodeRadius.toPx()
-        val labelPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-            color = scheme.onPrimary.toArgb()
-            textSize = 10.dp.toPx()
-            textAlign = android.graphics.Paint.Align.CENTER
-            typeface = android.graphics.Typeface.DEFAULT_BOLD
-        }
-        val positions = nodes.mapIndexed { index, node ->
-            val angle = -Math.PI / 2.0 + (2.0 * Math.PI * index / nodes.size.coerceAtLeast(1))
-            node.id to if (nodes.size == 1) center else Offset(center.x + orbit * kotlin.math.cos(angle).toFloat(), center.y + orbit * kotlin.math.sin(angle).toFloat())
-        }.toMap()
-        withTransform({
-            translate(left = panX, top = panY)
-            scale(scaleX = scale, scaleY = scale, pivot = center)
-        }) {
-            edges.forEach { edge ->
-                val from = positions[edge.sourceNodeId]
-                val to = positions[edge.targetNodeId]
-                if (from != null && to != null) drawLine(color = scheme.outline, start = from, end = to, strokeWidth = 2.dp.toPx())
-            }
-            nodes.forEachIndexed { index, node ->
-                val point = positions[node.id] ?: return@forEachIndexed
-                val selected = node.id == selectedNodeId
-                if (selected) drawCircle(color = scheme.tertiary.copy(alpha = 0.25f), radius = radiusPx * 1.9f, center = point)
-                drawCircle(color = if (selected) scheme.tertiary else scheme.primary, radius = radiusPx, center = point)
-                drawCircle(color = scheme.surface, radius = 3.dp.toPx(), center = point)
-                drawContext.canvas.nativeCanvas.drawText((index + 1).toString(), point.x, point.y + labelPaint.textSize * 0.34f, labelPaint)
+        ) {
+            val gapPx = gap.toPx()
+            val cellHeightPx = cellHeight.toPx()
+            val cellWidthPx = (size.width - gapPx * (columns + 1)) / columns
+            val centers = nodes.mapIndexed { index, node ->
+                val column = index % columns
+                val row = index / columns
+                node.id to Offset(
+                    gapPx + column * (cellWidthPx + gapPx) + cellWidthPx / 2f,
+                    gapPx + row * (cellHeightPx + gapPx) + cellHeightPx / 2f
+                )
+            }.toMap()
+            drawRoundRect(
+                color = scheme.surfaceVariant,
+                cornerRadius = androidx.compose.ui.geometry.CornerRadius(14.dp.toPx())
+            )
+            withTransform({
+                scale(scaleX = scale, scaleY = scale, pivot = Offset(size.width / 2f, size.height / 2f))
+            }) {
+                edges.forEach { edge ->
+                    val from = centers[edge.sourceNodeId]
+                    val to = centers[edge.targetNodeId]
+                    if (from != null && to != null) {
+                        drawLine(color = scheme.outline, start = from, end = to, strokeWidth = 1.7.dp.toPx())
+                    }
+                }
+                val textPaint = android.text.TextPaint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+                    color = scheme.onPrimaryContainer.toArgb()
+                    textSize = 11.dp.toPx()
+                    typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.BOLD)
+                    textAlign = android.graphics.Paint.Align.CENTER
+                }
+                nodes.forEachIndexed { index, node ->
+                    val column = index % columns
+                    val row = index / columns
+                    val left = gapPx + column * (cellWidthPx + gapPx)
+                    val top = gapPx + row * (cellHeightPx + gapPx)
+                    val topLeft = Offset(left, top)
+                    val cardSize = androidx.compose.ui.geometry.Size(cellWidthPx, cellHeightPx)
+                    drawRoundRect(
+                        color = if (node.id == selectedNodeId) scheme.tertiaryContainer else scheme.primaryContainer,
+                        topLeft = topLeft,
+                        size = cardSize,
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(11.dp.toPx())
+                    )
+                    if (node.id == selectedNodeId) {
+                        drawRoundRect(
+                            color = scheme.tertiary,
+                            topLeft = topLeft,
+                            size = cardSize,
+                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(11.dp.toPx()),
+                            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx())
+                        )
+                    }
+                    val title = node.title.trim().ifBlank { "بدون عنوان" }.take(120)
+                    val textWidth = (cellWidthPx - 14.dp.toPx()).toInt().coerceAtLeast(36)
+                    val layout = android.text.StaticLayout.Builder
+                        .obtain(title, 0, title.length, textPaint, textWidth)
+                        .setAlignment(android.text.Layout.Alignment.ALIGN_CENTER)
+                        .setTextDirection(android.text.TextDirectionHeuristics.RTL)
+                        .setMaxLines(2)
+                        .setEllipsize(android.text.TextUtils.TruncateAt.END)
+                        .setIncludePad(false)
+                        .build()
+                    val nativeCanvas = drawContext.canvas.nativeCanvas
+                    nativeCanvas.save()
+                    nativeCanvas.translate(left + (cellWidthPx - textWidth) / 2f, top + (cellHeightPx - layout.height) / 2f)
+                    layout.draw(nativeCanvas)
+                    nativeCanvas.restore()
+                }
             }
         }
     }
