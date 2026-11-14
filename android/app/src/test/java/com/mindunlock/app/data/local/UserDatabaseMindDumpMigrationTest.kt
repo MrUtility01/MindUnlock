@@ -757,6 +757,67 @@ class UserDatabaseMindDumpMigrationTest {
         }
     }
     @Test
+    fun inboxNoteAndJournalConversionsAreReversibleAndIdempotent() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(context, UserDatabase::class.java)
+            .allowMainThreadQueries().build()
+        try {
+            val content = "یادگیری VLAN\nجزئیات کامل با خط دوم"
+            val sourceId = db.mindDumpDao().insert(MindDumpEntity(content = content, category = "learning"))
+
+            val noteId = MindDumpWorkflow.convertToNote(db, sourceId)!!
+            assertEquals(noteId, MindDumpWorkflow.convertToNote(db, sourceId))
+            assertEquals(1, db.noteDao().getAll().size)
+            assertEquals(content, db.noteDao().getById(noteId)?.body)
+            assertEquals(sourceId, db.noteDao().getById(noteId)?.sourceMindDumpId)
+            assertEquals("note", db.mindDumpDao().getById(sourceId)?.status)
+
+            val note = db.noteDao().getById(noteId)!!
+            db.noteDao().upsert(note.copy(body = "ویرایش یادداشت"))
+            assertEquals(sourceId, MindDumpWorkflow.restoreNoteToInbox(db, noteId))
+            assertEquals("inbox", db.mindDumpDao().getById(sourceId)?.status)
+            assertEquals("ویرایش یادداشت", db.mindDumpDao().getById(sourceId)?.content)
+            assertEquals(null, db.noteDao().getById(noteId)?.sourceMindDumpId)
+
+            val journalSourceId = db.mindDumpDao().insert(
+                MindDumpEntity(content = "ثبت اتفاق روزانه\nشرح اتفاق", category = "thought")
+            )
+            val journalId = MindDumpWorkflow.convertToJournal(db, journalSourceId)!!
+            assertEquals(journalId, MindDumpWorkflow.convertToJournal(db, journalSourceId))
+            assertEquals(journalSourceId, db.journalEntryDao().getById(journalId)?.sourceMindDumpId)
+            assertEquals("journal", db.mindDumpDao().getById(journalSourceId)?.status)
+            assertEquals(journalSourceId, MindDumpWorkflow.restoreJournalToInbox(db, journalId))
+            assertEquals("inbox", db.mindDumpDao().getById(journalSourceId)?.status)
+            assertEquals("ثبت اتفاق روزانه\nشرح اتفاق", db.mindDumpDao().getById(journalSourceId)?.content)
+            assertEquals(null, db.journalEntryDao().getById(journalId)?.sourceMindDumpId)
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test
+    fun inboxTaskConversionPersistsSourceAndCanReturnEditedContent() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(context, UserDatabase::class.java)
+            .allowMainThreadQueries().build()
+        try {
+            val sourceId = db.mindDumpDao().insert(
+                MindDumpEntity(content = "پیکربندی DNS\nشرح کامل", category = "task")
+            )
+            val taskId = db.mindDumpDao().convertToTask(sourceId)!!
+            val task = db.studyTaskDao().getById(taskId)!!
+            assertEquals(sourceId, task.sourceMindDumpId)
+            assertEquals(taskId, db.mindDumpDao().getById(sourceId)?.linkedTaskId)
+            db.studyTaskDao().upsert(task.copy(details = "نسخه ویرایش‌شده DNS"))
+            assertEquals(sourceId, MindDumpWorkflow.restoreTaskToInbox(db, taskId))
+            assertEquals("نسخه ویرایش‌شده DNS", db.mindDumpDao().getById(sourceId)?.content)
+            assertEquals("inbox", db.mindDumpDao().getById(sourceId)?.status)
+            assertEquals(null, db.studyTaskDao().getById(taskId)?.sourceMindDumpId)
+            assertEquals("نسخه ویرایش‌شده DNS", db.studyTaskDao().getById(taskId)?.details)
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test
     fun inboxClarificationUpdatesTextAndCategoryTogether() = runBlocking {
         val db = Room.inMemoryDatabaseBuilder(context, UserDatabase::class.java)
             .allowMainThreadQueries()
