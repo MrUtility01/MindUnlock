@@ -59,14 +59,15 @@ data class ServerConfigEntity(
     val lastConnectedAt: Long? = null
 )
 
-@Entity(tableName = "notes", indices = [Index("itemUid"), Index("chapterId")])
+@Entity(tableName = "notes", indices = [Index("itemUid"), Index("chapterId"), Index(value = ["sourceMindDumpId"], unique = true)])
 data class NoteEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val itemUid: String? = null,
     val chapterId: String? = null,
     val title: String,
     val body: String,
-    val updatedAt: Long = System.currentTimeMillis()
+    val updatedAt: Long = System.currentTimeMillis(),
+    val sourceMindDumpId: Long? = null
 )
 
 @Entity(tableName = "bookmarks")
@@ -76,7 +77,7 @@ data class BookmarkEntity(
     val createdAt: Long = System.currentTimeMillis()
 )
 
-@Entity(tableName = "study_tasks", indices = [Index("remindAt")])
+@Entity(tableName = "study_tasks", indices = [Index("remindAt"), Index(value = ["sourceMindDumpId"], unique = true)])
 data class StudyTaskEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val title: String,
@@ -85,7 +86,8 @@ data class StudyTaskEntity(
     val dueAt: Long? = null,
     val remindAt: Long? = null,
     val completed: Boolean = false,
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    val sourceMindDumpId: Long? = null
 )
 
 @Entity(tableName = "mind_dump", indices = [Index("createdAt"), Index("status")])
@@ -99,7 +101,7 @@ data class MindDumpEntity(
     val linkedTaskId: Long? = null
 )
 
-@Entity(tableName = "journal_entries", indices = [Index("createdAt")])
+@Entity(tableName = "journal_entries", indices = [Index("createdAt"), Index(value = ["sourceMindDumpId"], unique = true)])
 data class JournalEntryEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val title: String = "",
@@ -107,7 +109,8 @@ data class JournalEntryEntity(
     val mood: String? = null,
     val tags: String = "",
     val createdAt: Long = System.currentTimeMillis(),
-    val updatedAt: Long = System.currentTimeMillis()
+    val updatedAt: Long = System.currentTimeMillis(),
+    val sourceMindDumpId: Long? = null
 )
 
 @Entity(tableName = "media_cache")
