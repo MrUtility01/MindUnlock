@@ -89,6 +89,39 @@ class PersianDateTest {
     }
 
     @Test
+    fun parsesSlashJalaliAndHyphenGregorianAsDifferentCalendars() {
+        val zone = ZoneId.of("UTC")
+        assertEquals(
+            LocalDate.of(2026, 11, 12).atTime(9, 5).atZone(zone).toInstant().toEpochMilli(),
+            PersianDate.parseDateTime("۱۴۰۵/۰۸/۲۱ ۰۹:۰۵", zone)
+        )
+        assertEquals(
+            LocalDate.of(1405, 8, 21).atTime(9, 5).atZone(zone).toInstant().toEpochMilli(),
+            PersianDate.parseDateTime("1405-08-21 09:05", zone)
+        )
+    }
+
+    @Test
+    fun roundTripsEveryDayAcrossSeveralLeapAndCommonYears() {
+        for (year in 1398..1410) {
+            for (month in 1..12) {
+                for (day in 1..PersianDate.daysInMonth(year, month)) {
+                    val date = JalaliDate(year, month, day)
+                    assertEquals(date, PersianDate.fromGregorian(PersianDate.toGregorian(date)))
+                }
+            }
+        }
+    }
+
+    @Test
+    fun formatsAndParsesMidnightWithoutChangingLocalCalendarDate() {
+        val zone = ZoneId.of("Europe/Berlin")
+        val local = LocalDate.of(2026, 11, 12).atStartOfDay()
+        val display = PersianDate.formatInput(local)
+        assertEquals(local.atZone(zone).toInstant().toEpochMilli(), PersianDate.parseDateTime(display, zone))
+    }
+
+    @Test
     fun rejectsInvalidJalaliDatesAndTimes() {
         assertNull(PersianDate.parseDateTime("1404/12/30 10:00", ZoneId.of("UTC")))
         assertNull(PersianDate.parseDateTime("1405/13/01 10:00", ZoneId.of("UTC")))
