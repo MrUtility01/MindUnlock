@@ -439,7 +439,6 @@ fun MindMapScreen(userDb: UserDatabase) {
     )
 }
 @Composable
-@Composable
 private fun MindMapGraphCanvas(
     nodes: List<MindMapNodeEntity>,
     edges: List<com.mindunlock.app.data.local.MindMapEdgeEntity>,
