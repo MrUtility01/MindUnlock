@@ -160,6 +160,9 @@ interface LabQuestionResponseDao {
 interface NoteDao {
     @Query("SELECT * FROM notes ORDER BY updatedAt DESC") fun observeAll(): Flow<List<NoteEntity>>
     @Query("SELECT * FROM notes") suspend fun getAll(): List<NoteEntity>
+    @Query("SELECT * FROM notes WHERE id = :id LIMIT 1") suspend fun getById(id: Long): NoteEntity?
+    @Query("SELECT * FROM notes WHERE sourceMindDumpId = :sourceId ORDER BY updatedAt DESC, id DESC LIMIT 1") suspend fun findBySourceMindDumpId(sourceId: Long): NoteEntity?
+    @Insert(onConflict = OnConflictStrategy.IGNORE) suspend fun insertFromMindDump(note: NoteEntity): Long
     @Query("SELECT id, substr(title, 1, 160) AS title FROM notes WHERE TRIM(title) != '' AND title LIKE '%' || :query || '%' ORDER BY updatedAt DESC LIMIT :limit") suspend fun searchMindMapSources(query: String, limit: Int): List<MindMapSourceItem>
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertAll(items: List<NoteEntity>)
     @Query("DELETE FROM notes") suspend fun deleteAll()
@@ -182,6 +185,8 @@ interface BookmarkDao {
 interface StudyTaskDao {
     @Query("SELECT * FROM study_tasks ORDER BY completed ASC, COALESCE(dueAt, 9223372036854775807) ASC, createdAt DESC") fun observeAll(): Flow<List<StudyTaskEntity>>
     @Query("SELECT * FROM study_tasks") suspend fun getAll(): List<StudyTaskEntity>
+    @Query("SELECT * FROM study_tasks WHERE id = :id LIMIT 1") suspend fun getById(id: Long): StudyTaskEntity?
+    @Query("SELECT * FROM study_tasks WHERE sourceMindDumpId = :sourceId ORDER BY createdAt DESC, id DESC LIMIT 1") suspend fun findBySourceMindDumpId(sourceId: Long): StudyTaskEntity?
     @Query("SELECT id, substr(title, 1, 160) AS title FROM study_tasks WHERE TRIM(title) != '' AND title LIKE '%' || :query || '%' ORDER BY createdAt DESC LIMIT :limit") suspend fun searchMindMapSources(query: String, limit: Int): List<MindMapSourceItem>
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertAll(items: List<StudyTaskEntity>)
     @Query("DELETE FROM study_tasks") suspend fun deleteAll()
@@ -204,8 +209,17 @@ interface MindDumpDao {
     @Query("SELECT * FROM mind_dump WHERE id = :id LIMIT 1")
     suspend fun getById(id: Long): MindDumpEntity?
 
+    @Query("SELECT * FROM mind_dump WHERE linkedTaskId = :taskId ORDER BY updatedAt DESC, id DESC LIMIT 1")
+    suspend fun getByLinkedTaskId(taskId: Long): MindDumpEntity?
+
+    @Query("UPDATE mind_dump SET content = :content, status = 'inbox', updatedAt = :updatedAt, linkedTaskId = NULL WHERE id = :id")
+    suspend fun restoreToInbox(id: Long, content: String, updatedAt: Long)
+
     @Query("SELECT * FROM study_tasks WHERE id = :id LIMIT 1")
     suspend fun getLinkedTask(id: Long): StudyTaskEntity?
+
+    @Query("SELECT * FROM study_tasks WHERE sourceMindDumpId = :sourceId ORDER BY createdAt DESC, id DESC LIMIT 1")
+    suspend fun getTaskBySourceMindDumpId(sourceId: Long): StudyTaskEntity?
 
     @Query("SELECT * FROM later_topics WHERE sourceMindDumpId = :sourceId ORDER BY updatedAt DESC, id DESC LIMIT 1")
     suspend fun getLaterTopicBySourceMindDumpId(sourceId: Long): LaterTopicEntity?
@@ -279,6 +293,7 @@ interface MindDumpDao {
     suspend fun convertToTask(entryId: Long): Long? {
         val entry = getById(entryId) ?: return null
         val linkedTask = entry.linkedTaskId?.let { getLinkedTask(it) }
+            ?: getTaskBySourceMindDumpId(entry.id)
         val taskId = linkedTask?.id ?: insertTask(MindDumpTaskMapper.toStudyTask(entry))
         updateStatus(entry.id, "task", System.currentTimeMillis(), taskId)
         return taskId
@@ -302,6 +317,9 @@ interface JournalEntryDao {
     @Query("SELECT * FROM journal_entries ORDER BY updatedAt DESC")
     fun observeAll(): Flow<List<JournalEntryEntity>>
     @Query("SELECT * FROM journal_entries") suspend fun getAll(): List<JournalEntryEntity>
+    @Query("SELECT * FROM journal_entries WHERE id = :id LIMIT 1") suspend fun getById(id: Long): JournalEntryEntity?
+    @Query("SELECT * FROM journal_entries WHERE sourceMindDumpId = :sourceId ORDER BY updatedAt DESC, id DESC LIMIT 1") suspend fun findBySourceMindDumpId(sourceId: Long): JournalEntryEntity?
+    @Insert(onConflict = OnConflictStrategy.IGNORE) suspend fun insertFromMindDump(entry: JournalEntryEntity): Long
     @Query("SELECT id, CASE WHEN TRIM(title) = '' THEN substr(body, 1, 160) ELSE substr(title, 1, 160) END AS title FROM journal_entries WHERE (title LIKE '%' || :query || '%' OR body LIKE '%' || :query || '%') AND (TRIM(title) != '' OR TRIM(body) != '') ORDER BY updatedAt DESC LIMIT :limit") suspend fun searchMindMapSources(query: String, limit: Int): List<MindMapSourceItem>
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertAll(items: List<JournalEntryEntity>)
     @Query("DELETE FROM journal_entries") suspend fun deleteAll()
@@ -339,7 +357,7 @@ interface LaterTopicDao {
     suspend fun delete(id: Long)
 }
 
-@Database(entities = [ProgressEntity::class, NoteEntity::class, BookmarkEntity::class, StudyTaskEntity::class, MindDumpEntity::class, JournalEntryEntity::class, LaterTopicEntity::class, LabStepProgressEntity::class, LearningSessionEntity::class, LabQuestionResponseEntity::class, LearningProfileEntity::class, LearningSessionFeedbackEntity::class, LearningStageProgressEntity::class, MindMapNodeEntity::class, MindMapEdgeEntity::class], version = 14, exportSchema = false)
+@Database(entities = [ProgressEntity::class, NoteEntity::class, BookmarkEntity::class, StudyTaskEntity::class, MindDumpEntity::class, JournalEntryEntity::class, LaterTopicEntity::class, LabStepProgressEntity::class, LearningSessionEntity::class, LabQuestionResponseEntity::class, LearningProfileEntity::class, LearningSessionFeedbackEntity::class, LearningStageProgressEntity::class, MindMapNodeEntity::class, MindMapEdgeEntity::class], version = 15, exportSchema = false)
 abstract class UserDatabase : RoomDatabase() {
     abstract fun progressDao(): ProgressDao
     abstract fun noteDao(): NoteDao
@@ -442,9 +460,20 @@ abstract class UserDatabase : RoomDatabase() {
                 db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_mind_map_nodes_sourceType_sourceId ON mind_map_nodes(sourceType, sourceId)")
             }
         }
+        val MIGRATION_14_15 = object : Migration(14, 15) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE notes ADD COLUMN sourceMindDumpId INTEGER")
+                db.execSQL("ALTER TABLE study_tasks ADD COLUMN sourceMindDumpId INTEGER")
+                db.execSQL("ALTER TABLE journal_entries ADD COLUMN sourceMindDumpId INTEGER")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_notes_sourceMindDumpId ON notes(sourceMindDumpId)")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_study_tasks_sourceMindDumpId ON study_tasks(sourceMindDumpId)")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_journal_entries_sourceMindDumpId ON journal_entries(sourceMindDumpId)")
+                db.execSQL("UPDATE study_tasks SET sourceMindDumpId = (SELECT id FROM mind_dump WHERE mind_dump.linkedTaskId = study_tasks.id ORDER BY updatedAt DESC, id DESC LIMIT 1) WHERE EXISTS (SELECT 1 FROM mind_dump WHERE mind_dump.linkedTaskId = study_tasks.id)")
+            }
+        }
         @Volatile private var instance: UserDatabase? = null
         fun getInstance(context: Context): UserDatabase = instance ?: synchronized(this) {
-            instance ?: Room.databaseBuilder(context.applicationContext, UserDatabase::class.java, "mindunlock-user.db").addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14).build().also { instance = it }
+            instance ?: Room.databaseBuilder(context.applicationContext, UserDatabase::class.java, "mindunlock-user.db").addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15).build().also { instance = it }
         }
     }
 }
