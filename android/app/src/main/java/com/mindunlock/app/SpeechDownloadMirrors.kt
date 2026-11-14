@@ -22,7 +22,7 @@ internal data class SpeechMirrorEndpoint(
  *  - a base URL, e.g. https://mirror.example.ir
  *  - a proxy template containing {url} or {encodedUrl}
  *
- * Custom endpoints always run first, followed by maintained public mirrors,
+ * The selected (prepopulated but editable) endpoints are tried in order,
  * and the publisher's original URL is always attempted last.
  */
 internal object SpeechDownloadMirrors {
@@ -47,7 +47,7 @@ internal object SpeechDownloadMirrors {
     }
 
     fun defaultEditableText(source: SpeechMirrorSource): String =
-        defaultAddresses(source).joinToString("\\n")
+        defaultAddresses(source).joinToString("\n")
 
     fun candidates(
         context: Context,
@@ -64,7 +64,7 @@ internal object SpeechDownloadMirrors {
             .toList()
 
 
-        val resolved = (custom + defaults).mapNotNull { resolve(it, originalUrl) }
+        val resolved = custom.mapNotNull { resolve(it, originalUrl) }
         val official = runCatching {
             val original = URL(originalUrl)
             require(original.protocol.equals("https", ignoreCase = true))
