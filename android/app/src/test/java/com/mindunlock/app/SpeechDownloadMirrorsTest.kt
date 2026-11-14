@@ -1,6 +1,6 @@
 package com.mindunlock.app
 
-import androidx.test.core.app.ApplicationProvider
+import org.robolectric.RuntimeEnvironment
 import android.content.Context
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -16,7 +16,7 @@ class SpeechDownloadMirrorsTest {
 
     @Before
     fun setUp() {
-        context = ApplicationProvider.getApplicationContext()
+        context = RuntimeEnvironment.getApplication()
         context.getSharedPreferences(SpeechDownloadMirrors.SETTINGS_FILE, Context.MODE_PRIVATE)
             .edit().clear().commit()
     }
