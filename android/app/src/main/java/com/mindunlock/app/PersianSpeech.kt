@@ -105,6 +105,7 @@ class PersianSpeech(context: Context) {
                     generateAndPlay(engine, queued)
                 }
             }.onFailure { failure ->
+                playbackQueue.cancel()
                 loadingId = null
                 loading.value = false
                 ready.value = loadedId == target && tts != null
