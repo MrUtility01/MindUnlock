@@ -69,6 +69,7 @@ fun GitHubBrowserScreen() {
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Text("مخزن عمومی MindUnlock", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        GitHubAuthCard()
         Text(
             "MrUtility01/MindUnlock · شاخه main · فقط خواندن عمومی",
             style = MaterialTheme.typography.bodySmall,
