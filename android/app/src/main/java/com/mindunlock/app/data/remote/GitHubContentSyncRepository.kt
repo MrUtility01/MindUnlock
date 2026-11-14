@@ -2,7 +2,6 @@ package com.mindunlock.app.data.remote
 
 import android.content.Context
 import androidx.room.withTransaction
-import com.google.gson.JsonArray
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
@@ -264,9 +263,6 @@ class GitHubContentSyncRepository(
         private const val PREFS = "github_content_sync_v1"
         private const val MAX_MANIFEST_BYTES = 1_000_000
         private const val MAX_CONTENT_BYTES = 1_000_000
-
-        private fun sha256(bytes: ByteArray): String = MessageDigest.getInstance("SHA-256")
-            .digest(bytes).joinToString("") { "%02x".format(it) }
     }
 }
 
