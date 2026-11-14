@@ -653,7 +653,7 @@ internal object OfflinePersianSpeech {
             modelConfig = OfflineModelConfig(
                 nemo = OfflineNemoEncDecCtcModelConfig(model = modelFile.absolutePath),
                 tokens = tokensFile.absolutePath,
-                numThreads = 4,
+                numThreads = if ((context.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager).isPowerSaveMode) 1 else 2,
                 provider = "cpu"
             )
         )
