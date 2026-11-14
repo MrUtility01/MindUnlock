@@ -447,8 +447,7 @@ private fun MindMapGraphCanvas(
     scale: Float,
     onSelectNode: (Long) -> Unit
 ) {
-    // Render node titles with Compose Text instead of nativeCanvas/StaticLayout.
-    // This keeps Persian shaping, RTL bidi handling and font fallback consistent.
+    // Compose Text handles Persian shaping/RTL; Canvas is retained only for light edge lines.
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         val columns = when {
             maxWidth >= 600.dp -> 4
@@ -456,47 +455,75 @@ private fun MindMapGraphCanvas(
             else -> 2
         }
         val rows = nodes.chunked(columns)
-        Column(
-            Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            rows.forEach { rowNodes ->
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    rowNodes.forEach { node ->
-                        Card(
-                            modifier = Modifier
-                                .weight(1f)
-                                .heightIn(min = 82.dp)
-                                .clickable { onSelectNode(node.id) },
-                            colors = androidx.compose.material3.CardDefaults.cardColors(
-                                containerColor = if (node.id == selectedNodeId)
-                                    MaterialTheme.colorScheme.tertiaryContainer
-                                else MaterialTheme.colorScheme.primaryContainer
-                            )
-                        ) {
-                            Box(
-                                Modifier.fillMaxWidth().heightIn(min = 82.dp).padding(8.dp),
-                                contentAlignment = androidx.compose.ui.Alignment.Center
-                            ) {
-                                Text(
-                                    text = node.title.trim().ifBlank { "بدون عنوان" },
-                                    color = if (node.id == selectedNodeId)
-                                        MaterialTheme.colorScheme.onTertiaryContainer
-                                    else MaterialTheme.colorScheme.onPrimaryContainer,
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = (13f * scale).coerceIn(11f, 17f).sp,
-                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                                    maxLines = 3,
-                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+        val gap = 8.dp
+        val nodeHeight = 82.dp
+        val canvasHeight = nodeHeight * rows.size + gap * (rows.size - 1).coerceAtLeast(0)
+        Box(Modifier.fillMaxWidth().height(canvasHeight)) {
+            Canvas(Modifier.fillMaxSize()) {
+                val gapPx = gap.toPx()
+                val cellWidth = (size.width - gapPx * (columns - 1)) / columns
+                val cellHeight = nodeHeight.toPx()
+                val centers = nodes.mapIndexed { index, node ->
+                    val column = index % columns
+                    val row = index / columns
+                    node.id to Offset(
+                        column * (cellWidth + gapPx) + cellWidth / 2f,
+                        row * (cellHeight + gapPx) + cellHeight / 2f
+                    )
+                }.toMap()
+                edges.forEach { edge ->
+                    val from = centers[edge.sourceNodeId]
+                    val to = centers[edge.targetNodeId]
+                    if (from != null && to != null) {
+                        drawLine(
+                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.65f),
+                            start = from,
+                            end = to,
+                            strokeWidth = 1.5.dp.toPx()
+                        )
+                    }
+                }
+            }
+            Column(
+                Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(gap)
+            ) {
+                rows.forEach { rowNodes ->
+                    Row(
+                        Modifier.fillMaxWidth().height(nodeHeight),
+                        horizontalArrangement = Arrangement.spacedBy(gap)
+                    ) {
+                        rowNodes.forEach { node ->
+                            Card(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(nodeHeight)
+                                    .clickable { onSelectNode(node.id) },
+                                colors = androidx.compose.material3.CardDefaults.cardColors(
+                                    containerColor = if (node.id == selectedNodeId)
+                                        MaterialTheme.colorScheme.tertiaryContainer
+                                    else MaterialTheme.colorScheme.primaryContainer
                                 )
+                            ) {
+                                Box(
+                                    Modifier.fillMaxSize().padding(8.dp),
+                                    contentAlignment = androidx.compose.ui.Alignment.Center
+                                ) {
+                                    Text(
+                                        text = node.title.trim().ifBlank { "بدون عنوان" },
+                                        color = if (node.id == selectedNodeId)
+                                            MaterialTheme.colorScheme.onTertiaryContainer
+                                        else MaterialTheme.colorScheme.onPrimaryContainer,
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = (13f * scale).coerceIn(11f, 17f).sp,
+                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                        maxLines = 3,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                    )
+                                }
                             }
                         }
-                    }
-                    repeat(columns - rowNodes.size) {
-                        Spacer(Modifier.weight(1f))
+                        repeat(columns - rowNodes.size) { Spacer(Modifier.weight(1f)) }
                     }
                 }
             }
