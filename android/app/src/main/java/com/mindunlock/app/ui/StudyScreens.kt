@@ -2518,10 +2518,16 @@ fun SettingsScreen(
     var showResetDialog by remember { mutableStateOf(false) }
     var showDeleteVoiceDialog by remember { mutableStateOf(false) }
     var hfMirrorAddresses by remember {
-        mutableStateOf(preferences.getString(SpeechDownloadMirrors.PREF_HF_MIRRORS, "").orEmpty())
+        mutableStateOf(
+            preferences.getString(SpeechDownloadMirrors.PREF_HF_MIRRORS, null)
+                ?: SpeechDownloadMirrors.defaultEditableText(SpeechMirrorSource.HUGGING_FACE)
+        )
     }
     var githubMirrorAddresses by remember {
-        mutableStateOf(preferences.getString(SpeechDownloadMirrors.PREF_GITHUB_MIRRORS, "").orEmpty())
+        mutableStateOf(
+            preferences.getString(SpeechDownloadMirrors.PREF_GITHUB_MIRRORS, null)
+                ?: SpeechDownloadMirrors.defaultEditableText(SpeechMirrorSource.GITHUB_RELEASE)
+        )
     }
     var mirrorSettingsMessage by remember { mutableStateOf("") }
     var asrModelPresent by remember { mutableStateOf(OfflinePersianSpeech.isInstalled(context)) }
@@ -2639,6 +2645,18 @@ fun SettingsScreen(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                OutlinedButton(
+                    onClick = {
+                        hfMirrorAddresses = SpeechDownloadMirrors.defaultEditableText(SpeechMirrorSource.HUGGING_FACE)
+                        githubMirrorAddresses = SpeechDownloadMirrors.defaultEditableText(SpeechMirrorSource.GITHUB_RELEASE)
+                        preferences.edit()
+                            .putString(SpeechDownloadMirrors.PREF_HF_MIRRORS, hfMirrorAddresses)
+                            .putString(SpeechDownloadMirrors.PREF_GITHUB_MIRRORS, githubMirrorAddresses)
+                            .apply()
+                        mirrorSettingsMessage = "میرورهای پیش‌فرض بازنشانی و ذخیره شدند."
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("بازنشانی میرورها به پیش‌فرض") }
                 Button(
                     onClick = {
                         preferences.edit()
