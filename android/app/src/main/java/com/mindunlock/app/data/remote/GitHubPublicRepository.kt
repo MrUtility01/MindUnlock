@@ -74,7 +74,7 @@ class GitHubPublicRepository(
         val item = json.asJsonObject
         require(item.get("type")?.asString == "file") { "این مسیر یک فایل متنی نیست." }
         val size = item.get("size")?.asLong ?: 0L
-        require(size in 0..MAX_TEXT_FILE_BYTES) { "فایل بزرگ‌تر از سقف پیش‌نمایش ۱٫۵ مگابایت است." }
+        require(size in 0..MAX_TEXT_FILE_BYTES) { "فایل بزرگ‌تر از سقف پیش‌نمایش ۱ مگابایت است." }
         val encoding = item.get("encoding")?.asString
         require(encoding == "base64") { "قالب فایل برای پیش‌نمایش متنی پشتیبانی نمی‌شود." }
         val encoded = item.get("content")?.asString ?: throw IllegalStateException("محتوای فایل در پاسخ GitHub وجود ندارد.")
