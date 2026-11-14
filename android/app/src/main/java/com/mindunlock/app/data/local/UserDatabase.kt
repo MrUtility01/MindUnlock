@@ -239,13 +239,19 @@ interface MindDumpDao {
         val topic = getLaterTopicById(topicId) ?: return null
         val source = topic.sourceMindDumpId?.let { getById(it) }
         val now = System.currentTimeMillis()
+        val title = topic.title.trim()
+        val details = topic.details.trim()
+        val content = when {
+            title.isBlank() -> details
+            details.isBlank() -> title
+            details.startsWith(title) -> details
+            else -> "$title\n\n$details"
+        }
+        if (content.isBlank()) return null
         val restoredId = if (source != null) {
-            updateStatus(source.id, "inbox", now, null)
+            restoreToInbox(source.id, content, now)
             source.id
         } else {
-            val content = listOf(topic.title, topic.details)
-                .filter { it.isNotBlank() }
-                .joinToString("\n\n")
             insert(MindDumpEntity(content = content, category = "learning", createdAt = now, updatedAt = now))
         }
         deleteLaterTopic(topic.id)
