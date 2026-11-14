@@ -188,6 +188,7 @@ class PersianSpeech(context: Context) {
                 setRequestProperty("Accept", "application/octet-stream")
             }
             try {
+                DownloadAuditLog.record(appContext, "TTS", "attempt=${index + 1}/${mirrors.size} host=${mirror.label} file=${spec.model}")
                 status.value = "آزمایش میرور ${index + 1} از ${mirrors.size}: ${mirror.label}"
                 connection.connect()
                 val response = connection.responseCode
@@ -224,12 +225,15 @@ class PersianSpeech(context: Context) {
                     "دانلود کامل نیست؛ $received از ${spec.archiveBytes} بایت دریافت شد."
                 }
                 check(partial.renameTo(archive)) { "انتقال بسته دانلودشده ناموفق بود." }
+                DownloadAuditLog.record(appContext, "TTS", "success host=${mirror.label} bytes=$received file=${spec.model}")
                 status.value = "بسته از میرور ${mirror.label} دریافت شد؛ اعتبارسنجی و استخراج آغاز می‌شود."
                 return
             } catch (failure: Throwable) {
                 partial.delete()
                 archive.delete()
-                failures += "${index + 1}. ${mirror.label}: ${failure.message ?: failure.javaClass.simpleName}"
+                val reason = failure.message ?: failure.javaClass.simpleName
+                DownloadAuditLog.record(appContext, "TTS", "failure host=${mirror.label} reason=$reason")
+                failures += "${index + 1}. ${mirror.label}: $reason"
             } finally {
                 connection.disconnect()
             }
