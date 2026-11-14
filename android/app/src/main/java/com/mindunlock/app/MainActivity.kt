@@ -592,10 +592,10 @@ internal object OfflinePersianSpeech {
         val tokensFile = File(modelDir, "tokens.txt")
         if (!modelFile.isFile || modelFile.length() < 1_000_000L) {
             onProgress(0)
-            download(MODEL_URL, modelFile) { percent -> onProgress((percent * 0.9f).toInt().coerceIn(0, 90)) }
+            download(context, SpeechMirrorSource.HUGGING_FACE, MODEL_URL, modelFile) { percent -> onProgress((percent * 0.9f).toInt().coerceIn(0, 90)) }
         } else onProgress(90)
         if (!tokensFile.isFile || tokensFile.length() < 100L) {
-            download(TOKENS_URL, tokensFile) { percent -> onProgress(90 + (percent / 10).coerceIn(0, 10)) }
+            download(context, SpeechMirrorSource.HUGGING_FACE, TOKENS_URL, tokensFile) { percent -> onProgress(90 + (percent / 10).coerceIn(0, 10)) }
         }
         check(modelFile.isFile && modelFile.length() >= 1_000_000L) { "فایل مدل تشخیص گفتار ناقص است." }
         check(tokensFile.isFile && tokensFile.length() >= 100L) { "فایل واژگان مدل تشخیص گفتار ناقص است." }
@@ -672,50 +672,86 @@ internal object OfflinePersianSpeech {
         }
     }
 
-    private fun download(url: String, target: File, onProgress: (Int) -> Unit) {
+    private fun download(
+        context: Context,
+        source: SpeechMirrorSource,
+        originalUrl: String,
+        target: File,
+        onProgress: (Int) -> Unit
+    ) {
         val partial = File(target.parentFile, target.name + ".part")
-        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
-            connectTimeout = 20_000
-            readTimeout = 120_000
-            instanceFollowRedirects = true
-            setRequestProperty("User-Agent", "MindUnlock-Android")
-        }
-        try {
-            connection.connect()
-            if (connection.responseCode !in 200..299) error("دریافت مدل ناموفق بود: HTTP ${connection.responseCode}")
-            val total = connection.contentLengthLong
-            connection.inputStream.use { input ->
-                partial.outputStream().buffered().use { output ->
-                    val buffer = ByteArray(64 * 1024)
-                    var copied = 0L
-                    var lastPercent = -1
-                    while (true) {
-                        val read = input.read(buffer)
-                        if (read < 0) break
-                        output.write(buffer, 0, read)
-                        copied += read
-                        if (total > 0) {
-                            val percent = ((copied * 100) / total).toInt()
-                            if (percent != lastPercent) {
-                                lastPercent = percent
-                                onProgress(percent)
+        val failures = mutableListOf<String>()
+        val mirrors = SpeechDownloadMirrors.candidates(context, source, originalUrl)
+        check(mirrors.isNotEmpty()) { "برای دریافت فایل هیچ میروری پیکربندی نشده است." }
+
+        for ((index, mirror) in mirrors.withIndex()) {
+            partial.delete()
+            val connection = (URL(mirror.url).openConnection() as HttpURLConnection).apply {
+                connectTimeout = 15_000
+                readTimeout = 120_000
+                instanceFollowRedirects = true
+                requestMethod = "GET"
+                setRequestProperty("User-Agent", "MindUnlock-Android/0.6.28")
+                setRequestProperty("Accept", "application/octet-stream")
+            }
+            try {
+                onProgress(0)
+                connection.connect()
+                val responseCode = connection.responseCode
+                if (responseCode !in 200..299) {
+                    error("HTTP $responseCode")
+                }
+                val total = connection.contentLengthLong
+                connection.inputStream.use { input ->
+                    partial.outputStream().buffered().use { output ->
+                        val buffer = ByteArray(64 * 1024)
+                        var copied = 0L
+                        var lastPercent = -1
+                        while (true) {
+                            val read = input.read(buffer)
+                            if (read < 0) break
+                            output.write(buffer, 0, read)
+                            copied += read
+                            if (total > 0L) {
+                                val percent = ((copied * 100L) / total).toInt().coerceIn(0, 100)
+                                if (percent != lastPercent) {
+                                    lastPercent = percent
+                                    onProgress(percent)
+                                }
                             }
                         }
                     }
                 }
+                if (total > 0L && partial.length() != total) {
+                    error("فایل ناقص بود: ${partial.length()} از $total بایت")
+                }
+                if (partial.length() < 100L) {
+                    error("پاسخ سرور فایل مدل معتبر نبود یا بسیار کوچک بود.")
+                }
+
+                val backup = File(target.parentFile, target.name + ".backup")
+                backup.delete()
+                if (target.exists() && !target.renameTo(backup)) {
+                    error("فایل قبلی برای جایگزینی قابل انتقال نبود.")
+                }
+                if (!partial.renameTo(target)) {
+                    if (backup.exists()) backup.renameTo(target)
+                    error("ذخیره فایل دریافت‌شده ناموفق بود.")
+                }
+                backup.delete()
+                onProgress(100)
+                return
+            } catch (failure: Throwable) {
+                partial.delete()
+                failures += "${index + 1}. ${mirror.label}: ${failure.message ?: failure.javaClass.simpleName}"
+            } finally {
+                connection.disconnect()
             }
-            if (total > 0L && partial.length() != total) {
-                error("دریافت فایل کامل نیست: ${partial.length()} از $total بایت.")
-            }
-            if (partial.length() < 100L) error("فایل مدل ناقص دریافت شد.")
-            if (target.exists() && !target.delete()) error("جایگزینی فایل مدل قبلی انجام نشد.")
-            if (!partial.renameTo(target)) error("ذخیره فایل مدل انجام نشد.")
-        } catch (error: Throwable) {
-            partial.delete()
-            throw error
-        } finally {
-            connection.disconnect()
         }
+        target.parentFile?.let { parent ->
+            File(parent, target.name + ".part").delete()
+        }
+        error("همه میرورهای دریافت ناموفق بودند: ${failures.joinToString(" | ")}")
     }
 }
 
