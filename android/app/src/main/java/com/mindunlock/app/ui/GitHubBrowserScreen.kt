@@ -70,13 +70,14 @@ fun GitHubBrowserScreen() {
     ) {
         Text("مخزن عمومی MindUnlock", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         GitHubAuthCard()
+        GitHubContentSyncCard()
         Text(
             "MrUtility01/MindUnlock · شاخه main · فقط خواندن عمومی",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Text(
-            "برای مرور و پیش‌نمایش فایل‌ها نیازی به ورود نیست. ارسال فایل و همگام‌سازی نوشتنی در مرحله احراز هویت GitHub App اضافه می‌شود.",
+            "مرور عمومی بدون ورود انجام می‌شود. واردسازی محتوا از Manifest با بررسی هش و حفاظت از نسخه‌های محلی انجام می‌شود؛ ارسال فایل نیز با GitHub App و Pull Request است.",
             style = MaterialTheme.typography.bodySmall
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
