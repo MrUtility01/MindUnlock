@@ -93,6 +93,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import kotlinx.coroutines.withContext
 import com.mindunlock.app.ui.theme.MindUnlockTheme
+import com.mindunlock.app.ui.GitHubBrowserScreen
 
 class MainActivity : ComponentActivity() {
     private lateinit var speech: PersianSpeech
@@ -311,6 +312,7 @@ private fun MindUnlockRoot(
         "profile" -> "پروفایل یادگیری"
         "learning" -> "موتور یادگیری"
         "sync" -> "اتصال و دریافت محتوا"
+        "github" -> "مخزن عمومی GitHub"
         "more" -> "ابزارهای یادگیری"
         else -> "MindUnlock"
     }
@@ -319,7 +321,7 @@ private fun MindUnlockRoot(
             "reader" -> previousScreen
             "chapter" -> "subject"
             "subject" -> "courses"
-            "sync", "settings", "profile", "learning", "mindmap", "more", "quiz", "exam", "review", "labs", "planner", "progress", "bookmarks", "inbox", "journal", "later", "backup", "archive", "about" -> "home"
+            "sync", "github", "settings", "profile", "learning", "mindmap", "more", "quiz", "exam", "review", "labs", "planner", "progress", "bookmarks", "inbox", "journal", "later", "backup", "archive", "about" -> "home"
             else -> "home"
         }
     }
@@ -360,6 +362,11 @@ private fun MindUnlockRoot(
                                 text = { Text("اتصال به ویندوز") },
                                 leadingIcon = { Icon(Icons.Default.CloudDownload, contentDescription = null) },
                                 onClick = { showTopMenu = false; screen = "sync" }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("مرور مخزن عمومی GitHub") },
+                                leadingIcon = { Icon(Icons.Default.CloudDownload, contentDescription = null) },
+                                onClick = { showTopMenu = false; screen = "github" }
                             )
                             DropdownMenuItem(
                                 text = { Text("صندوق ورودی") },
@@ -464,6 +471,7 @@ private fun MindUnlockRoot(
                 "profile" -> LearningProfileScreen(preferences, userDatabase)
                 "learning" -> LearningEngineScreen(repository.database, userDatabase, preferences, onOpenChapter = { id -> selectedChapter = id; screen = "chapter" }, onNavigate = { screen = it })
                 "sync" -> SyncScreen(repository, onDone = { screen = "courses" })
+                "github" -> GitHubBrowserScreen()
                 else -> MoreScreen(onNavigate = { screen = it })
             }
         }
