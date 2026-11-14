@@ -17,6 +17,8 @@ android {
         versionCode = 45
         versionName = "0.6.30"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // GitHub App Client ID is a public identifier, not a credential or secret.
+        buildConfigField("String", "GITHUB_APP_CLIENT_ID", "\"Iv23li8i213BD0rRdrpI\"")
     }
 
     buildTypes {
@@ -32,7 +34,7 @@ android {
     }
     kotlinOptions { jvmTarget = "17" }
     testOptions { unitTests.isIncludeAndroidResources = true }
-    buildFeatures { compose = true }
+    buildFeatures { compose = true; buildConfig = true }
     packaging {
         resources.excludes += "sherpa-onnx/native/**"
          resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }
