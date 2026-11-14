@@ -329,7 +329,7 @@ class UserDatabaseMindDumpMigrationTest {
             val restored = db.mindDumpDao().getById(sourceId)
             assertEquals("inbox", restored?.status)
             assertEquals(null, restored?.linkedTaskId)
-            assertEquals("سؤال درباره مسیریابی", restored?.content)
+            assertEquals("سؤال درباره مسیریابی\n\nمتن کامل سؤال و زمینه آن", restored?.content)
             assertEquals(0, db.laterTopicDao().getAll().size)
 
             val orphanTopicId = db.laterTopicDao().insert(
