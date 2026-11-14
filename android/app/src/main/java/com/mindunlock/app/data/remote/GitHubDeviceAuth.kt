@@ -7,9 +7,9 @@ import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
 import com.mindunlock.app.BuildConfig
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.Dispatchers
 import okhttp3.FormBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -30,6 +30,13 @@ data class GitHubDeviceCode(
 
 data class GitHubAccount(val login: String, val name: String?)
 
+data class GitHubStoredTokens(
+    val accessToken: String,
+    val refreshToken: String?,
+    val accessTokenExpiresAtMillis: Long,
+    val refreshTokenExpiresAtMillis: Long
+)
+
 class GitHubDeviceAuth(
     private val clientId: String = BuildConfig.GITHUB_APP_CLIENT_ID,
     private val http: OkHttpClient = OkHttpClient.Builder()
@@ -43,6 +50,7 @@ class GitHubDeviceAuth(
         require(clientId.isNotBlank()) { "شناسه GitHub App در نسخه برنامه تنظیم نشده است." }
         val body = FormBody.Builder()
             .add("client_id", clientId)
+            .add("scope", "offline_access")
             .build()
         val json = postJson("https://github.com/login/device/code", body)
         GitHubDeviceCode(
@@ -70,20 +78,37 @@ class GitHubDeviceAuth(
                 .build()
             val response = postJson("https://github.com/login/oauth/access_token", body)
             when (response.optString("error")) {
-                "authorization_pending" -> onWaiting("در انتظار تأیید در GitHub…")
+                "authorization_pending" -> withContext(Dispatchers.Main.immediate) {
+                    onWaiting("در انتظار تأیید در GitHub…")
+                }
                 "slow_down" -> {
                     interval += 5L
-                    onWaiting("گیت‌هاب درخواست کرده فاصله بررسی بیشتر شود…")
+                    withContext(Dispatchers.Main.immediate) {
+                        onWaiting("گیت‌هاب فاصله بررسی را افزایش داد؛ در انتظار…")
+                    }
                 }
                 "access_denied" -> error("درخواست ورود در GitHub رد شد.")
-                "expired_token" -> error("کد ورود منقضی شد؛ دوباره تلاش کن.")
+                "expired_token", "token_expired" -> error("کد ورود منقضی شد؛ دوباره تلاش کن.")
                 "incorrect_client_credentials" -> error("Client ID با تنظیمات GitHub App مطابقت ندارد.")
-                "unsupported_grant_type" -> error("Device Flow برای این GitHub App فعال نیست.")
+                "unsupported_grant_type" -> error("نوع مجوز Device Flow پشتیبانی نشد.")
+                "device_flow_disabled" -> error("Device Flow در تنظیمات GitHub App فعال نشده است.")
+                "incorrect_device_code" -> error("کد دستگاه معتبر نیست؛ ورود را از ابتدا شروع کن.")
                 else -> {
                     val token = response.optString("access_token")
                     if (token.isNotBlank()) {
                         val account = fetchAccount(token)
-                        GitHubTokenVault.save(context.applicationContext, token)
+                        val now = System.currentTimeMillis()
+                        val expiresIn = response.optLong("expires_in", 0L)
+                        val refreshExpiresIn = response.optLong("refresh_token_expires_in", 0L)
+                        GitHubTokenVault.save(
+                            context = context.applicationContext,
+                            tokens = GitHubStoredTokens(
+                                accessToken = token,
+                                refreshToken = response.optString("refresh_token").takeIf { it.isNotBlank() },
+                                accessTokenExpiresAtMillis = if (expiresIn > 0L) now + expiresIn * 1000L else 0L,
+                                refreshTokenExpiresAtMillis = if (refreshExpiresIn > 0L) now + refreshExpiresIn * 1000L else 0L
+                            )
+                        )
                         return@withContext account
                     }
                     if (response.has("error")) {
@@ -94,6 +119,45 @@ class GitHubDeviceAuth(
             }
         }
         error("زمان تأیید ورود تمام شد؛ دوباره تلاش کن.")
+    }
+
+    suspend fun getValidAccessToken(context: Context): String? = withContext(Dispatchers.IO) {
+        val stored = GitHubTokenVault.read(context) ?: return@withContext null
+        val now = System.currentTimeMillis()
+        if (stored.accessTokenExpiresAtMillis == 0L || stored.accessTokenExpiresAtMillis > now + 60_000L) {
+            return@withContext stored.accessToken
+        }
+        val refresh = stored.refreshToken ?: run {
+            GitHubTokenVault.clear(context)
+            return@withContext null
+        }
+        if (stored.refreshTokenExpiresAtMillis > 0L && stored.refreshTokenExpiresAtMillis <= now) {
+            GitHubTokenVault.clear(context)
+            return@withContext null
+        }
+        val body = FormBody.Builder()
+            .add("client_id", clientId)
+            .add("grant_type", "refresh_token")
+            .add("refresh_token", refresh)
+            .build()
+        val response = postJson("https://github.com/login/oauth/access_token", body)
+        val newAccess = response.optString("access_token")
+        val newRefresh = response.optString("refresh_token")
+        if (newAccess.isBlank() || newRefresh.isBlank()) {
+            GitHubTokenVault.clear(context)
+            return@withContext null
+        }
+        val refreshedAt = System.currentTimeMillis()
+        GitHubTokenVault.save(
+            context,
+            GitHubStoredTokens(
+                accessToken = newAccess,
+                refreshToken = newRefresh,
+                accessTokenExpiresAtMillis = refreshedAt + response.optLong("expires_in", 28_800L) * 1000L,
+                refreshTokenExpiresAtMillis = refreshedAt + response.optLong("refresh_token_expires_in", 15_897_600L) * 1000L
+            )
+        )
+        newAccess
     }
 
     private fun fetchAccount(token: String): GitHubAccount {
@@ -129,24 +193,31 @@ class GitHubDeviceAuth(
 
 object GitHubTokenVault {
     private const val PREFS = "github_auth_secure"
-    private const val TOKEN_KEY = "github_user_token"
+    private const val TOKENS_KEY = "github_tokens_encrypted"
+    private const val IV_KEY = "github_tokens_iv"
     private const val KEY_ALIAS = "mindunlock_github_token_aes"
 
-    fun save(context: Context, token: String) {
-        require(token.isNotBlank())
+    fun save(context: Context, tokens: GitHubStoredTokens) {
+        require(tokens.accessToken.isNotBlank())
+        val plain = JSONObject()
+            .put("access_token", tokens.accessToken)
+            .put("refresh_token", tokens.refreshToken ?: JSONObject.NULL)
+            .put("access_expires_at", tokens.accessTokenExpiresAtMillis)
+            .put("refresh_expires_at", tokens.refreshTokenExpiresAtMillis)
+            .toString()
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey())
-        val encrypted = cipher.doFinal(token.toByteArray(Charsets.UTF_8))
+        val encrypted = cipher.doFinal(plain.toByteArray(Charsets.UTF_8))
         prefs(context).edit()
-            .putString("iv", Base64.encodeToString(cipher.iv, Base64.NO_WRAP))
-            .putString(TOKEN_KEY, Base64.encodeToString(encrypted, Base64.NO_WRAP))
+            .putString(IV_KEY, Base64.encodeToString(cipher.iv, Base64.NO_WRAP))
+            .putString(TOKENS_KEY, Base64.encodeToString(encrypted, Base64.NO_WRAP))
             .apply()
     }
 
-    fun read(context: Context): String? {
+    fun read(context: Context): GitHubStoredTokens? {
         val store = prefs(context)
-        val iv = store.getString("iv", null) ?: return null
-        val encrypted = store.getString(TOKEN_KEY, null) ?: return null
+        val iv = store.getString(IV_KEY, null) ?: return null
+        val encrypted = store.getString(TOKENS_KEY, null) ?: return null
         return try {
             val cipher = Cipher.getInstance("AES/GCM/NoPadding")
             cipher.init(
@@ -154,7 +225,13 @@ object GitHubTokenVault {
                 getOrCreateKey(),
                 GCMParameterSpec(128, Base64.decode(iv, Base64.NO_WRAP))
             )
-            String(cipher.doFinal(Base64.decode(encrypted, Base64.NO_WRAP)), Charsets.UTF_8)
+            val json = JSONObject(String(cipher.doFinal(Base64.decode(encrypted, Base64.NO_WRAP)), Charsets.UTF_8))
+            GitHubStoredTokens(
+                accessToken = json.getString("access_token"),
+                refreshToken = json.optString("refresh_token").takeIf { it.isNotBlank() && it != "null" },
+                accessTokenExpiresAtMillis = json.optLong("access_expires_at", 0L),
+                refreshTokenExpiresAtMillis = json.optLong("refresh_expires_at", 0L)
+            )
         } catch (_: Exception) {
             clear(context)
             null
