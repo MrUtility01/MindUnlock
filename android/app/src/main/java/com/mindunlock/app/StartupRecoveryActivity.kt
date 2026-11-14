@@ -101,7 +101,7 @@ class StartupRecoveryActivity : Activity() {
             text = report.ifBlank { "گزارش خطا ثبت نشده است." }
             textSize = 12f
             typeface = Typeface.MONOSPACE
-            textIsSelectable = true
+            setTextIsSelectable(true)
             setPadding(dp(10), dp(10), dp(10), dp(10))
         }
         content.addView(reportView, matchWrap())
