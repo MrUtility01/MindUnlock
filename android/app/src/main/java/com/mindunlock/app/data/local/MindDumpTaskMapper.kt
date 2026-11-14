@@ -14,7 +14,8 @@ object MindDumpTaskMapper {
         return StudyTaskEntity(
             title = title,
             details = entry.content,
-            taskType = if (entry.category == "project") "project" else "task"
+            taskType = if (entry.category == "project") "project" else "task",
+            sourceMindDumpId = entry.id
         )
     }
 }
