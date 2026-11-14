@@ -43,6 +43,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -247,7 +248,7 @@ fun KnowledgeArchiveScreen(db: AppDatabase, speech: PersianSpeech, onOpenItem: (
                 Card(onClick = { onOpenItem(item.uid) }, modifier = Modifier.fillMaxWidth()) {
                     Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(item.title ?: "بدون عنوان", fontWeight = FontWeight.SemiBold)
-                        OutlinedButton(onClick = { speech.speak(cleanHtml(listOfNotNull(item.title, item.summary).joinToString(". "))) }, enabled = speech.ready.value) { Text("خواندن خلاصه") }
+                        OutlinedButton(onClick = { speech.speak(cleanHtml(listOfNotNull(item.title, item.summary).joinToString(". "))) }, enabled = !speech.loading.value) { Text("خواندن خلاصه") }
                         Text("${kindLabel(item.type)} · $chapterTitle", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                         if (!item.summary.isNullOrBlank()) {
                             Text(cleanHtml(item.summary), maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
@@ -369,7 +370,7 @@ fun DashboardScreen(
             ResumeActionKind.START_LEARNING -> onNavigate("learning")
         }
     }
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    Column(Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
             Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text("MindUnlock", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
@@ -909,7 +910,7 @@ fun ReaderScreen(db: AppDatabase, userDb: UserDatabase, itemUid: String, speech:
         val base = rel.substringAfterLast('/')
         imageRefs.any { ref -> ref == rel || rel.endsWith(ref) || ref.endsWith(rel) || ref.substringAfterLast('/') == base }
     }
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(kindLabel(current.type), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium)
         Text(current.title ?: "بدون عنوان", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         if (!current.summary.isNullOrBlank()) Text(cleanHtml(current.summary), style = MaterialTheme.typography.titleSmall)
@@ -974,7 +975,7 @@ fun ReaderScreen(db: AppDatabase, userDb: UserDatabase, itemUid: String, speech:
             FilledTonalButton(onClick = {
                 val text = "${current.title}. $bodyText"
                 speech.speak(cleanHtml(text), preferences.getFloat("speech_rate", 1f), preferences.getString("speech_voice", null))
-            }, enabled = speech.ready.value) { Icon(Icons.Default.PlayArrow, null); Text("خواندن فارسی") }
+            }, enabled = !speech.loading.value) { Icon(Icons.Default.PlayArrow, null); Text("خواندن فارسی") }
             OutlinedButton(onClick = { speech.stop() }) { Icon(Icons.Default.Stop, null); Text("توقف صدا") }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1184,7 +1185,7 @@ private fun LabScenarioReaderPanel(
                     }
                     speech.speak(script, preferences.getFloat("speech_rate", 1f), preferences.getString("speech_voice", null))
                 },
-                enabled = speech.ready.value,
+                enabled = !speech.loading.value,
                 modifier = Modifier.weight(1f)
             ) { Text("خواندن مراحل") }
             Button(
@@ -1246,7 +1247,7 @@ fun FlashcardsScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeec
     var flipped by rememberSaveable(reviewOnly) { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val current = deck.getOrNull(index)
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    Column(Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text(if (reviewOnly) "مرور هوشمند روزانه" else "دستهٔ فلش‌کارت‌ها", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             MetricCard(if (reviewOnly) "موارد سررسیدشده" else "فلش‌کارت‌ها", if (reviewOnly) dueCandidates.size.toString() else flashcards.size.toString(), Modifier.weight(1f))
@@ -1292,7 +1293,7 @@ fun FlashcardsScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeec
             }
             val old = progress.firstOrNull { it.itemUid == current.uid }
             Text("تلاش‌ها: ${old?.attempts ?: 0} · درست: ${old?.correct ?: 0} · اشتباه: ${old?.wrong ?: 0} · فاصله: ${old?.intervalDays ?: 0} روز", style = MaterialTheme.typography.labelSmall)
-            OutlinedButton(onClick = { speech.speak(cleanHtml(current.title.orEmpty() + ". " + current.content.orEmpty()), preferences.getFloat("speech_rate", 1f), preferences.getString("speech_voice", "gyro")) }, enabled = speech.ready.value) { Icon(Icons.Default.PlayArrow, null); Text("شنیدن کارت") }
+            OutlinedButton(onClick = { speech.speak(cleanHtml(current.title.orEmpty() + ". " + current.content.orEmpty()), preferences.getFloat("speech_rate", 1f), preferences.getString("speech_voice", "gyro")) }, enabled = !speech.loading.value) { Icon(Icons.Default.PlayArrow, null); Text("شنیدن کارت") }
             if (flipped) {
                 Text("کیفیت یادآوری را صادقانه ارزیابی کن", fontWeight = FontWeight.SemiBold)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -1345,7 +1346,7 @@ fun QuizScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeech, exa
     var score by rememberSaveable(examMode) { mutableIntStateOf(0) }
     var scoredCount by rememberSaveable(examMode) { mutableIntStateOf(0) }
     val item = valid.getOrNull(index)
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(if (examMode) "آزمون" else "تمرین", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         if (finished) {
             Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
@@ -1363,7 +1364,7 @@ fun QuizScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeech, exa
             Text(cleanHtml(item.content.orEmpty()), style = MaterialTheme.typography.bodyLarge)
             val meta = runCatching { JsonParser.parseString(item.metadataJson ?: "{}").asJsonObject }.getOrNull()
             val options = readStringArray(item.optionsJson ?: meta?.get("options")?.toString())
-            OutlinedButton(onClick = { speech.speak(item.title.orEmpty() + ". " + cleanHtml(item.content.orEmpty()) + ". " + options.joinToString(". ")) }, enabled = speech.ready.value, modifier = Modifier.fillMaxWidth()) { Text("خواندن سؤال و گزینه‌ها") }
+            OutlinedButton(onClick = { speech.speak(item.title.orEmpty() + ". " + cleanHtml(item.content.orEmpty()) + ". " + options.joinToString(". ")) }, enabled = !speech.loading.value, modifier = Modifier.fillMaxWidth()) { Text("خواندن سؤال و گزینه‌ها") }
             options.forEachIndexed { i, option ->
                 Card(
                     onClick = { if (!checked) answer = i },
@@ -1563,7 +1564,7 @@ fun NotesScreen(userDb: UserDatabase, speech: PersianSpeech) {
                             }
                         }
                         Text(note.body, maxLines = 4, overflow = TextOverflow.Ellipsis)
-                        OutlinedButton(onClick = { speech.speak(note.title + ". " + note.body) }, enabled = speech.ready.value) { Text("خواندن یادداشت") }
+                        OutlinedButton(onClick = { speech.speak(note.title + ". " + note.body) }, enabled = !speech.loading.value) { Text("خواندن یادداشت") }
                         if (note.sourceMindDumpId != null) {
                             Text("منبع: صندوق ورودی #${note.sourceMindDumpId}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                             OutlinedButton(
@@ -1666,7 +1667,7 @@ fun LabsScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeech, onO
                         Text("پروژه شخصی", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                         Text(task.title, fontWeight = FontWeight.SemiBold)
                         if (task.details.isNotBlank()) Text(task.details, style = MaterialTheme.typography.bodySmall)
-                        IconButton(onClick = { speech.speak(task.title + ". " + task.details) }, enabled = speech.ready.value) { Icon(Icons.Default.VolumeUp, contentDescription = "خواندن کار") }
+                        IconButton(onClick = { speech.speak(task.title + ". " + task.details) }, enabled = !speech.loading.value) { Icon(Icons.Default.VolumeUp, contentDescription = "خواندن کار") }
                         Text(if (task.completed) "تکمیل‌شده" else "در حال انجام", style = MaterialTheme.typography.labelSmall)
                     }
                 }
@@ -1794,7 +1795,7 @@ fun PlannerScreen(userDb: UserDatabase, speech: PersianSpeech) {
             (query.isBlank() || task.title.contains(query, true) || task.details.contains(query, true))
     }
 
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("برنامهٔ روزانه، تکلیف و پروژهٔ شخصی", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         Text("کارهای عقب‌افتاده: $overdueCount · کل کارها: ${tasks.size}", style = MaterialTheme.typography.bodySmall, color = if (overdueCount > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
         Card(Modifier.fillMaxWidth()) {
@@ -1982,7 +1983,7 @@ fun PlannerScreen(userDb: UserDatabase, speech: PersianSpeech) {
                             modifier = Modifier.fillMaxWidth()
                         ) { Text("بازگردانی نسخه به صندوق ورودی") }
                     }
-                    OutlinedButton(onClick = { speech.speak(task.title + ". " + task.details) }, enabled = speech.ready.value) { Text("خواندن کار") }
+                    OutlinedButton(onClick = { speech.speak(task.title + ". " + task.details) }, enabled = !speech.loading.value) { Text("خواندن کار") }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(
                             enabled = task.id !in busyTaskIds,
@@ -2210,10 +2211,10 @@ fun ProgressScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeech)
     val completion = if (snapshot.totalItems == 0) 0f else snapshot.completedItems.toFloat() / snapshot.totalItems
     val maxActivity = snapshot.recentActivity.maxOfOrNull { it.sessionMinutes }?.coerceAtLeast(1L) ?: 1L
 
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    Column(Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text("گزارش پیشرفت و تحلیل یادگیری", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         Text("آمار از محتوای تأییدشده و پیشرفت آموزشی همین دستگاه محاسبه می‌شود.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        OutlinedButton(onClick = { speech.speak("گزارش پیشرفت. " + snapshot.completedItems + " از " + snapshot.totalItems + " مطلب تکمیل شده. " + snapshot.attempts + " تلاش و " + snapshot.accuracyPercent + " درصد دقت.") }, enabled = speech.ready.value, modifier = Modifier.fillMaxWidth()) { Text("خواندن گزارش پیشرفت") }
+        OutlinedButton(onClick = { speech.speak("گزارش پیشرفت. " + snapshot.completedItems + " از " + snapshot.totalItems + " مطلب تکمیل شده. " + snapshot.attempts + " تلاش و " + snapshot.accuracyPercent + " درصد دقت.") }, enabled = !speech.loading.value, modifier = Modifier.fillMaxWidth()) { Text("خواندن گزارش پیشرفت") }
         Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -2445,7 +2446,7 @@ fun BookmarksScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeech
                             Text(kindLabel(item.type), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                             if (!item.summary.isNullOrBlank()) {
                                 Text(cleanHtml(item.summary), maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
-                                OutlinedButton(onClick = { speech.speak(item.title.orEmpty() + ". " + cleanHtml(item.summary.orEmpty())) }, enabled = speech.ready.value) { Text("خواندن نشانک") }
+                                OutlinedButton(onClick = { speech.speak(item.title.orEmpty() + ". " + cleanHtml(item.summary.orEmpty())) }, enabled = !speech.loading.value) { Text("خواندن نشانک") }
                             }
                         }
                         IconButton(onClick = { pendingRemoval = item.uid }) {
@@ -2599,7 +2600,7 @@ fun SettingsScreen(
     }
 
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+        Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Text("مرکز تنظیمات MindUnlock", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
@@ -3158,7 +3159,7 @@ fun SyncScreen(repository: SyncRepository, onDone: () -> Unit) {
     var progressText by remember { mutableStateOf("") }
     var diagnostic by remember { mutableStateOf<com.mindunlock.app.data.repository.ConnectionDiagnostics?>(null) }
     var diagnosticBusy by remember { mutableStateOf(false) }
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+    Column(Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
         Text("اتصال به سرور ویندوز", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         OutlinedTextField(host, { host = it }, Modifier.fillMaxWidth(), label = { Text("IP یا نام میزبان ویندوز") }, singleLine = true, placeholder = { Text("مثلاً 192.168.1.10") })
         OutlinedTextField(port, { port = it.filter(Char::isDigit).take(5) }, Modifier.fillMaxWidth(), label = { Text("پورت") }, singleLine = true)
