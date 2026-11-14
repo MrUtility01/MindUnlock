@@ -77,6 +77,8 @@ class PersianSpeech(context: Context) {
         loadingId = target
         loading.value = true
         ready.value = false
+        downloadProgress.value = 0f
+        downloadedBytes.value = 0L
         error.value = null
         status.value = "در حال بررسی یا دریافت مدل ${voiceOptions.first { it.first == target }.second}…"
 
@@ -287,6 +289,12 @@ class PersianSpeech(context: Context) {
 
     fun deleteDownloadedVoice(id: String) {
         val target = voiceOptions.firstOrNull { it.first == id }?.first ?: return
+        if (loadingId == target) {
+            val message = "تا پایان دریافت یا بارگذاری این گوینده، حذف فایل‌ها امکان‌پذیر نیست."
+            error.value = message
+            status.value = message
+            return
+        }
         if (loadedId == target) {
             stop()
             try { tts?.release() } catch (_: Throwable) {}
