@@ -89,6 +89,11 @@ class PersianSpeech(context: Context) {
         return dir.walkTopDown().filter { it.isFile }.sumOf { it.length() }
     }
 
+    private fun cpuThreads(): Int {
+        val powerManager = appContext.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+        return if (powerManager.isPowerSaveMode) 1 else 2
+    }
+
     private fun buildEngine(id: String): OfflineTts {
         val spec = spec(id)
         val speechRoot = File(appContext.filesDir, "speech").apply { mkdirs() }
@@ -102,7 +107,7 @@ class PersianSpeech(context: Context) {
         val config = OfflineTtsConfig(model = OfflineTtsModelConfig(vits = OfflineTtsVitsModelConfig(
             model = model.absolutePath, tokens = File(modelDir, "tokens.txt").absolutePath,
             dataDir = File(modelDir, "espeak-ng-data").absolutePath
-        ), numThreads = 2, debug = false, provider = "cpu"))
+        ), numThreads = cpuThreads(), debug = false, provider = "cpu"))
         return OfflineTts(config = config).also { check(it.numSpeakers() > 0) { "مدل گوینده‌ای ارائه نکرد." } }
     }
 
@@ -183,6 +188,7 @@ class PersianSpeech(context: Context) {
                 setRequestProperty("Accept", "application/octet-stream")
             }
             try {
+                DownloadAuditLog.record(appContext, "TTS", "attempt=${index + 1}/${mirrors.size} host=${mirror.label} file=${spec.model}")
                 status.value = "آزمایش میرور ${index + 1} از ${mirrors.size}: ${mirror.label}"
                 connection.connect()
                 val response = connection.responseCode
@@ -219,12 +225,15 @@ class PersianSpeech(context: Context) {
                     "دانلود کامل نیست؛ $received از ${spec.archiveBytes} بایت دریافت شد."
                 }
                 check(partial.renameTo(archive)) { "انتقال بسته دانلودشده ناموفق بود." }
+                DownloadAuditLog.record(appContext, "TTS", "success host=${mirror.label} bytes=$received file=${spec.model}")
                 status.value = "بسته از میرور ${mirror.label} دریافت شد؛ اعتبارسنجی و استخراج آغاز می‌شود."
                 return
             } catch (failure: Throwable) {
                 partial.delete()
                 archive.delete()
-                failures += "${index + 1}. ${mirror.label}: ${failure.message ?: failure.javaClass.simpleName}"
+                val reason = failure.message ?: failure.javaClass.simpleName
+                DownloadAuditLog.record(appContext, "TTS", "failure host=${mirror.label} reason=$reason")
+                failures += "${index + 1}. ${mirror.label}: $reason"
             } finally {
                 connection.disconnect()
             }

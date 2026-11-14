@@ -653,7 +653,7 @@ internal object OfflinePersianSpeech {
             modelConfig = OfflineModelConfig(
                 nemo = OfflineNemoEncDecCtcModelConfig(model = modelFile.absolutePath),
                 tokens = tokensFile.absolutePath,
-                numThreads = 4,
+                numThreads = if ((context.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager).isPowerSaveMode) 1 else 2,
                 provider = "cpu"
             )
         )
@@ -695,6 +695,7 @@ internal object OfflinePersianSpeech {
                 setRequestProperty("Accept", "application/octet-stream")
             }
             try {
+                DownloadAuditLog.record(context, source.name, "attempt=${index + 1}/${mirrors.size} host=${mirror.label} file=${target.name}")
                 onProgress(0)
                 connection.connect()
                 val responseCode = connection.responseCode
@@ -744,10 +745,13 @@ internal object OfflinePersianSpeech {
                 }
                 backup.delete()
                 onProgress(100)
+                DownloadAuditLog.record(context, source.name, "success host=${mirror.label} bytes=${target.length()} file=${target.name}")
                 return
             } catch (failure: Throwable) {
                 partial.delete()
-                failures += "${index + 1}. ${mirror.label}: ${failure.message ?: failure.javaClass.simpleName}"
+                val reason = failure.message ?: failure.javaClass.simpleName
+                DownloadAuditLog.record(context, source.name, "failure host=${mirror.label} reason=$reason")
+                failures += "${index + 1}. ${mirror.label}: $reason"
             } finally {
                 connection.disconnect()
             }

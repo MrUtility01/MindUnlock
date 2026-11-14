@@ -1,5 +1,7 @@
 package com.mindunlock.app
 
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -44,6 +46,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.mindunlock.app.data.local.MindMapNodeEntity
 import com.mindunlock.app.data.local.MindMapSourceItem
 import com.mindunlock.app.data.local.UserDatabase
@@ -443,111 +446,85 @@ private fun MindMapGraphCanvas(
     scale: Float,
     onSelectNode: (Long) -> Unit
 ) {
-    val scheme = MaterialTheme.colorScheme
+    // Compose Text handles Persian shaping/RTL; Canvas is retained only for light edge lines.
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         val columns = when {
             maxWidth >= 600.dp -> 4
-            maxWidth >= 320.dp -> 3
+            maxWidth >= 360.dp -> 3
             else -> 2
         }
-        val rows = (nodes.size + columns - 1) / columns
-        val cellHeight = 64.dp
+        val rows = nodes.chunked(columns)
         val gap = 8.dp
-        val canvasHeight = cellHeight * rows + gap * (rows + 1)
-        Canvas(
-            Modifier.fillMaxWidth().height(canvasHeight)
-                // Tap only: vertical drags are deliberately left to the parent LazyColumn.
-                .pointerInput(nodes, columns, scale) {
-                    detectTapGestures { tap ->
-                        val gapPx = gap.toPx()
-                        val cellHeightPx = cellHeight.toPx()
-                        val cellWidthPx = (size.width - gapPx * (columns + 1)) / columns
-                        val center = Offset(size.width / 2f, size.height / 2f)
-                        val local = Offset(
-                            (tap.x - center.x) / scale + center.x,
-                            (tap.y - center.y) / scale + center.y
-                        )
-                        val x = local.x - gapPx
-                        val y = local.y - gapPx
-                        if (x >= 0f && y >= 0f) {
-                            val column = (x / (cellWidthPx + gapPx)).toInt()
-                            val row = (y / (cellHeightPx + gapPx)).toInt()
-                            val insideCell = x % (cellWidthPx + gapPx) <= cellWidthPx &&
-                                y % (cellHeightPx + gapPx) <= cellHeightPx
-                            val index = row * columns + column
-                            if (insideCell && column in 0 until columns) nodes.getOrNull(index)?.let { onSelectNode(it.id) }
-                        }
-                    }
-                }
-        ) {
-            val gapPx = gap.toPx()
-            val cellHeightPx = cellHeight.toPx()
-            val cellWidthPx = (size.width - gapPx * (columns + 1)) / columns
-            val centers = nodes.mapIndexed { index, node ->
-                val column = index % columns
-                val row = index / columns
-                node.id to Offset(
-                    gapPx + column * (cellWidthPx + gapPx) + cellWidthPx / 2f,
-                    gapPx + row * (cellHeightPx + gapPx) + cellHeightPx / 2f
-                )
-            }.toMap()
-            drawRoundRect(
-                color = scheme.surfaceVariant,
-                cornerRadius = androidx.compose.ui.geometry.CornerRadius(14.dp.toPx())
-            )
-            withTransform({
-                scale(scaleX = scale, scaleY = scale, pivot = Offset(size.width / 2f, size.height / 2f))
-            }) {
+        val nodeHeight = 82.dp
+        val canvasHeight = nodeHeight * rows.size + gap * (rows.size - 1).coerceAtLeast(0)
+        val edgeColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.65f)
+        Box(Modifier.fillMaxWidth().height(canvasHeight)) {
+            Canvas(Modifier.fillMaxSize()) {
+                val gapPx = gap.toPx()
+                val cellWidth = (size.width - gapPx * (columns - 1)) / columns
+                val cellHeight = nodeHeight.toPx()
+                val centers = nodes.mapIndexed { index, node ->
+                    val column = index % columns
+                    val row = index / columns
+                    node.id to Offset(
+                        column * (cellWidth + gapPx) + cellWidth / 2f,
+                        row * (cellHeight + gapPx) + cellHeight / 2f
+                    )
+                }.toMap()
                 edges.forEach { edge ->
                     val from = centers[edge.sourceNodeId]
                     val to = centers[edge.targetNodeId]
                     if (from != null && to != null) {
-                        drawLine(color = scheme.outline, start = from, end = to, strokeWidth = 1.7.dp.toPx())
-                    }
-                }
-                val textPaint = android.text.TextPaint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-                    color = scheme.onPrimaryContainer.toArgb()
-                    textSize = 11.dp.toPx()
-                    typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.BOLD)
-                    textAlign = android.graphics.Paint.Align.CENTER
-                }
-                nodes.forEachIndexed { index, node ->
-                    val column = index % columns
-                    val row = index / columns
-                    val left = gapPx + column * (cellWidthPx + gapPx)
-                    val top = gapPx + row * (cellHeightPx + gapPx)
-                    val topLeft = Offset(left, top)
-                    val cardSize = androidx.compose.ui.geometry.Size(cellWidthPx, cellHeightPx)
-                    drawRoundRect(
-                        color = if (node.id == selectedNodeId) scheme.tertiaryContainer else scheme.primaryContainer,
-                        topLeft = topLeft,
-                        size = cardSize,
-                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(11.dp.toPx())
-                    )
-                    if (node.id == selectedNodeId) {
-                        drawRoundRect(
-                            color = scheme.tertiary,
-                            topLeft = topLeft,
-                            size = cardSize,
-                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(11.dp.toPx()),
-                            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx())
+                        drawLine(
+                            color = edgeColor,
+                            start = from,
+                            end = to,
+                            strokeWidth = 1.5.dp.toPx()
                         )
                     }
-                    val title = node.title.trim().ifBlank { "بدون عنوان" }.take(120)
-                    val textWidth = (cellWidthPx - 14.dp.toPx()).toInt().coerceAtLeast(36)
-                    val layout = android.text.StaticLayout.Builder
-                        .obtain(title, 0, title.length, textPaint, textWidth)
-                        .setAlignment(android.text.Layout.Alignment.ALIGN_CENTER)
-                        .setTextDirection(android.text.TextDirectionHeuristics.RTL)
-                        .setMaxLines(2)
-                        .setEllipsize(android.text.TextUtils.TruncateAt.END)
-                        .setIncludePad(false)
-                        .build()
-                    val nativeCanvas = drawContext.canvas.nativeCanvas
-                    nativeCanvas.save()
-                    nativeCanvas.translate(left + (cellWidthPx - textWidth) / 2f, top + (cellHeightPx - layout.height) / 2f)
-                    layout.draw(nativeCanvas)
-                    nativeCanvas.restore()
+                }
+            }
+            Column(
+                Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(gap)
+            ) {
+                rows.forEach { rowNodes ->
+                    Row(
+                        Modifier.fillMaxWidth().height(nodeHeight),
+                        horizontalArrangement = Arrangement.spacedBy(gap)
+                    ) {
+                        rowNodes.forEach { node ->
+                            Card(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(nodeHeight)
+                                    .clickable { onSelectNode(node.id) },
+                                colors = androidx.compose.material3.CardDefaults.cardColors(
+                                    containerColor = if (node.id == selectedNodeId)
+                                        MaterialTheme.colorScheme.tertiaryContainer
+                                    else MaterialTheme.colorScheme.primaryContainer
+                                )
+                            ) {
+                                Box(
+                                    Modifier.fillMaxSize().padding(8.dp),
+                                    contentAlignment = androidx.compose.ui.Alignment.Center
+                                ) {
+                                    Text(
+                                        text = node.title.trim().ifBlank { "بدون عنوان" },
+                                        color = if (node.id == selectedNodeId)
+                                            MaterialTheme.colorScheme.onTertiaryContainer
+                                        else MaterialTheme.colorScheme.onPrimaryContainer,
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = (13f * scale).coerceIn(11f, 17f).sp,
+                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                        maxLines = 3,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                        }
+                        repeat(columns - rowNodes.size) { Spacer(Modifier.weight(1f)) }
+                    }
                 }
             }
         }
