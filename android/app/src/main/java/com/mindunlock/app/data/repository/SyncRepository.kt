@@ -7,6 +7,7 @@ import com.google.gson.JsonArray
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
+import com.mindunlock.app.DownloadAuditLog
 import com.mindunlock.app.data.local.AppDatabase
 import com.mindunlock.app.data.local.ChapterEntity
 import com.mindunlock.app.data.local.ContentItemEntity
@@ -270,31 +271,57 @@ class SyncRepository(context: Context) {
             val fileName = path.substringAfterLast('/')
             if (!chapterText.contains(urlPath) && !chapterText.contains(path) && !chapterText.contains(fileName)) return@forEach
             if (size !in 1..(40L * 1024L * 1024L)) return@forEach
-            // Media are downloaded only when a selected chapter references them, then SHA-256 verified.
+
+            val targetLabel = "media/$path"
             val request = Request.Builder().url(base.trimEnd('/') + "/" + urlPath.trimStart('/')).get().build()
-            client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return@use
-                val bytes = response.body?.bytes() ?: return@use
-                if (bytes.size.toLong() != size) return@use
-                val actualHash = sha256(bytes)
-                if (!actualHash.equals(hash, ignoreCase = true)) return@use
-                val root = File(appContext.filesDir, "media").canonicalFile
-                val target = File(root, path).canonicalFile
-                if (!target.path.startsWith(root.path + File.separator)) return@use
-                target.parentFile?.mkdirs()
-                val temp = File(target.parentFile, target.name + ".part")
-                temp.writeBytes(bytes)
-                if (temp.length() != size || sha256(temp.readBytes()) != actualHash) {
-                    temp.delete()
-                    return@use
+            DownloadAuditLog.record(appContext, "SYNC_MEDIA", "attempt target=$targetLabel expectedBytes=$size")
+            try {
+                client.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) {
+                        DownloadAuditLog.record(appContext, "SYNC_MEDIA", "failure target=$targetLabel http=${response.code}")
+                    } else {
+                        val bytes = response.body?.bytes()
+                        when {
+                            bytes == null -> DownloadAuditLog.record(appContext, "SYNC_MEDIA", "failure target=$targetLabel reason=empty_body")
+                            bytes.size.toLong() != size -> DownloadAuditLog.record(
+                                appContext, "SYNC_MEDIA", "failure target=$targetLabel reason=size_mismatch received=${bytes.size} expected=$size"
+                            )
+                            !sha256(bytes).equals(hash, ignoreCase = true) -> DownloadAuditLog.record(
+                                appContext, "SYNC_MEDIA", "failure target=$targetLabel reason=sha256_mismatch"
+                            )
+                            else -> {
+                                val root = File(appContext.filesDir, "media").canonicalFile
+                                val target = File(root, path).canonicalFile
+                                if (!target.path.startsWith(root.path + File.separator)) {
+                                    DownloadAuditLog.record(appContext, "SYNC_MEDIA", "failure target=$targetLabel reason=unsafe_path")
+                                } else {
+                                    target.parentFile?.mkdirs()
+                                    val temp = File(target.parentFile, target.name + ".part")
+                                    temp.writeBytes(bytes)
+                                    if (temp.length() != size || !sha256(temp.readBytes()).equals(hash, ignoreCase = true)) {
+                                        temp.delete()
+                                        DownloadAuditLog.record(appContext, "SYNC_MEDIA", "failure target=$targetLabel reason=post_write_verification")
+                                    } else {
+                                        if (!temp.renameTo(target)) {
+                                            temp.copyTo(target, overwrite = true)
+                                            temp.delete()
+                                        }
+                                        database.mediaCacheDao().upsert(
+                                            MediaCacheEntity(path, target.absolutePath, hash, bytes.size.toLong())
+                                        )
+                                        DownloadAuditLog.record(appContext, "SYNC_MEDIA", "success target=$targetLabel bytes=${bytes.size} sha256=verified")
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
-                if (!temp.renameTo(target)) {
-                    temp.copyTo(target, overwrite = true)
-                    temp.delete()
-                }
-                database.mediaCacheDao().upsert(
-                    MediaCacheEntity(path, target.absolutePath, actualHash, bytes.size.toLong())
+            } catch (error: Exception) {
+                DownloadAuditLog.record(
+                    appContext, "SYNC_MEDIA",
+                    "failure target=$targetLabel reason=${error.javaClass.simpleName}"
                 )
+                throw error
             }
         }
     }
@@ -316,17 +343,37 @@ class SyncRepository(context: Context) {
     private fun postJson(url: String, body: okhttp3.RequestBody): JsonElement = request(url, body)
 
     private fun request(url: String, body: okhttp3.RequestBody?): JsonElement {
-        val builder = Request.Builder().url(url).header("Accept", "application/json")
-        if (body == null) builder.get() else builder.post(body)
-        client.newCall(builder.build()).execute().use { response ->
-            val text = response.body?.string().orEmpty()
-            if (!response.isSuccessful) {
-                val detail = runCatching { JsonParser.parseString(text).asJsonObject.get("detail")?.asString }.getOrNull()
-                val message = detail ?: "درخواست به ویندوز ناموفق بود (HTTP ${response.code})."
-                if (response.code == 401) throw IllegalStateException("نشست ورود منقضی شده یا اطلاعات ورود معتبر نیست؛ دوباره همگام‌سازی را با رمز ویندوز انجام بده.")
-                throw IllegalStateException(message)
+        val method = if (body == null) "GET" else "POST"
+        val target = runCatching { java.net.URL(url).let { it.host + it.path } }.getOrDefault("endpoint")
+        DownloadAuditLog.record(appContext, "SYNC_HTTP", "attempt method=$method target=$target")
+        var failureLogged = false
+        try {
+            val builder = Request.Builder().url(url).header("Accept", "application/json")
+            if (body == null) builder.get() else builder.post(body)
+            client.newCall(builder.build()).execute().use { response ->
+                val text = response.body?.string().orEmpty()
+                if (!response.isSuccessful) {
+                    DownloadAuditLog.record(appContext, "SYNC_HTTP", "failure method=$method target=$target http=${response.code}")
+                    failureLogged = true
+                    val detail = runCatching { JsonParser.parseString(text).asJsonObject.get("detail")?.asString }.getOrNull()
+                    val message = detail ?: "درخواست به ویندوز ناموفق بود (HTTP ${response.code})."
+                    if (response.code == 401) throw IllegalStateException("نشست ورود منقضی شده یا اطلاعات ورود معتبر نیست؛ دوباره همگام‌سازی را با رمز ویندوز انجام بده.")
+                    throw IllegalStateException(message)
+                }
+                DownloadAuditLog.record(
+                    appContext, "SYNC_HTTP",
+                    "success method=$method target=$target http=${response.code} bytes=${text.toByteArray(Charsets.UTF_8).size}"
+                )
+                return if (text.isBlank()) JsonObject() else JsonParser.parseString(text)
             }
-            return if (text.isBlank()) JsonObject() else JsonParser.parseString(text)
+        } catch (error: Exception) {
+            if (!failureLogged) {
+                DownloadAuditLog.record(
+                    appContext, "SYNC_HTTP",
+                    "failure method=$method target=$target reason=${error.javaClass.simpleName}"
+                )
+            }
+            throw error
         }
     }
 
