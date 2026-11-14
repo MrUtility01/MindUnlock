@@ -60,11 +60,11 @@ class GitHubContentSyncRepository(
         require(manifestFile.size <= MAX_MANIFEST_BYTES) { "فایل فهرست محتوا بیش از حد بزرگ است." }
         val manifest = GitHubManifestPolicy.parse(manifestFile.text)
         return manifest.map { item ->
-            val local = database.chapterDao().get(item.id)
+            val local = database.chapterDao().get(localChapterId(item.id))
             if (local == null) {
                 GitHubContentSyncEntry(item, GitHubContentSyncStatus.NEW)
             } else {
-                val localItems = database.contentItemDao().getForChapter(item.id)
+                val localItems = database.contentItemDao().getForChapter(localChapterId(item.id))
                 val currentFingerprint = fingerprint(local, localItems)
                 val baseRemote = preferences.getString(remoteBaseKey(item.id), null)
                 val baseLocal = preferences.getString(localBaseKey(item.id), null)
@@ -112,10 +112,10 @@ class GitHubContentSyncRepository(
             }
             val parsed = parseContent(entry.item, file.text)
             val uidCollision = parsed.second.firstNotNullOfOrNull { candidate ->
-                database.contentItemDao().get(candidate.uid)?.takeIf { it.chapterId != entry.item.id }?.uid
+                database.contentItemDao().get(candidate.uid)?.takeIf { it.chapterId != localChapterId(entry.item.id) }?.uid
             }
             require(uidCollision == null) { "شناسه آیتم $uidCollision قبلاً در فصل دیگری استفاده شده است؛ برای جلوگیری از جابه‌جایی داده واردسازی متوقف شد." }
-            val latest = database.chapterDao().get(entry.item.id)
+            val latest = database.chapterDao().get(localChapterId(entry.item.id))
             if (entry.status == GitHubContentSyncStatus.NEW && latest != null) {
                 blocked += "${entry.item.title}: هم‌زمان در دستگاه ایجاد شده؛ برای جلوگیری از بازنویسی نادیده گرفته شد."
                 skipped++
@@ -127,7 +127,7 @@ class GitHubContentSyncRepository(
                     skipped++
                     return@forEachIndexed
                 }
-                val latestItems = database.contentItemDao().getForChapter(entry.item.id)
+                val latestItems = database.contentItemDao().getForChapter(localChapterId(entry.item.id))
                 val expectedLocal = preferences.getString(localBaseKey(entry.item.id), null)
                 if (expectedLocal == null || fingerprint(latestChapter, latestItems) != expectedLocal) {
                     blocked += "${entry.item.title}: نسخه محلی هنگام واردسازی تغییر کرده؛ برای جلوگیری از ازدست‌رفتن تغییرات متوقف شد."
@@ -137,12 +137,12 @@ class GitHubContentSyncRepository(
             }
             database.withTransaction {
                 database.chapterDao().upsert(parsed.first)
-                database.contentItemDao().deleteForChapter(entry.item.id)
+                database.contentItemDao().deleteForChapter(localChapterId(entry.item.id))
                 if (parsed.second.isNotEmpty()) database.contentItemDao().upsertAll(parsed.second)
             }
-            val saved = database.chapterDao().get(entry.item.id)
+            val saved = database.chapterDao().get(localChapterId(entry.item.id))
                 ?: error("ثبت فصل «${entry.item.title}» در پایگاه داده تأیید نشد.")
-            val savedItems = database.contentItemDao().getForChapter(entry.item.id)
+            val savedItems = database.contentItemDao().getForChapter(localChapterId(entry.item.id))
             preferences.edit()
                 .putString(remoteBaseKey(entry.item.id), entry.item.contentHash)
                 .putString(localBaseKey(entry.item.id), fingerprint(saved, savedItems))
@@ -159,7 +159,7 @@ class GitHubContentSyncRepository(
         val now = System.currentTimeMillis()
         if (manifest.format == "md" || manifest.format == "markdown" || manifest.format == "txt") {
             val chapter = ChapterEntity(
-                id = manifest.id,
+                id = localChapterId(manifest.id),
                 title = manifest.title,
                 orderIndex = manifest.orderNum,
                 groupName = manifest.groupName,
@@ -170,8 +170,8 @@ class GitHubContentSyncRepository(
                 syncedAt = now
             )
             val item = ContentItemEntity(
-                uid = "${manifest.id}_content",
-                chapterId = manifest.id,
+                uid = "github_${manifest.id}_content",
+                chapterId = localChapterId(manifest.id),
                 type = "lesson",
                 title = manifest.title,
                 content = text,
@@ -194,8 +194,9 @@ class GitHubContentSyncRepository(
             val item = element.asJsonObject
             val title = item.string("title")?.takeIf { it.isNotBlank() }
                 ?: throw IllegalArgumentException("عنوان یکی از آیتم‌های فصل خالی است.")
-            val uid = item.string("source_uid") ?: item.string("uid") ?: item.string("id")
-                ?: "${manifest.id}_$index"
+            val sourceUid = item.string("source_uid") ?: item.string("uid") ?: item.string("id")
+                ?: index.toString()
+            val uid = "github_${manifest.id}_$sourceUid"
             val metadata = item.get("metadata")?.takeIf { it.isJsonObject }?.asJsonObject
             val options = item.get("options") ?: metadata?.get("options")
             ContentItemEntity(
@@ -254,6 +255,8 @@ class GitHubContentSyncRepository(
         }
         return sha256(canonical.toByteArray(Charsets.UTF_8))
     }
+
+    private fun localChapterId(id: String) = "github_$id"
 
     private fun remoteBaseKey(id: String) = "remote:$id"
     private fun localBaseKey(id: String) = "local:$id"
