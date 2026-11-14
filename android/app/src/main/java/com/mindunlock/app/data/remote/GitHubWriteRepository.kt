@@ -58,7 +58,7 @@ class GitHubWriteRepository(
 
         val repoInfo = api("GET", "/repos/$owner/$repository", token)
         val permissions = repoInfo.optJSONObject("permissions")
-        if (permissions?.optBoolean("push", false) != true) {
+        if (permissions?.optBoolean("push", true) == false) {
             throw IllegalStateException(
                 "حساب متصل اجازه نوشتن در این مخزن را ندارد. GitHub App را روی MrUtility01/MindUnlock نصب کن و دسترسی Contents و Pull requests را روی Read and write بگذار."
             )
