@@ -74,7 +74,7 @@ class GitHubWriteRepository(
                 .put("ref", "refs/heads/$branch")
                 .put("sha", baseSha)
         )
-        val path = "content/inbox/$safeName"
+        val path = "content/inbox/${UUID.randomUUID().toString().take(8)}-$safeName"
         val encoded = Base64.encodeToString(bytes, Base64.NO_WRAP)
         api(
             "PUT",
