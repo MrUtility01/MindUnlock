@@ -43,7 +43,7 @@ class SpeechDownloadMirrorsTest {
         )
         assertTrue(
             SpeechDownloadMirrors.defaultEditableText(SpeechMirrorSource.GITHUB_RELEASE)
-                .contains("\\n")
+                .contains("\n")
         )
     }
 
