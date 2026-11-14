@@ -173,7 +173,7 @@ class GitHubDeviceAuth(
             .header("Authorization", "Bearer $token")
             .header("User-Agent", "MindUnlock-Android")
             .get().build()
-        http.newCall(request).execute().use { response ->
+        return http.newCall(request).execute().use { response ->
             val payload = response.body?.string().orEmpty()
             if (!response.isSuccessful) error("اعتبارسنجی حساب GitHub ناموفق بود (HTTP ${response.code}).")
             val user = JSONObject(payload)
