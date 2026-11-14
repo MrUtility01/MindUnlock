@@ -35,6 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.mindunlock.app.data.local.JournalEntryEntity
+import com.mindunlock.app.data.local.MindDumpWorkflow
 import com.mindunlock.app.data.local.UserDatabase
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
@@ -129,6 +130,22 @@ fun JournalScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
                             OutlinedButton(onClick = { speech.speak((entry.title + ". " + entry.body).trim()) }, modifier = Modifier.fillMaxWidth()) { Text("خواندن نوشته با صدا") }
                             if (entry.mood != null) Text("حال‌وهوا: " + when(entry.mood) { "calm" -> "آرام"; "good" -> "خوب"; "tired" -> "خسته"; "stressed" -> "پرفشار"; else -> entry.mood }, style = MaterialTheme.typography.labelSmall)
                             if (entry.tags.isNotBlank()) Text("برچسب‌ها: ${entry.tags}", style = MaterialTheme.typography.labelSmall)
+                            if (entry.sourceMindDumpId != null) {
+                                Text("منبع: صندوق ورودی #${entry.sourceMindDumpId}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                                OutlinedButton(
+                                    onClick = {
+                                        scope.launch {
+                                            try {
+                                                MindDumpWorkflow.restoreJournalToInbox(userDatabase, entry.id)
+                                                message = "نسخه نوشته‌شده به صندوق ورودی بازگشت."
+                                            } catch (_: Exception) {
+                                                message = "بازگردانی نوشته به صندوق انجام نشد."
+                                            }
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) { Text("بازگردانی نسخه به صندوق ورودی") }
+                            }
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 OutlinedButton(
                                     onClick = {
@@ -185,7 +202,8 @@ fun JournalScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
                                             body = editBody.trim(),
                                             mood = editMood.ifBlank { null },
                                             tags = editTags.trim(),
-                                            updatedAt = System.currentTimeMillis()
+                                            updatedAt = System.currentTimeMillis(),
+                                            sourceMindDumpId = entry.sourceMindDumpId
                                         )
                                     )
                                     editingEntry = null
