@@ -2618,11 +2618,11 @@ fun SettingsScreen(
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("میرورهای دانلود مدل‌های صوتی", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(
-                    "هر خط یک میرور و به ترتیب اولویت است. آدرس معتبر داخلی/ایرانی خودت را در خط اول قرار بده؛ برنامه ابتدا آدرس‌های سفارشی، بعد میرورهای عمومی و در پایان سرور اصلی را امتحان می‌کند.",
+                    "هر خط یک میرور و به ترتیب اولویت است. فهرست‌های پیش‌فرض آماده‌اند؛ می‌توانی میرور داخلی خودت را به ابتدای فهرست اضافه کنی، ترتیب را عوض کنی یا هر نشانی را ویرایش و حذف کنی. سرور اصلی همیشه آخرین مسیر جایگزین است.",
                     style = MaterialTheme.typography.bodySmall
                 )
                 Text(
-                    "پیش‌فرض‌ها: Hugging Face: hf-mirror.com و beta.hf-mirror.com · GitHub: ghfast.top، gh-proxy.com و ghproxy.net. در بررسی فعلی، میرور ایرانیِ عمومی برای همین فایل‌های مدل تأیید نشد؛ نشانی داخلی خودت را می‌توانی اینجا اولویت بدهی.",
+                    "پیش‌فرض‌های قابل ویرایش: Hugging Face: hf-mirror.com و beta.hf-mirror.com · GitHub: ghfast.top، gh-proxy.com و ghproxy.net. میرور ایرانی عمومیِ تأییدشده‌ای برای همین فایل‌های مدل در اختیار ندارم؛ نشانی سرور داخلی را می‌توانی در ابتدای فهرست قرار بدهی.",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
