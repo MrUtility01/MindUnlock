@@ -185,8 +185,16 @@ class GitHubDeviceAuth(
             .build()
         http.newCall(request).execute().use { response ->
             val payload = response.body?.string().orEmpty()
-            if (!response.isSuccessful) error("ارتباط با سرویس ورود GitHub ناموفق بود (HTTP ${response.code}).")
-            return JSONObject(payload)
+            val json = try {
+                JSONObject(payload)
+            } catch (_: Exception) {
+                if (!response.isSuccessful) error("ارتباط با سرویس ورود GitHub ناموفق بود (HTTP ${response.code}).")
+                error("پاسخ سرویس ورود GitHub معتبر نیست.")
+            }
+            if (!response.isSuccessful && !json.has("error")) {
+                error("ارتباط با سرویس ورود GitHub ناموفق بود (HTTP ${response.code}).")
+            }
+            return json
         }
     }
 }
