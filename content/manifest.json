@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-11-15T00:00:00Z",
+  "items": [
+    {
+      "id": "it-network-foundations",
+      "title": "مبانی شبکه و زیرساخت سازمانی",
+      "group_name": "شبکه و زیرساخت",
+      "order_num": 1,
+      "path": "content/library/it-network-foundations.json",
+      "format": "json",
+      "content_hash": "a331d69c3fd1b94938faf842a3facb4a51dbc0d284c1b44acc023a8a1056613d",
+      "updated_at": "2026-11-15T00:00:00Z",
+      "schema_version": 1
+    }
+  ]
+}
