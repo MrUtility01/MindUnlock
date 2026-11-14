@@ -47,14 +47,19 @@ internal object SpeechDownloadMirrors {
                 "https://beta.hf-mirror.com"
             )
             SpeechMirrorSource.GITHUB_RELEASE -> listOf(
-                "https://ghfast.top",
-                "https://gh-proxy.com",
-                "https://ghproxy.net"
+                "https://ghfast.top/{url}",
+                "https://gh-proxy.com/{url}",
+                "https://ghproxy.net/{url}"
             )
         }
 
         val resolved = (custom + defaults).mapNotNull { resolve(it, originalUrl) }
-        val official = resolve(originalUrl, originalUrl)
+        val official = runCatching {
+            val original = URL(originalUrl)
+            require(original.protocol.equals("https", ignoreCase = true))
+            require(original.host.isNotBlank() && original.userInfo == null)
+            SpeechMirrorEndpoint(original.host, original.toExternalForm())
+        }.getOrNull()
         return (resolved + listOfNotNull(official)).distinctBy { it.url }
     }
 
