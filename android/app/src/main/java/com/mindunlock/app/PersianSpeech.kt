@@ -89,6 +89,11 @@ class PersianSpeech(context: Context) {
         return dir.walkTopDown().filter { it.isFile }.sumOf { it.length() }
     }
 
+    private fun cpuThreads(): Int {
+        val powerManager = appContext.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+        return if (powerManager.isPowerSaveMode) 1 else 2
+    }
+
     private fun buildEngine(id: String): OfflineTts {
         val spec = spec(id)
         val speechRoot = File(appContext.filesDir, "speech").apply { mkdirs() }
@@ -102,7 +107,7 @@ class PersianSpeech(context: Context) {
         val config = OfflineTtsConfig(model = OfflineTtsModelConfig(vits = OfflineTtsVitsModelConfig(
             model = model.absolutePath, tokens = File(modelDir, "tokens.txt").absolutePath,
             dataDir = File(modelDir, "espeak-ng-data").absolutePath
-        ), numThreads = 2, debug = false, provider = "cpu"))
+        ), numThreads = cpuThreads(), debug = false, provider = "cpu"))
         return OfflineTts(config = config).also { check(it.numSpeakers() > 0) { "مدل گوینده‌ای ارائه نکرد." } }
     }
 
