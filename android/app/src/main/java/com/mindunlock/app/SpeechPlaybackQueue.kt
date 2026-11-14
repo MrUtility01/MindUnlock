@@ -17,6 +17,7 @@ internal class SpeechPlaybackQueue {
     private val sequence = AtomicLong(0L)
     @Volatile private var pending: QueuedSpeechRequest? = null
 
+    @Synchronized
     fun enqueue(voiceId: String, text: String, speed: Float): QueuedSpeechRequest {
         val request = QueuedSpeechRequest(
             voiceId = voiceId,
@@ -28,6 +29,7 @@ internal class SpeechPlaybackQueue {
         return request
     }
 
+    @Synchronized
     fun switchVoice(voiceId: String) {
         val generation = sequence.incrementAndGet()
         pending = pending
@@ -35,6 +37,7 @@ internal class SpeechPlaybackQueue {
             ?.copy(generation = generation)
     }
 
+    @Synchronized
     fun take(voiceId: String): QueuedSpeechRequest? {
         val request = pending ?: return null
         if (request.voiceId != voiceId || request.generation != sequence.get()) return null
@@ -45,6 +48,7 @@ internal class SpeechPlaybackQueue {
     fun isCurrent(request: QueuedSpeechRequest): Boolean =
         request.generation == sequence.get()
 
+    @Synchronized
     fun cancel() {
         pending = null
         sequence.incrementAndGet()
