@@ -458,6 +458,7 @@ private fun MindMapGraphCanvas(
         val gap = 8.dp
         val nodeHeight = 82.dp
         val canvasHeight = nodeHeight * rows.size + gap * (rows.size - 1).coerceAtLeast(0)
+        val edgeColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.65f)
         Box(Modifier.fillMaxWidth().height(canvasHeight)) {
             Canvas(Modifier.fillMaxSize()) {
                 val gapPx = gap.toPx()
@@ -476,7 +477,7 @@ private fun MindMapGraphCanvas(
                     val to = centers[edge.targetNodeId]
                     if (from != null && to != null) {
                         drawLine(
-                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.65f),
+                            color = edgeColor,
                             start = from,
                             end = to,
                             strokeWidth = 1.5.dp.toPx()
