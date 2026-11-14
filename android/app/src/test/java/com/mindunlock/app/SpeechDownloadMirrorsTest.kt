@@ -28,6 +28,63 @@ class SpeechDownloadMirrorsTest {
     }
 
     @Test
+    fun shippedDefaultsAreVisibleAsEditableSettingsValues() {
+        assertEquals(
+            listOf("https://hf-mirror.com", "https://beta.hf-mirror.com"),
+            SpeechDownloadMirrors.defaultAddresses(SpeechMirrorSource.HUGGING_FACE)
+        )
+        assertEquals(
+            listOf(
+                "https://ghfast.top/{url}",
+                "https://gh-proxy.com/{url}",
+                "https://ghproxy.net/{url}"
+            ),
+            SpeechDownloadMirrors.defaultAddresses(SpeechMirrorSource.GITHUB_RELEASE)
+        )
+        assertTrue(
+            SpeechDownloadMirrors.defaultEditableText(SpeechMirrorSource.GITHUB_RELEASE)
+                .contains("\n")
+        )
+    }
+
+    @Test
+    fun blankSavedMirrorListFallsBackToShippedDefaults() {
+        context.getSharedPreferences(SpeechDownloadMirrors.SETTINGS_FILE, Context.MODE_PRIVATE)
+            .edit()
+            .putString(SpeechDownloadMirrors.PREF_GITHUB_MIRRORS, "")
+            .commit()
+
+        val original = "https://github.com/owner/repo/releases/download/v1/model.tar.bz2"
+        val candidates = SpeechDownloadMirrors.candidates(
+            context,
+            SpeechMirrorSource.GITHUB_RELEASE,
+            original
+        )
+
+        assertEquals("ghfast.top", candidates.first().label)
+        assertEquals(original, candidates.last().url)
+    }
+
+    @Test
+    fun customSavedListReplacesBuiltInDefaultsAndKeepsOfficialLast() {
+        context.getSharedPreferences(SpeechDownloadMirrors.SETTINGS_FILE, Context.MODE_PRIVATE)
+            .edit()
+            .putString(SpeechDownloadMirrors.PREF_GITHUB_MIRRORS, "https://custom.example.ir/{url}")
+            .commit()
+
+        val original = "https://github.com/owner/repo/releases/download/v1/model.tar.bz2"
+        val candidates = SpeechDownloadMirrors.candidates(
+            context,
+            SpeechMirrorSource.GITHUB_RELEASE,
+            original
+        )
+
+        assertEquals(2, candidates.size)
+        assertTrue(candidates.first().url.startsWith("https://custom.example.ir/"))
+        assertEquals(original, candidates.last().url)
+    }
+
+    @Test
     fun customIranianEndpointIsTriedFirstAndOfficialHostLast() {
         context.getSharedPreferences(SpeechDownloadMirrors.SETTINGS_FILE, Context.MODE_PRIVATE)
             .edit()

@@ -27,28 +27,34 @@ object LegacyDatabaseMigrator {
             val contentTarget = content.openHelper.writableDatabase
             val userTarget = user.openHelper.writableDatabase
             contentTarget.beginTransaction()
-            userTarget.beginTransaction()
             try {
-                onProgress("انتقال فصل‌ها...")
-                copyTable(source, contentTarget, "chapters")
-                onProgress("انتقال محتوای آموزشی...")
-                copyTable(source, contentTarget, "content_items")
-                onProgress("انتقال تنظیمات سرور...")
-                copyTable(source, contentTarget, "server_config")
-                onProgress("انتقال حافظه رسانه...")
-                copyTable(source, contentTarget, "media_cache")
-                onProgress("انتقال پیشرفت مطالعه...")
-                copyTable(source, userTarget, "progress")
-                onProgress("انتقال یادداشت‌ها...")
-                copyTable(source, userTarget, "notes")
-                onProgress("انتقال نشانک‌ها...")
-                copyTable(source, userTarget, "bookmarks")
-                onProgress("انتقال برنامه‌های مطالعه...")
-                copyTable(source, userTarget, "study_tasks")
-                contentTarget.setTransactionSuccessful()
-                userTarget.setTransactionSuccessful()
+                // Begin the second transaction inside the first one's try/finally.
+                // If the user database cannot start a transaction (for example,
+                // storage is full), the content transaction must still be closed.
+                userTarget.beginTransaction()
+                try {
+                    onProgress("انتقال فصل‌ها...")
+                    copyTable(source, contentTarget, "chapters")
+                    onProgress("انتقال محتوای آموزشی...")
+                    copyTable(source, contentTarget, "content_items")
+                    onProgress("انتقال تنظیمات سرور...")
+                    copyTable(source, contentTarget, "server_config")
+                    onProgress("انتقال حافظه رسانه...")
+                    copyTable(source, contentTarget, "media_cache")
+                    onProgress("انتقال پیشرفت مطالعه...")
+                    copyTable(source, userTarget, "progress")
+                    onProgress("انتقال یادداشت‌ها...")
+                    copyTable(source, userTarget, "notes")
+                    onProgress("انتقال نشانک‌ها...")
+                    copyTable(source, userTarget, "bookmarks")
+                    onProgress("انتقال برنامه‌های مطالعه...")
+                    copyTable(source, userTarget, "study_tasks")
+                    contentTarget.setTransactionSuccessful()
+                    userTarget.setTransactionSuccessful()
+                } finally {
+                    userTarget.endTransaction()
+                }
             } finally {
-                userTarget.endTransaction()
                 contentTarget.endTransaction()
             }
             prefs.edit().putBoolean("split_v1_complete", true).apply()

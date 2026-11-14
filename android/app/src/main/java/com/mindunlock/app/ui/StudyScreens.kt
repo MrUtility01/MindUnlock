@@ -2518,10 +2518,18 @@ fun SettingsScreen(
     var showResetDialog by remember { mutableStateOf(false) }
     var showDeleteVoiceDialog by remember { mutableStateOf(false) }
     var hfMirrorAddresses by remember {
-        mutableStateOf(preferences.getString(SpeechDownloadMirrors.PREF_HF_MIRRORS, "").orEmpty())
+        mutableStateOf(
+            preferences.getString(SpeechDownloadMirrors.PREF_HF_MIRRORS, null)
+                ?.takeIf { it.isNotBlank() }
+                ?: SpeechDownloadMirrors.defaultEditableText(SpeechMirrorSource.HUGGING_FACE)
+        )
     }
     var githubMirrorAddresses by remember {
-        mutableStateOf(preferences.getString(SpeechDownloadMirrors.PREF_GITHUB_MIRRORS, "").orEmpty())
+        mutableStateOf(
+            preferences.getString(SpeechDownloadMirrors.PREF_GITHUB_MIRRORS, null)
+                ?.takeIf { it.isNotBlank() }
+                ?: SpeechDownloadMirrors.defaultEditableText(SpeechMirrorSource.GITHUB_RELEASE)
+        )
     }
     var mirrorSettingsMessage by remember { mutableStateOf("") }
     var asrModelPresent by remember { mutableStateOf(OfflinePersianSpeech.isInstalled(context)) }
@@ -2610,11 +2618,11 @@ fun SettingsScreen(
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("میرورهای دانلود مدل‌های صوتی", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(
-                    "هر خط یک میرور و به ترتیب اولویت است. آدرس معتبر داخلی/ایرانی خودت را در خط اول قرار بده؛ برنامه ابتدا آدرس‌های سفارشی، بعد میرورهای عمومی و در پایان سرور اصلی را امتحان می‌کند.",
+                    "هر خط یک میرور و به ترتیب اولویت است. فهرست‌های پیش‌فرض آماده‌اند؛ می‌توانی میرور داخلی خودت را به ابتدای فهرست اضافه کنی، ترتیب را عوض کنی یا هر نشانی را ویرایش و حذف کنی. سرور اصلی همیشه آخرین مسیر جایگزین است.",
                     style = MaterialTheme.typography.bodySmall
                 )
                 Text(
-                    "پیش‌فرض‌ها: Hugging Face: hf-mirror.com و beta.hf-mirror.com · GitHub: ghfast.top، gh-proxy.com و ghproxy.net. در بررسی فعلی، میرور ایرانیِ عمومی برای همین فایل‌های مدل تأیید نشد؛ نشانی داخلی خودت را می‌توانی اینجا اولویت بدهی.",
+                    "پیش‌فرض‌های قابل ویرایش: Hugging Face: hf-mirror.com و beta.hf-mirror.com · GitHub: ghfast.top، gh-proxy.com و ghproxy.net. میرور ایرانی عمومیِ تأییدشده‌ای برای همین فایل‌های مدل در اختیار ندارم؛ نشانی سرور داخلی را می‌توانی در ابتدای فهرست قرار بدهی.",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -2639,6 +2647,18 @@ fun SettingsScreen(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                OutlinedButton(
+                    onClick = {
+                        hfMirrorAddresses = SpeechDownloadMirrors.defaultEditableText(SpeechMirrorSource.HUGGING_FACE)
+                        githubMirrorAddresses = SpeechDownloadMirrors.defaultEditableText(SpeechMirrorSource.GITHUB_RELEASE)
+                        preferences.edit()
+                            .putString(SpeechDownloadMirrors.PREF_HF_MIRRORS, hfMirrorAddresses)
+                            .putString(SpeechDownloadMirrors.PREF_GITHUB_MIRRORS, githubMirrorAddresses)
+                            .apply()
+                        mirrorSettingsMessage = "میرورهای پیش‌فرض بازنشانی و ذخیره شدند."
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("بازنشانی میرورها به پیش‌فرض") }
                 Button(
                     onClick = {
                         preferences.edit()

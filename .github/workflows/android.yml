@@ -2302,7 +2302,18 @@ jobs:
               }
           }
           """
-          (package_dir / "CrashDiagnostics.kt").write_text(diagnostics, encoding="utf-8")
+          crash_path = package_dir / "CrashDiagnostics.kt"
+          existing_crash = crash_path.read_text(encoding="utf-8") if crash_path.is_file() else ""
+          recovery_markers = (
+              "fun beginLaunch(context: Context): Boolean",
+              "fun markLaunchHealthy(context: Context)",
+              "fun clearRecoveryState(context: Context)",
+              "fun recordStartupFailure(context: Context",
+          )
+          if all(marker in existing_crash for marker in recovery_markers):
+              print("Preserved advanced startup crash capture and recovery implementation.")
+          else:
+              crash_path.write_text(diagnostics, encoding="utf-8")
 
           if "CrashDiagnostics.install(this)" not in main:
               marker = "super.onCreate(savedInstanceState)"
