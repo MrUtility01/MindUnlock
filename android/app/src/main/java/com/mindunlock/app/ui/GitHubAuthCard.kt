@@ -80,7 +80,7 @@ fun GitHubAuthCard() {
                         } ?: error("خواندن فایل انتخاب‌شده ممکن نشد.")
                     }
                     require(loaded.isNotBlank()) { "فایل خالی است." }
-                    require(!loaded.contains('\u0000')) { "این فایل متنی نیست." }
+                    require(!loaded.contains(0.toChar())) { "این فایل متنی نیست." }
                     selectedText = loaded
                     selectedFileName = (uri.lastPathSegment ?: "content.txt").substringAfterLast('/')
                     uploadTitle = selectedFileName
