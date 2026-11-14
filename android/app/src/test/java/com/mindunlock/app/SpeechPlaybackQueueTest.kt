@@ -30,7 +30,7 @@ class SpeechPlaybackQueueTest {
         assertTrue(ready != null)
         assertEquals(original.voiceId, ready?.voiceId)
         assertEquals(original.text, ready?.text)
-        assertEquals(original.speed, ready?.speed)
+        assertEquals(original.speed.toDouble(), ready?.speed?.toDouble() ?: -1.0, 0.0001)
         assertFalse(queue.isCurrent(original))
         assertTrue(ready?.let(queue::isCurrent) == true)
     }
