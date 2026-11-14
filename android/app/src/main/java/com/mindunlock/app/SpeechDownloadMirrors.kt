@@ -30,28 +30,41 @@ internal object SpeechDownloadMirrors {
     const val PREF_GITHUB_MIRRORS = "speech_mirror_github_release"
     const val SETTINGS_FILE = "mindunlock_preferences"
 
+    /**
+     * Shipped defaults are also shown directly in Settings so the user can
+     * edit, reorder, remove, or replace them without entering URLs manually.
+     */
+    fun defaultAddresses(source: SpeechMirrorSource): List<String> = when (source) {
+        SpeechMirrorSource.HUGGING_FACE -> listOf(
+            "https://hf-mirror.com",
+            "https://beta.hf-mirror.com"
+        )
+        SpeechMirrorSource.GITHUB_RELEASE -> listOf(
+            "https://ghfast.top/{url}",
+            "https://gh-proxy.com/{url}",
+            "https://ghproxy.net/{url}"
+        )
+    }
+
+    fun defaultEditableText(source: SpeechMirrorSource): String =
+        defaultAddresses(source).joinToString("\\n")
+
     fun candidates(
         context: Context,
         source: SpeechMirrorSource,
         originalUrl: String
     ): List<SpeechMirrorEndpoint> {
         val preferences = context.getSharedPreferences(SETTINGS_FILE, Context.MODE_PRIVATE)
-        val custom = preferences.getString(source.preferenceKey, "").orEmpty()
-            .lineSequence()
+        val configured = if (preferences.contains(source.preferenceKey)) {
+            preferences.getString(source.preferenceKey, "").orEmpty()
+        } else {
+            defaultEditableText(source)
+        }
+        val custom = configured.lineSequence()
             .map { it.trim() }
             .filter { it.isNotBlank() }
             .toList()
-        val defaults = when (source) {
-            SpeechMirrorSource.HUGGING_FACE -> listOf(
-                "https://hf-mirror.com",
-                "https://beta.hf-mirror.com"
-            )
-            SpeechMirrorSource.GITHUB_RELEASE -> listOf(
-                "https://ghfast.top/{url}",
-                "https://gh-proxy.com/{url}",
-                "https://ghproxy.net/{url}"
-            )
-        }
+
 
         val resolved = (custom + defaults).mapNotNull { resolve(it, originalUrl) }
         val official = runCatching {
