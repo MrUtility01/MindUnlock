@@ -55,11 +55,9 @@ internal object SpeechDownloadMirrors {
         originalUrl: String
     ): List<SpeechMirrorEndpoint> {
         val preferences = context.getSharedPreferences(SETTINGS_FILE, Context.MODE_PRIVATE)
-        val configured = if (preferences.contains(source.preferenceKey)) {
-            preferences.getString(source.preferenceKey, "").orEmpty()
-        } else {
-            defaultEditableText(source)
-        }
+        val configured = preferences.getString(source.preferenceKey, null)
+            ?.takeIf { it.isNotBlank() }
+            ?: defaultEditableText(source)
         val custom = configured.lineSequence()
             .map { it.trim() }
             .filter { it.isNotBlank() }
