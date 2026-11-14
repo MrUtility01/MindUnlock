@@ -204,6 +204,12 @@ object UserDataBackupCodec {
         require(payload.tasks.map { it.id }.distinct().size == payload.tasks.size) { "کار تکراری است." }
         require(payload.mindDump.map { it.id }.distinct().size == payload.mindDump.size) { "ورودی صندوق تکراری است." }
         require(payload.journalEntries.map { it.id }.distinct().size == payload.journalEntries.size) { "یادداشت روزانه تکراری است." }
+        val noteSources = payload.notes.mapNotNull { it.sourceMindDumpId }
+        val taskSources = payload.tasks.mapNotNull { it.sourceMindDumpId }
+        val journalSources = payload.journalEntries.mapNotNull { it.sourceMindDumpId }
+        require(noteSources.all { it > 0 } && noteSources.distinct().size == noteSources.size) { "پیوند منبع یادداشت تکراری یا نامعتبر است." }
+        require(taskSources.all { it > 0 } && taskSources.distinct().size == taskSources.size) { "پیوند منبع کار تکراری یا نامعتبر است." }
+        require(journalSources.all { it > 0 } && journalSources.distinct().size == journalSources.size) { "پیوند منبع نوشته روزانه تکراری یا نامعتبر است." }
         require(payload.laterTopics.map { it.id }.distinct().size == payload.laterTopics.size) { "موضوع تکراری است." }
         require(payload.learningSessions.map { it.id }.distinct().size == payload.learningSessions.size) { "جلسه یادگیری تکراری است." }
         require(payload.labQuestionResponses.map { it.itemUid to it.questionIndex }.distinct().size == payload.labQuestionResponses.size) { "پاسخ سؤال آزمایشگاه تکراری است." }
