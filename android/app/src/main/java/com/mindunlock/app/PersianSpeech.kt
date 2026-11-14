@@ -114,49 +114,7 @@ class PersianSpeech(context: Context) {
         downloadProgress.value = 0f
         downloadedBytes.value = 0L
         status.value = "در حال اتصال به سرور دریافت مدل…"
-        val connection = (URL(spec.archive).openConnection() as HttpURLConnection).apply {
-            connectTimeout = 30000
-            readTimeout = 180000
-            instanceFollowRedirects = true
-            requestMethod = "GET"
-            setRequestProperty("User-Agent", "MindUnlock-Android/0.5.2")
-            setRequestProperty("Accept", "application/octet-stream")
-        }
-        try {
-            val response = connection.responseCode
-            check(response == HttpURLConnection.HTTP_OK) {
-                "سرور دریافت مدل پاسخ HTTP " + response + " داد."
-            }
-            val expectedLength = connection.contentLength.toLong()
-            check(expectedLength == spec.archiveBytes) {
-                "حجم بسته با نسخهٔ معتبر مدل مطابقت ندارد (HTTP=" + expectedLength + "، expected=" + spec.archiveBytes + ")."
-            }
-            status.value = "در حال دریافت بستهٔ صدای فارسی…"
-            var received = 0L
-            connection.inputStream.use { input ->
-                partial.outputStream().buffered().use { output ->
-                    val buffer = ByteArray(64 * 1024)
-                    while (true) {
-                        val count = input.read(buffer)
-                        if (count < 0) break
-                        output.write(buffer, 0, count)
-                        received += count
-                        downloadedBytes.value = received
-                        downloadProgress.value = (received.toFloat() / expectedLength.toFloat()).coerceIn(0f, 1f)
-                    }
-                }
-            }
-            check(received == expectedLength && partial.length() == spec.archiveBytes) {
-                "دانلود کامل نشد؛ " + received + " از " + expectedLength + " بایت دریافت شد."
-            }
-            check(partial.renameTo(archive)) { "ذخیرهٔ بستهٔ دانلودشده ناموفق بود." }
-        } catch (e: Throwable) {
-            partial.delete()
-            archive.delete()
-            throw IllegalStateException("دانلود مدل ناموفق بود: " + (e.message ?: e.javaClass.simpleName), e)
-        } finally {
-            connection.disconnect()
-        }
+        downloadArchiveWithFallback(spec, archive, partial)
 
         status.value = "در حال بررسی و استخراج مدل گفتار…"
         val root = File(appContext.filesDir, "speech-staging").apply { mkdirs() }.canonicalFile
@@ -200,6 +158,75 @@ class PersianSpeech(context: Context) {
         } finally {
             root.deleteRecursively()
         }
+    }
+
+    private fun downloadArchiveWithFallback(spec: ModelSpec, archive: File, partial: File) {
+        val mirrors = SpeechDownloadMirrors.candidates(
+            appContext,
+            SpeechMirrorSource.GITHUB_RELEASE,
+            spec.archive
+        )
+        val failures = mutableListOf<String>()
+        check(mirrors.isNotEmpty()) { "میروری برای دریافت مدل گفتار تنظیم نشده است." }
+
+        for ((index, mirror) in mirrors.withIndex()) {
+            archive.delete()
+            partial.delete()
+            val connection = (URL(mirror.url).openConnection() as HttpURLConnection).apply {
+                connectTimeout = 20_000
+                readTimeout = 180_000
+                instanceFollowRedirects = true
+                requestMethod = "GET"
+                setRequestProperty("User-Agent", "MindUnlock-Android/0.6.28")
+                setRequestProperty("Accept", "application/octet-stream")
+            }
+            try {
+                status.value = "آزمایش میرور ${index + 1} از ${mirrors.size}: ${mirror.label}"
+                connection.connect()
+                val response = connection.responseCode
+                check(response in 200..299) { "پاسخ HTTP $response" }
+
+                val announcedLength = connection.contentLengthLong
+                if (announcedLength > 0L) {
+                    check(announcedLength == spec.archiveBytes) {
+                        "اندازه اعلام‌شده با مدل اصلی برابر نیست ($announcedLength بایت)."
+                    }
+                }
+
+                status.value = "دریافت بسته مدل از ${mirror.label}…"
+                var received = 0L
+                connection.inputStream.use { input ->
+                    partial.outputStream().buffered().use { output ->
+                        val buffer = ByteArray(64 * 1024)
+                        while (true) {
+                            val count = input.read(buffer)
+                            if (count < 0) break
+                            output.write(buffer, 0, count)
+                            received += count
+                            downloadedBytes.value = received
+                            downloadProgress.value =
+                                (received.toFloat() / spec.archiveBytes.toFloat()).coerceIn(0f, 1f)
+                        }
+                    }
+                }
+                check(received == spec.archiveBytes && partial.length() == spec.archiveBytes) {
+                    "دانلود کامل نیست؛ $received از ${spec.archiveBytes} بایت دریافت شد."
+                }
+                check(partial.renameTo(archive)) { "انتقال بسته دانلودشده ناموفق بود." }
+                status.value = "بسته از میرور ${mirror.label} دریافت شد؛ اعتبارسنجی و استخراج آغاز می‌شود."
+                return
+            } catch (failure: Throwable) {
+                partial.delete()
+                archive.delete()
+                failures += "${index + 1}. ${mirror.label}: ${failure.message ?: failure.javaClass.simpleName}"
+            } finally {
+                connection.disconnect()
+            }
+        }
+
+        throw IllegalStateException(
+            "تمام میرورهای دریافت مدل ناموفق بودند: ${failures.joinToString(" | ")}"
+        )
     }
 
     fun deleteDownloadedVoice(id: String) {
