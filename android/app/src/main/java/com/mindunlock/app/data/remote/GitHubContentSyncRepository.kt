@@ -291,7 +291,7 @@ internal object GitHubManifestPolicy {
             require(updated.isNotBlank() && updated.length <= 40) { "زمان به‌روزرسانی Manifest معتبر نیست." }
             require(itemSchema == 1) { "نسخه ساختار ورودی پشتیبانی نمی‌شود." }
             require(safePath.substringAfterLast('.').lowercase() == format ||
-                (format == "markdown" && safePath.endsWith(".md", true))) {
+                (format == "markdown" && (safePath.endsWith(".md", true) || safePath.endsWith(".markdown", true)))) {
                 "پسوند فایل با قالب اعلام‌شده در Manifest یکسان نیست."
             }
             GitHubManifestItem(
