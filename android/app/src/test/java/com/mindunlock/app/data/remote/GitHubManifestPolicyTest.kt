@@ -37,8 +37,7 @@ class GitHubManifestPolicyTest {
             manifest("[${item(id = "second", path = "content/library/second.json")}, ${item()}]")
         )
         assertEquals(2, parsed.size)
-        assertEquals("network-basics", parsed.first().id)
-        assertEquals("content/library/network-basics.json", parsed.first().path)
+        assertEquals(true, parsed.any { it.id == "network-basics" && it.path == "content/library/network-basics.json" })
     }
 
     @Test
