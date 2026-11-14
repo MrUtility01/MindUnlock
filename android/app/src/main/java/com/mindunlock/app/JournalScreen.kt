@@ -238,8 +238,13 @@ fun JournalScreen(userDatabase: UserDatabase, speech: PersianSpeech) {
                             pendingDeleteEntryId = null
                             scope.launch {
                                 try {
-                                    userDatabase.journalEntryDao().delete(entryId)
-                                    message = "نوشته حذف شد."
+                                    val deleted = MindDumpWorkflow.deleteJournalAndRestoreInbox(userDatabase, entryId)
+                                    check(deleted) { "Journal delete/recovery failed" }
+                                    message = if (pendingEntry.sourceMindDumpId != null) {
+                                        "نوشته حذف شد؛ آخرین نسخه آن به صندوق ورودی بازگشت."
+                                    } else {
+                                        "نوشته حذف شد."
+                                    }
                                 } catch (cancelled: CancellationException) {
                                     throw cancelled
                                 } catch (_: Exception) {
