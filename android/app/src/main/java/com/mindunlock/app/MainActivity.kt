@@ -701,6 +701,10 @@ internal object OfflinePersianSpeech {
                 if (responseCode !in 200..299) {
                     error("HTTP $responseCode")
                 }
+                val contentType = connection.contentType.orEmpty().lowercase(java.util.Locale.US)
+                if (contentType.contains("text/html")) {
+                    error("میرور به‌جای فایل مدل، صفحه HTML برگرداند.")
+                }
                 val total = connection.contentLengthLong
                 connection.inputStream.use { input ->
                     partial.outputStream().buffered().use { output ->
