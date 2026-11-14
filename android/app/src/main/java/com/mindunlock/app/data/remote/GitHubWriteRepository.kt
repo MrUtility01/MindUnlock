@@ -65,7 +65,7 @@ class GitHubWriteRepository(
         }
         val mainRef = api("GET", "/repos/$owner/$repository/git/ref/heads/$baseBranch", token)
         val baseSha = mainRef.getJSONObject("object").getString("sha")
-        val branch = "mindunlock-content/" + UUID.randomUUID().toString().replace("-", "").take(16)
+        val branch = "mindunlock-content-" + UUID.randomUUID().toString().replace("-", "").take(16)
         api(
             "POST",
             "/repos/$owner/$repository/git/refs",
