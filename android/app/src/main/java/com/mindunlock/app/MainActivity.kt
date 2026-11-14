@@ -100,85 +100,159 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         CrashDiagnostics.install(this)
-        enableEdgeToEdge()
-        speech = PersianSpeech(this)
-        val app = application as MindUnlockApp
-        val preferences = getSharedPreferences("mindunlock_preferences", MODE_PRIVATE)
-        val userDatabase = UserDatabase.getInstance(this)
-        
-        setContent {
-            var theme by remember { mutableStateOf(preferences.getString("theme", "light") ?: "light") }
-            var fontScale by remember { mutableStateOf(preferences.getFloat("font_scale", 1f)) }
-            val density = LocalDensity.current
-            var unlocked by rememberSaveable { mutableStateOf(false) }
-            var lockPassword by rememberSaveable { mutableStateOf("") }
-            var lockError by rememberSaveable { mutableStateOf("") }
-            var startupReady by rememberSaveable { mutableStateOf(false) }
-            var migrationError by rememberSaveable { mutableStateOf("") }
-                      var migrationStatus by rememberSaveable { mutableStateOf("شروع آماده‌سازی...") }
-            var migrationAttempt by rememberSaveable { mutableStateOf(0) }
 
-            LaunchedEffect(migrationAttempt) {
-                migrationError = ""
-                try {
-                    withContext(Dispatchers.IO) {
-                        LegacyDatabaseMigrator.migrate(this@MainActivity, app.repository.database, userDatabase, onProgress = { phase -> runOnUiThread { migrationStatus = phase } })
+        // Do not repeat a startup crash loop. The recovery Activity uses only
+        // platform Views and never opens Room, Compose screens, or speech models.
+        if (CrashDiagnostics.beginLaunch(this)) {
+            openStartupRecovery()
+            return
+        }
+
+        try {
+            CrashDiagnostics.setCurrentScreen("MainActivity: preparing dependencies")
+            enableEdgeToEdge()
+            speech = PersianSpeech(this)
+
+            val app = application as MindUnlockApp
+            val repository = app.repository
+            val preferences = getSharedPreferences("mindunlock_preferences", MODE_PRIVATE)
+            val userDatabase = UserDatabase.getInstance(this)
+
+            setContent {
+                var theme by remember { mutableStateOf(preferences.getString("theme", "light") ?: "light") }
+                var fontScale by remember { mutableStateOf(preferences.getFloat("font_scale", 1f)) }
+                val density = LocalDensity.current
+                var unlocked by rememberSaveable { mutableStateOf(false) }
+                var lockPassword by rememberSaveable { mutableStateOf("") }
+                var lockError by rememberSaveable { mutableStateOf("") }
+                var startupReady by rememberSaveable { mutableStateOf(false) }
+                var migrationError by rememberSaveable { mutableStateOf("") }
+                var migrationStatus by rememberSaveable { mutableStateOf("شروع آماده‌سازی...") }
+                var migrationAttempt by rememberSaveable { mutableStateOf(0) }
+
+                LaunchedEffect(migrationAttempt) {
+                    migrationError = ""
+                    CrashDiagnostics.setCurrentScreen("Startup: legacy database migration")
+                    try {
+                        withContext(Dispatchers.IO) {
+                            LegacyDatabaseMigrator.migrate(
+                                this@MainActivity,
+                                repository.database,
+                                userDatabase,
+                                onProgress = { phase ->
+                                    runOnUiThread { migrationStatus = phase }
+                                }
+                            )
+                        }
+                        startupReady = true
+                    } catch (error: Throwable) {
+                        migrationError = error.message ?: "انتقال اطلاعات قدیمی ناموفق بود."
+                        CrashDiagnostics.recordHandled(this@MainActivity, "LegacyDatabaseMigrator", error)
+                        android.util.Log.e("MindUnlockStartup", "Legacy database migration failed", error)
                     }
-                    startupReady = true
-                } catch (error: Exception) {
-                    migrationError = error.message ?: "انتقال اطلاعات قدیمی ناموفق بود."
-                    android.util.Log.e("MindUnlockStartup", "Legacy database migration failed", error)
                 }
-            }
-            MindUnlockTheme(theme) {
-                CompositionLocalProvider(
-                    LocalLayoutDirection provides LayoutDirection.Rtl,
-                    LocalDensity provides Density(density.density, density.fontScale * fontScale)
-                ) {
-                    if (!startupReady) {
-                    Column(
-                        Modifier.fillMaxSize().padding(28.dp),
-                        verticalArrangement = Arrangement.Center,
-                        horizontalAlignment = Alignment.CenterHorizontally
+
+                MindUnlockTheme(theme) {
+                    // This runs only after the first successful composition. If
+                    // rendering the dashboard crashes, the next launch enters recovery.
+                    androidx.compose.runtime.SideEffect {
+                        if (startupReady) {
+                            CrashDiagnostics.markLaunchHealthy(this@MainActivity)
+                        }
+                    }
+                    CompositionLocalProvider(
+                        LocalLayoutDirection provides LayoutDirection.Rtl,
+                        LocalDensity provides Density(density.density, density.fontScale * fontScale)
                     ) {
-                        Text("MindUnlock · آماده‌سازی برنامه", style = MaterialTheme.typography.headlineSmall)
-                        if (migrationError.isBlank()) {
-                            CircularProgressIndicator()
-                            Text(migrationStatus, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        } else {
-                            Text("آماده‌سازی کامل نشد: $migrationError", color = MaterialTheme.colorScheme.error)
-                            Button(onClick = { migrationAttempt += 1 }, modifier = Modifier.fillMaxWidth()) {
-                                Text("تلاش مجدد")
-                            }
-                        }
-                    }
-                } else if (!unlocked) {
-                        Column(Modifier.fillMaxSize().padding(28.dp), verticalArrangement = Arrangement.Center) {
-                            Text("MindUnlock · قفل برنامه", style = MaterialTheme.typography.headlineSmall)
-                            Text(if (AppLock.isConfigured(preferences)) "برای ورود رمز برنامه را وارد کن." else "برای محافظت از اطلاعات، رمز اولیه برنامه را تعیین کن (حداقل ۴ کاراکتر).")
-                            OutlinedTextField(lockPassword, { lockPassword = it; lockError = "" }, Modifier.fillMaxWidth(), label = { Text("رمز برنامه") }, visualTransformation = PasswordVisualTransformation(), singleLine = true)
-                            if (lockError.isNotBlank()) Text(lockError, color = MaterialTheme.colorScheme.error)
-                            Button(onClick = {
-                                try {
-                                    if (AppLock.isConfigured(preferences)) {
-                                        if (AppLock.verify(preferences, lockPassword.toCharArray())) { unlocked = true; lockPassword = "" }
-                                        else lockError = "رمز برنامه صحیح نیست."
-                                    } else {
-                                        AppLock.setPassword(preferences, lockPassword.toCharArray()); unlocked = true; lockPassword = ""
+                        if (!startupReady) {
+                            Column(
+                                Modifier.fillMaxSize().padding(28.dp),
+                                verticalArrangement = Arrangement.Center,
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text("MindUnlock · آماده‌سازی برنامه", style = MaterialTheme.typography.headlineSmall)
+                                if (migrationError.isBlank()) {
+                                    CircularProgressIndicator()
+                                    Text(migrationStatus, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                } else {
+                                    Text("آماده‌سازی کامل نشد: $migrationError", color = MaterialTheme.colorScheme.error)
+                                    Button(onClick = { migrationAttempt += 1 }, modifier = Modifier.fillMaxWidth()) {
+                                        Text("تلاش مجدد")
                                     }
-                                } catch (e: Exception) { lockError = e.message ?: "تنظیم رمز ناموفق بود." }
-                            }, modifier = Modifier.fillMaxWidth(), enabled = lockPassword.length >= 4) { Text(if (AppLock.isConfigured(preferences)) "ورود به برنامه" else "فعال‌سازی قفل و ورود") }
+                                }
+                            }
+                        } else if (!unlocked) {
+                            Column(Modifier.fillMaxSize().padding(28.dp), verticalArrangement = Arrangement.Center) {
+                                Text("MindUnlock · قفل برنامه", style = MaterialTheme.typography.headlineSmall)
+                                Text(
+                                    if (AppLock.isConfigured(preferences)) {
+                                        "برای ورود رمز برنامه را وارد کن."
+                                    } else {
+                                        "برای محافظت از اطلاعات، رمز اولیه برنامه را تعیین کن (حداقل ۴ کاراکتر)."
+                                    }
+                                )
+                                OutlinedTextField(
+                                    lockPassword,
+                                    { lockPassword = it; lockError = "" },
+                                    Modifier.fillMaxWidth(),
+                                    label = { Text("رمز برنامه") },
+                                    visualTransformation = PasswordVisualTransformation(),
+                                    singleLine = true
+                                )
+                                if (lockError.isNotBlank()) Text(lockError, color = MaterialTheme.colorScheme.error)
+                                Button(
+                                    onClick = {
+                                        try {
+                                            if (AppLock.isConfigured(preferences)) {
+                                                if (AppLock.verify(preferences, lockPassword.toCharArray())) {
+                                                    unlocked = true
+                                                    lockPassword = ""
+                                                } else {
+                                                    lockError = "رمز برنامه صحیح نیست."
+                                                }
+                                            } else {
+                                                AppLock.setPassword(preferences, lockPassword.toCharArray())
+                                                unlocked = true
+                                                lockPassword = ""
+                                            }
+                                        } catch (error: Exception) {
+                                            lockError = error.message ?: "تنظیم رمز ناموفق بود."
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    enabled = lockPassword.length >= 4
+                                ) {
+                                    Text(if (AppLock.isConfigured(preferences)) "ورود به برنامه" else "فعال‌سازی قفل و ورود")
+                                }
+                            }
+                        } else {
+                            MindUnlockRoot(
+                                repository = repository,
+                                userDatabase = userDatabase,
+                                speech = speech,
+                                initialTheme = theme,
+                                onThemeChange = { theme = it; preferences.edit().putString("theme", it).apply() },
+                                onFontScaleChange = { fontScale = it; preferences.edit().putFloat("font_scale", it).apply() },
+                                preferences = preferences,
+                                onLockApp = { unlocked = false }
+                            )
                         }
-                    } else {
-                        MindUnlockRoot(
-                            repository = app.repository, userDatabase = userDatabase, speech = speech, initialTheme = theme,
-                            onThemeChange = { theme = it; preferences.edit().putString("theme", it).apply() },
-                            onFontScaleChange = { fontScale = it; preferences.edit().putFloat("font_scale", it).apply() },
-                            preferences = preferences, onLockApp = { unlocked = false }
-                        )
                     }
                 }
             }
+        } catch (error: Throwable) {
+            CrashDiagnostics.recordStartupFailure(this, "MainActivity.onCreate", error)
+            android.util.Log.e("MindUnlockStartup", "MainActivity startup failed", error)
+            openStartupRecovery()
+        }
+    }
+
+    private fun openStartupRecovery() {
+        runCatching {
+            startActivity(android.content.Intent(this, StartupRecoveryActivity::class.java))
+            finish()
+        }.onFailure { error ->
+            CrashDiagnostics.recordStartupFailure(this, "Opening StartupRecoveryActivity", error)
         }
     }
 
