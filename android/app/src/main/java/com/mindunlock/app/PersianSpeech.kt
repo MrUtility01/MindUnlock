@@ -187,6 +187,10 @@ class PersianSpeech(context: Context) {
                 connection.connect()
                 val response = connection.responseCode
                 check(response in 200..299) { "پاسخ HTTP $response" }
+                val contentType = connection.contentType.orEmpty().lowercase(java.util.Locale.US)
+                check(!contentType.contains("text/html")) {
+                    "میرور به‌جای آرشیو مدل، صفحه HTML برگرداند."
+                }
 
                 val announcedLength = connection.contentLengthLong
                 if (announcedLength > 0L) {
