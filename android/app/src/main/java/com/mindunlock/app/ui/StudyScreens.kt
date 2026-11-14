@@ -1428,6 +1428,63 @@ fun NotesScreen(userDb: UserDatabase, speech: PersianSpeech) {
     var query by rememberSaveable { mutableStateOf("") }
     var exportMessage by remember { mutableStateOf("") }
     val visible = notes.filter { query.isBlank() || it.title.contains(query, true) || it.body.contains(query, true) }
+    val importLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenMultipleDocuments()
+    ) { uris ->
+        if (uris.isNotEmpty()) {
+            scope.launch {
+                var imported = 0
+                val errors = mutableListOf<String>()
+                uris.forEach { uri ->
+                    runCatching {
+                        val displayName = context.contentResolver.query(
+                            uri,
+                            arrayOf(android.provider.OpenableColumns.DISPLAY_NAME),
+                            null, null, null
+                        )?.use { cursor ->
+                            if (cursor.moveToFirst()) cursor.getString(0) else null
+                        } ?: uri.lastPathSegment?.substringAfterLast('/') ?: "مطلب واردشده"
+                        val extension = displayName.substringAfterLast('.', "").lowercase(Locale.ROOT)
+                        require(extension in setOf("md", "markdown", "txt", "json")) {
+                            "فرمت پشتیبانی‌نشده: $displayName"
+                        }
+                        val raw = withContext(Dispatchers.IO) {
+                            context.contentResolver.openInputStream(uri)?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }
+                                ?: error("خواندن فایل ممکن نشد: $displayName")
+                        }
+                        require(raw.isNotBlank()) { "فایل خالی است: $displayName" }
+                        val fileTitle = displayName.substringBeforeLast('.').ifBlank { "مطلب واردشده" }
+                        val parsedTitle: String?
+                        val body: String
+                        if (extension == "json") {
+                            val element = JsonParser.parseString(raw)
+                            val obj = element.takeIf { it.isJsonObject }?.asJsonObject
+                            parsedTitle = obj?.get("title")?.takeIf { it.isJsonPrimitive }?.asString
+                            val contentValue = listOf("body", "content", "markdown", "text", "description")
+                                .firstNotNullOfOrNull { key -> obj?.get(key)?.takeIf { it.isJsonPrimitive }?.asString }
+                            body = contentValue ?: com.google.gson.Gson().toJson(element)
+                        } else {
+                            parsedTitle = raw.lineSequence().firstOrNull { it.trimStart().startsWith("# ") }
+                                ?.trim()?.removePrefix("# ")?.trim()
+                            body = raw
+                        }
+                        userDb.noteDao().upsert(
+                            NoteEntity(
+                                title = parsedTitle?.takeIf { it.isNotBlank() } ?: fileTitle,
+                                body = body,
+                                updatedAt = System.currentTimeMillis()
+                            )
+                        )
+                        imported++
+                    }.onFailure { errors += (it.message ?: "خطای ناشناخته") }
+                }
+                exportMessage = buildString {
+                    append("تعداد ").append(imported).append(" فایل بدون تأیید وارد شد.")
+                    if (errors.isNotEmpty()) append(" خطاها: ").append(errors.take(3).joinToString("؛ "))
+                }
+            }
+        }
+    }
     val exportLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("text/plain")
     ) { uri ->
@@ -1470,13 +1527,17 @@ fun NotesScreen(userDb: UserDatabase, speech: PersianSpeech) {
             Button(
                 onClick = { editingId = null; title = ""; body = ""; showDialog = true },
                 modifier = Modifier.weight(1f)
-            ) { Icon(Icons.Default.Add, null); Text("یادداشت جدید") }
+            ) { Icon(Icons.Default.Add, null); Text("نوشتن مطلب") }
             OutlinedButton(
-                onClick = { exportLauncher.launch("MindUnlock-Notes.txt") },
-                enabled = notes.isNotEmpty(),
+                onClick = { importLauncher.launch(arrayOf("*/*")) },
                 modifier = Modifier.weight(1f)
-            ) { Icon(Icons.Default.Download, null); Text("خروجی همه") }
+            ) { Icon(Icons.Default.Download, null); Text("ورود MD / JSON / TXT") }
         }
+        OutlinedButton(
+            onClick = { exportLauncher.launch("MindUnlock-Notes.txt") },
+            enabled = notes.isNotEmpty(),
+            modifier = Modifier.fillMaxWidth()
+        ) { Icon(Icons.Default.Download, null); Text("خروجی همه یادداشت‌ها") }
         OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth(), label = { Text("جست‌وجو در یادداشت‌ها") }, singleLine = true)
         PersianVoiceInputButton(compact = true) { spoken -> query = listOf(query, spoken).filter { it.isNotBlank() }.joinToString(" ") }
         if (exportMessage.isNotBlank()) Text(exportMessage, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
