@@ -1488,7 +1488,15 @@ fun NotesScreen(userDb: UserDatabase, speech: PersianSpeech) {
                     Column(Modifier.fillMaxWidth().padding(13.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(note.title, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                            IconButton(onClick = { scope.launch { userDb.noteDao().delete(note.id) } }) {
+                            IconButton(onClick = {
+                                scope.launch {
+                                    val deleted = MindDumpWorkflow.deleteNoteAndRestoreInbox(userDb, note.id)
+                                    exportMessage = if (deleted) {
+                                        if (note.sourceMindDumpId != null) "یادداشت حذف و متن نهایی آن به صندوق ورودی بازگردانده شد."
+                                        else "یادداشت حذف شد."
+                                    } else "حذف انجام نشد؛ داده‌ها حفظ شدند."
+                                }
+                            }) {
                                 Icon(Icons.Default.Delete, contentDescription = "حذف")
                             }
                         }
@@ -2034,9 +2042,14 @@ fun PlannerScreen(userDb: UserDatabase, speech: PersianSpeech) {
                     onClick = {
                         pendingDeleteTask = null
                         runTaskAction(task.id) {
-                            userDb.studyTaskDao().delete(task.id)
+                            val deleted = MindDumpWorkflow.deleteTaskAndRestoreInbox(userDb, task.id)
+                            check(deleted) { "Task delete/recovery failed" }
                             cancelTaskReminder(task.id)
-                            message = "کار و یادآور آن حذف شدند."
+                            message = if (task.sourceMindDumpId != null) {
+                                "کار حذف شد؛ آخرین نسخه آن به صندوق ورودی بازگشت و یادآور حذف شد."
+                            } else {
+                                "کار و یادآور آن حذف شدند."
+                            }
                         }
                     }
                 ) { Text("حذف") }
