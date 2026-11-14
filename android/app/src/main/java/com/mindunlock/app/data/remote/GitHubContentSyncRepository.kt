@@ -122,6 +122,20 @@ class GitHubContentSyncRepository(
                 skipped++
                 return@forEachIndexed
             }
+            if (entry.status == GitHubContentSyncStatus.REMOTE_UPDATE) {
+                val latestChapter = latest ?: run {
+                    blocked += "${entry.item.title}: نسخه محلی هنگام واردسازی حذف شده؛ فهرست را تازه‌سازی کن."
+                    skipped++
+                    return@forEachIndexed
+                }
+                val latestItems = database.contentItemDao().getForChapter(entry.item.id)
+                val expectedLocal = preferences.getString(localBaseKey(entry.item.id), null)
+                if (expectedLocal == null || fingerprint(latestChapter, latestItems) != expectedLocal) {
+                    blocked += "${entry.item.title}: نسخه محلی هنگام واردسازی تغییر کرده؛ برای جلوگیری از ازدست‌رفتن تغییرات متوقف شد."
+                    skipped++
+                    return@forEachIndexed
+                }
+            }
             database.withTransaction {
                 database.chapterDao().upsert(parsed.first)
                 database.contentItemDao().deleteForChapter(entry.item.id)
