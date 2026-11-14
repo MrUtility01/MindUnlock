@@ -51,7 +51,7 @@ class GitHubWriteRepository(
         val bytes = text.toByteArray(StandardCharsets.UTF_8)
         require(bytes.isNotEmpty()) { "فایل خالی است." }
         require(bytes.size <= MAX_UPLOAD_BYTES) { "حداکثر اندازه فایل قابل ارسال ۱ مگابایت است." }
-        require(!text.contains('\u0000')) { "محتوا شامل داده باینری است." }
+        require(!text.contains(0.toChar())) { "محتوا شامل داده باینری است." }
         val cleanTitle = title.trim().take(120).ifBlank { safeName }
         val token = auth.getValidAccessToken(context)
             ?: throw IllegalStateException("نشست GitHub معتبر نیست؛ دوباره وارد GitHub شو.")
