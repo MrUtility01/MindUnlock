@@ -51,7 +51,7 @@ class GitHubWriteRepository(
         val bytes = text.toByteArray(StandardCharsets.UTF_8)
         require(bytes.isNotEmpty()) { "فایل خالی است." }
         require(bytes.size <= MAX_UPLOAD_BYTES) { "حداکثر اندازه فایل قابل ارسال ۱ مگابایت است." }
-        require(!text.contains('\\u0000')) { "محتوا شامل داده باینری است." }
+        require(!text.contains('\u0000')) { "محتوا شامل داده باینری است." }
         val cleanTitle = title.trim().take(120).ifBlank { safeName }
         val token = auth.getValidAccessToken(context)
             ?: throw IllegalStateException("نشست GitHub معتبر نیست؛ دوباره وارد GitHub شو.")
@@ -93,7 +93,7 @@ class GitHubWriteRepository(
                 .put("title", cleanTitle)
                 .put("head", branch)
                 .put("base", baseBranch)
-                .put("body", "این فایل از برنامه MindUnlock ارسال شده است.\\n\\nمسیر پیشنهادی: `$path`\\n\\nاین تغییر در شاخه جداگانه قرار دارد و برای ورود به شاخه اصلی نیازمند بازبینی و ادغام است.")
+                .put("body", "این فایل از برنامه MindUnlock ارسال شده است.\n\nمسیر پیشنهادی: `$path`\n\nاین تغییر در شاخه جداگانه قرار دارد و برای ورود به شاخه اصلی نیازمند بازبینی و ادغام است.")
         )
         GitHubUploadResult(
             branch = branch,
