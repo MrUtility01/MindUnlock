@@ -4,11 +4,16 @@ import android.app.Application
 import com.mindunlock.app.data.repository.SyncRepository
 
 class MindUnlockApp : Application() {
-    lateinit var repository: SyncRepository
-        private set
+    /**
+     * Install crash reporting first and defer Room/OkHttp initialization until the
+     * activity has checked whether this launch needs the recovery screen.
+     */
+    val repository: SyncRepository by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        SyncRepository(this)
+    }
 
     override fun onCreate() {
         super.onCreate()
-        repository = SyncRepository(this)
+        CrashDiagnostics.install(this)
     }
 }
