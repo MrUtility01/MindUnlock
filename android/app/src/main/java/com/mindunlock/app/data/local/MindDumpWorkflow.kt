@@ -17,6 +17,13 @@ object MindDumpWorkflow {
         }
     }
 
+    private fun contentToRestore(sourceContent: String?, title: String, body: String, titleLimit: Int): String {
+        if (sourceContent == null) return mergeTitleAndBody(title, body)
+        val originalTitle = titleFrom(sourceContent, "").take(titleLimit)
+        return if (title.trim() == originalTitle) body.trim()
+        else mergeTitleAndBody(title, body)
+    }
+
     suspend fun convertToNote(database: UserDatabase, entryId: Long): Long? =
         database.withTransaction {
             val source = database.mindDumpDao().getById(entryId) ?: return@withTransaction null
@@ -56,13 +63,14 @@ object MindDumpWorkflow {
     suspend fun restoreNoteToInbox(database: UserDatabase, noteId: Long): Long? =
         database.withTransaction {
             val note = database.noteDao().getById(noteId) ?: return@withTransaction null
-            val content = mergeTitleAndBody(note.title, note.body)
+            val sourceId = note.sourceMindDumpId
+            val source = sourceId?.let { database.mindDumpDao().getById(it) }
+            val content = contentToRestore(source?.content, note.title, note.body, 120)
             if (content.isBlank()) return@withTransaction null
             val now = System.currentTimeMillis()
-            val sourceId = note.sourceMindDumpId
-            val restoredId = if (sourceId != null && database.mindDumpDao().getById(sourceId) != null) {
-                database.mindDumpDao().restoreToInbox(sourceId, content, now)
-                sourceId
+            val restoredId = if (source != null) {
+                database.mindDumpDao().restoreToInbox(source.id, content, now)
+                source.id
             } else {
                 database.mindDumpDao().insert(MindDumpEntity(content = content, category = "thought", createdAt = now, updatedAt = now))
             }
@@ -73,13 +81,14 @@ object MindDumpWorkflow {
     suspend fun restoreJournalToInbox(database: UserDatabase, journalId: Long): Long? =
         database.withTransaction {
             val entry = database.journalEntryDao().getById(journalId) ?: return@withTransaction null
-            val content = mergeTitleAndBody(entry.title, entry.body)
+            val sourceId = entry.sourceMindDumpId
+            val source = sourceId?.let { database.mindDumpDao().getById(it) }
+            val content = contentToRestore(source?.content, entry.title, entry.body, 120)
             if (content.isBlank()) return@withTransaction null
             val now = System.currentTimeMillis()
-            val sourceId = entry.sourceMindDumpId
-            val restoredId = if (sourceId != null && database.mindDumpDao().getById(sourceId) != null) {
-                database.mindDumpDao().restoreToInbox(sourceId, content, now)
-                sourceId
+            val restoredId = if (source != null) {
+                database.mindDumpDao().restoreToInbox(source.id, content, now)
+                source.id
             } else {
                 database.mindDumpDao().insert(MindDumpEntity(content = content, category = "thought", createdAt = now, updatedAt = now))
             }
@@ -90,13 +99,14 @@ object MindDumpWorkflow {
     suspend fun restoreTaskToInbox(database: UserDatabase, taskId: Long): Long? =
         database.withTransaction {
             val task = database.studyTaskDao().getById(taskId) ?: return@withTransaction null
-            val content = mergeTitleAndBody(task.title, task.details)
+            val sourceId = task.sourceMindDumpId ?: database.mindDumpDao().getByLinkedTaskId(task.id)?.id
+            val source = sourceId?.let { database.mindDumpDao().getById(it) }
+            val content = contentToRestore(source?.content, task.title, task.details, 80)
             if (content.isBlank()) return@withTransaction null
             val now = System.currentTimeMillis()
-            val sourceId = task.sourceMindDumpId ?: database.mindDumpDao().getByLinkedTaskId(task.id)?.id
-            val restoredId = if (sourceId != null && database.mindDumpDao().getById(sourceId) != null) {
-                database.mindDumpDao().restoreToInbox(sourceId, content, now)
-                sourceId
+            val restoredId = if (source != null) {
+                database.mindDumpDao().restoreToInbox(source.id, content, now)
+                source.id
             } else {
                 database.mindDumpDao().insert(MindDumpEntity(content = content, category = "task", createdAt = now, updatedAt = now))
             }
@@ -108,12 +118,13 @@ object MindDumpWorkflow {
         database.withTransaction {
             val note = database.noteDao().getById(noteId) ?: return@withTransaction false
             if (note.sourceMindDumpId != null) {
-                val content = mergeTitleAndBody(note.title, note.body)
+                val sourceId = note.sourceMindDumpId
+                val source = database.mindDumpDao().getById(sourceId)
+                val content = contentToRestore(source?.content, note.title, note.body, 120)
                 if (content.isBlank()) return@withTransaction false
                 val now = System.currentTimeMillis()
-                val sourceId = note.sourceMindDumpId
-                if (database.mindDumpDao().getById(sourceId) != null) {
-                    database.mindDumpDao().restoreToInbox(sourceId, content, now)
+                if (source != null) {
+                    database.mindDumpDao().restoreToInbox(source.id, content, now)
                 } else {
                     database.mindDumpDao().insert(MindDumpEntity(content = content, category = "thought", createdAt = now, updatedAt = now))
                 }
@@ -126,12 +137,13 @@ object MindDumpWorkflow {
         database.withTransaction {
             val entry = database.journalEntryDao().getById(journalId) ?: return@withTransaction false
             if (entry.sourceMindDumpId != null) {
-                val content = mergeTitleAndBody(entry.title, entry.body)
+                val sourceId = entry.sourceMindDumpId
+                val source = database.mindDumpDao().getById(sourceId)
+                val content = contentToRestore(source?.content, entry.title, entry.body, 120)
                 if (content.isBlank()) return@withTransaction false
                 val now = System.currentTimeMillis()
-                val sourceId = entry.sourceMindDumpId
-                if (database.mindDumpDao().getById(sourceId) != null) {
-                    database.mindDumpDao().restoreToInbox(sourceId, content, now)
+                if (source != null) {
+                    database.mindDumpDao().restoreToInbox(source.id, content, now)
                 } else {
                     database.mindDumpDao().insert(MindDumpEntity(content = content, category = "thought", createdAt = now, updatedAt = now))
                 }
@@ -145,11 +157,12 @@ object MindDumpWorkflow {
             val task = database.studyTaskDao().getById(taskId) ?: return@withTransaction false
             val sourceId = task.sourceMindDumpId ?: database.mindDumpDao().getByLinkedTaskId(task.id)?.id
             if (sourceId != null) {
-                val content = mergeTitleAndBody(task.title, task.details)
+                val source = database.mindDumpDao().getById(sourceId)
+                val content = contentToRestore(source?.content, task.title, task.details, 80)
                 if (content.isBlank()) return@withTransaction false
                 val now = System.currentTimeMillis()
-                if (database.mindDumpDao().getById(sourceId) != null) {
-                    database.mindDumpDao().restoreToInbox(sourceId, content, now)
+                if (source != null) {
+                    database.mindDumpDao().restoreToInbox(source.id, content, now)
                 } else {
                     database.mindDumpDao().insert(MindDumpEntity(content = content, category = "task", createdAt = now, updatedAt = now))
                 }
