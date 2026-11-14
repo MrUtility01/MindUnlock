@@ -48,6 +48,24 @@ class SpeechDownloadMirrorsTest {
     }
 
     @Test
+    fun blankSavedMirrorListFallsBackToShippedDefaults() {
+        context.getSharedPreferences(SpeechDownloadMirrors.SETTINGS_FILE, Context.MODE_PRIVATE)
+            .edit()
+            .putString(SpeechDownloadMirrors.PREF_GITHUB_MIRRORS, "")
+            .commit()
+
+        val original = "https://github.com/owner/repo/releases/download/v1/model.tar.bz2"
+        val candidates = SpeechDownloadMirrors.candidates(
+            context,
+            SpeechMirrorSource.GITHUB_RELEASE,
+            original
+        )
+
+        assertEquals("ghfast.top", candidates.first().label)
+        assertEquals(original, candidates.last().url)
+    }
+
+    @Test
     fun customSavedListReplacesBuiltInDefaultsAndKeepsOfficialLast() {
         context.getSharedPreferences(SpeechDownloadMirrors.SETTINGS_FILE, Context.MODE_PRIVATE)
             .edit()
