@@ -396,7 +396,7 @@ jobs:
           screens = (package / "ui/StudyScreens.kt").read_text(encoding="utf-8")
           checks = {
               "on-demand speech model": "activeId = saved" in speech and "selectVoice(saved)" not in speech,
-              "validated speech model downloads": "archiveBytes" in speech and "expectedLength == spec.archiveBytes" in speech and "stagedInstall" in speech,
+              "validated speech model downloads": "archiveBytes" in speech and (("expectedLength == spec.archiveBytes" in speech and "received == expectedLength" in speech) or ("downloadArchiveWithFallback" in speech and "announcedLength == spec.archiveBytes" in speech and "received == spec.archiveBytes" in speech)) and "stagedInstall" in speech,
               "voice deletion and download status": "deleteDownloadedVoice" in speech and "isVoiceDownloaded" in speech,
               "split user/content databases": "interface ProgressDao" in user_db and "interface ContentItemDao" in content_db,
               "paged chapter queries": "getChapterPage" in content_db and "getChapterFilteredCount" in content_db,
