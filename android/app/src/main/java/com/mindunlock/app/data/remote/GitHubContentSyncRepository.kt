@@ -97,7 +97,7 @@ class GitHubContentSyncRepository(
 
         val blocked = entries.filter {
             it.status !in setOf(GitHubContentSyncStatus.NEW, GitHubContentSyncStatus.REMOTE_UPDATE)
-        }.map { "${it.item.title}: ${it.status.label}" }
+        }.map { "${it.item.title}: ${it.status.label}" }.toMutableList()
         val eligible = entries.filter {
             it.status in setOf(GitHubContentSyncStatus.NEW, GitHubContentSyncStatus.REMOTE_UPDATE)
         }
@@ -112,9 +112,13 @@ class GitHubContentSyncRepository(
                 "هش فایل «${entry.item.title}» با Manifest مطابقت ندارد؛ واردسازی متوقف شد."
             }
             val parsed = parseContent(entry.item, file.text)
+            val uidCollision = parsed.second.firstNotNullOfOrNull { candidate ->
+                database.contentItemDao().get(candidate.uid)?.takeIf { it.chapterId != entry.item.id }?.uid
+            }
+            require(uidCollision == null) { "شناسه آیتم $uidCollision قبلاً در فصل دیگری استفاده شده است؛ برای جلوگیری از جابه‌جایی داده واردسازی متوقف شد." }
             val latest = database.chapterDao().get(entry.item.id)
             if (entry.status == GitHubContentSyncStatus.NEW && latest != null) {
-                blocked + "${entry.item.title}: هم‌زمان در دستگاه ایجاد شده؛ برای جلوگیری از بازنویسی نادیده گرفته شد."
+                blocked += "${entry.item.title}: هم‌زمان در دستگاه ایجاد شده؛ برای جلوگیری از بازنویسی نادیده گرفته شد."
                 skipped++
                 return@forEachIndexed
             }
