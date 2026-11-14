@@ -2451,6 +2451,13 @@ fun SettingsScreen(
     var settingsMessage by remember { mutableStateOf("") }
     var showResetDialog by remember { mutableStateOf(false) }
     var showDeleteVoiceDialog by remember { mutableStateOf(false) }
+    var hfMirrorAddresses by remember {
+        mutableStateOf(preferences.getString(SpeechDownloadMirrors.PREF_HF_MIRRORS, "").orEmpty())
+    }
+    var githubMirrorAddresses by remember {
+        mutableStateOf(preferences.getString(SpeechDownloadMirrors.PREF_GITHUB_MIRRORS, "").orEmpty())
+    }
+    var mirrorSettingsMessage by remember { mutableStateOf("") }
     var asrModelPresent by remember { mutableStateOf(OfflinePersianSpeech.isInstalled(context)) }
     var asrDownloading by remember { mutableStateOf(false) }
     var asrDownloadProgress by remember { mutableIntStateOf(0) }
@@ -2532,6 +2539,50 @@ fun SettingsScreen(
     ) {
         Text("مرکز تنظیمات MindUnlock", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         Text("تنظیمات ظاهری، مطالعه، گفتار فارسی، امنیت، فضای ذخیره‌سازی و اتصال را از این بخش مدیریت کن.", style = MaterialTheme.typography.bodyMedium)
+
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("میرورهای دانلود مدل‌های صوتی", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(
+                    "هر خط یک میرور و به ترتیب اولویت است. آدرس داخلی/ایرانی خودت را در خط اول قرار بده؛ برنامه ابتدا آدرس‌های سفارشی، بعد میرورهای عمومی و در پایان سرور اصلی را امتحان می‌کند.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                OutlinedTextField(
+                    value = hfMirrorAddresses,
+                    onValueChange = { hfMirrorAddresses = it.take(3000) },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("میرورهای Hugging Face · تشخیص گفتار") },
+                    minLines = 2,
+                    maxLines = 5
+                )
+                OutlinedTextField(
+                    value = githubMirrorAddresses,
+                    onValueChange = { githubMirrorAddresses = it.take(3000) },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("میرورهای GitHub Release · صداهای خواندن") },
+                    minLines = 2,
+                    maxLines = 5
+                )
+                Text(
+                    "می‌توانی نشانی پایه مانند https://mirror.example.ir یا الگوی پراکسی دارای {url} / {encodedUrl} وارد کنی. فقط HTTPS پذیرفته می‌شود. برای استفاده از میرور ایرانی، نشانی سرویس داخلی خودت را اینجا وارد کن.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Button(
+                    onClick = {
+                        preferences.edit()
+                            .putString(SpeechDownloadMirrors.PREF_HF_MIRRORS, hfMirrorAddresses.trim())
+                            .putString(SpeechDownloadMirrors.PREF_GITHUB_MIRRORS, githubMirrorAddresses.trim())
+                            .apply()
+                        mirrorSettingsMessage = "ترتیب میرورها ذخیره شد؛ دانلودهای بعدی از همین ترتیب استفاده می‌کنند."
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("ذخیره ترتیب میرورها") }
+                if (mirrorSettingsMessage.isNotBlank()) {
+                    Text(mirrorSettingsMessage, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                }
+            }
+        }
 
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
