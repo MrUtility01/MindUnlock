@@ -125,6 +125,14 @@ fun GitHubAuthCard() {
                     uploadStatus = ""
                     status = "توکن ذخیره‌شده پاک شد."
                 }) { Text("پاک‌کردن توکن ذخیره‌شده") }
+                OutlinedButton(onClick = {
+                    GitHubTokenVault.clear(context)
+                    tokenPresent = false
+                    account = null
+                    selectedText = ""
+                    uploadStatus = ""
+                    status = "نشست قبلی پاک شد؛ اکنون می‌توانی دوباره وارد شوی."
+                }) { Text("ورود مجدد به GitHub") }
             } else {
                 Button(enabled = !busy, onClick = {
                     authJob?.cancel()
