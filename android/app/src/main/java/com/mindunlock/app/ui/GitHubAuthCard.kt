@@ -64,7 +64,7 @@ fun GitHubAuthCard() {
                     tokenPresent = false
                     deviceCode = null
                     status = "اتصال GitHub از این دستگاه پاک شد."
-                }) { Text("قطع اتصال و پاک‌کردن توکن") }
+                }) { Text("پاک‌کردن توکن از این دستگاه") }
             } else if (tokenPresent) {
                 Text("یک توکن رمزگذاری‌شده از ورود قبلی روی این دستگاه وجود دارد.", style = MaterialTheme.typography.bodyMedium)
                 OutlinedButton(onClick = {
@@ -128,7 +128,7 @@ fun GitHubAuthCard() {
             }
             Text(status, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(
-                "رمز عبور GitHub در برنامه دریافت نمی‌شود. توکن در Android Keystore محافظت می‌شود و در گزارش‌ها ثبت نمی‌شود.",
+                "رمز عبور GitHub در برنامه دریافت نمی‌شود. توکن در Android Keystore محافظت می‌شود و در گزارش‌ها ثبت نمی‌شود. پاک‌کردن محلی، مجوز را از حساب GitHub لغو نمی‌کند.",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
