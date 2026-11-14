@@ -411,7 +411,7 @@ class UserDatabaseMindDumpMigrationTest {
             context,
             UserDatabase::class.java,
             databaseName
-        ).addMigrations(UserDatabase.MIGRATION_1_2, UserDatabase.MIGRATION_2_3, UserDatabase.MIGRATION_3_4, UserDatabase.MIGRATION_4_5, UserDatabase.MIGRATION_5_6, UserDatabase.MIGRATION_6_7, UserDatabase.MIGRATION_7_8, UserDatabase.MIGRATION_8_9, UserDatabase.MIGRATION_9_10, UserDatabase.MIGRATION_10_11, UserDatabase.MIGRATION_11_12, UserDatabase.MIGRATION_12_13, UserDatabase.MIGRATION_13_14).allowMainThreadQueries().build()
+        ).addMigrations(UserDatabase.MIGRATION_1_2, UserDatabase.MIGRATION_2_3, UserDatabase.MIGRATION_3_4, UserDatabase.MIGRATION_4_5, UserDatabase.MIGRATION_5_6, UserDatabase.MIGRATION_6_7, UserDatabase.MIGRATION_7_8, UserDatabase.MIGRATION_8_9, UserDatabase.MIGRATION_9_10, UserDatabase.MIGRATION_10_11, UserDatabase.MIGRATION_11_12, UserDatabase.MIGRATION_12_13, UserDatabase.MIGRATION_13_14, UserDatabase.MIGRATION_14_15).allowMainThreadQueries().build()
 
         try {
             val migratedProfile = LearningProfileEntity(answersCsv = List(20) { "5" }.joinToString(","), sessionMinutes = 60, maxTopics = 3, guidedMode = "flexible", completed = true)
