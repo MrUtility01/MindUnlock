@@ -116,7 +116,7 @@ class GitHubPublicRepository(
         const val DEFAULT_OWNER = "MrUtility01"
         const val DEFAULT_REPOSITORY = "MindUnlock"
         const val DEFAULT_BRANCH = "main"
-        const val MAX_TEXT_FILE_BYTES = 1_572_864L
+        const val MAX_TEXT_FILE_BYTES = 1_000_000L
         private const val MAX_RESPONSE_CHARS = 5_000_000
     }
 }
@@ -124,6 +124,7 @@ class GitHubPublicRepository(
 internal object GitHubPathPolicy {
     fun normalize(path: String): String {
         val value = path.trim().replace('\\', '/').trim('/')
+        if (value.isEmpty()) return ""
         require(value.length <= 500) { "مسیر بیش از حد طولانی است." }
         require(value.split('/').none { it == "." || it == ".." || it.isBlank() }) {
             "مسیر فایل معتبر نیست."
