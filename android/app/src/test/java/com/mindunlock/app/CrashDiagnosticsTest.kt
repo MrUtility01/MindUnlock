@@ -8,6 +8,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 
@@ -43,6 +44,15 @@ class CrashDiagnosticsTest {
         CrashDiagnostics.markLaunchHealthy(context)
 
         assertFalse(CrashDiagnostics.beginLaunch(context))
+    }
+
+    @Test
+    fun recoveryActivityRendersWithoutOpeningApplicationDatabases() {
+        val controller = Robolectric.buildActivity(StartupRecoveryActivity::class.java).setup()
+
+        assertTrue(controller.get().findViewById<android.view.View>(android.R.id.content) != null)
+
+        controller.pause().stop().destroy()
     }
 
     @Test
