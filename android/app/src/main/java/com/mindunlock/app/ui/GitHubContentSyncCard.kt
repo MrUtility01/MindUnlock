@@ -124,6 +124,53 @@ fun GitHubContentSyncCard() {
                                         color = if (eligible) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                     Text(entry.item.path, style = MaterialTheme.typography.labelSmall)
+                                    if (entry.status == GitHubContentSyncStatus.CONFLICT ||
+                                        entry.status == GitHubContentSyncStatus.LOCAL_MODIFIED ||
+                                        entry.status == GitHubContentSyncStatus.REMOTE_UPDATE
+                                    ) {
+                                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                            OutlinedButton(
+                                                enabled = !busy,
+                                                onClick = {
+                                                    scope.launch {
+                                                        busy = true
+                                                        error = ""
+                                                        try {
+                                                            repository.keepLocalVersion(entry.item.id)
+                                                            entries = repository.inspect()
+                                                            status = "نسخه محلی «${entry.item.title}» حفظ شد؛ هیچ محتوایی جایگزین یا ارسال نشد."
+                                                        } catch (failure: Exception) {
+                                                            error = failure.message ?: "حفظ نسخه محلی ناموفق بود."
+                                                        } finally {
+                                                            busy = false
+                                                        }
+                                                    }
+                                                }
+                                            ) { Text("حفظ نسخه محلی") }
+                                            if (entry.status == GitHubContentSyncStatus.CONFLICT ||
+                                                entry.status == GitHubContentSyncStatus.REMOTE_UPDATE
+                                            ) {
+                                                OutlinedButton(
+                                                    enabled = !busy,
+                                                    onClick = {
+                                                        scope.launch {
+                                                            busy = true
+                                                            error = ""
+                                                            try {
+                                                                repository.takeRemoteVersion(entry.item.id)
+                                                                entries = repository.inspect()
+                                                                status = "نسخه GitHub برای «${entry.item.title}» با تأیید صریح جایگزین شد."
+                                                            } catch (failure: Exception) {
+                                                                error = failure.message ?: "دریافت نسخه GitHub ناموفق بود."
+                                                            } finally {
+                                                                busy = false
+                                                            }
+                                                        }
+                                                    }
+                                                ) { Text("جایگزینی با نسخه GitHub") }
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
