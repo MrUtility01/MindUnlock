@@ -30,13 +30,12 @@ class SpeechDownloadMirrorsTest {
     @Test
     fun shippedDefaultsAreVisibleAsEditableSettingsValues() {
         assertEquals(
-            listOf("https://hf-mirror.com", "https://beta.hf-mirror.com"),
+            listOf("https://hf-mirror.com"),
             SpeechDownloadMirrors.defaultAddresses(SpeechMirrorSource.HUGGING_FACE)
         )
         assertEquals(
             listOf(
                 "https://ghfast.top/{url}",
-                "https://gh-proxy.com/{url}",
                 "https://ghproxy.net/{url}"
             ),
             SpeechDownloadMirrors.defaultAddresses(SpeechMirrorSource.GITHUB_RELEASE)
@@ -120,7 +119,7 @@ class SpeechDownloadMirrorsTest {
         )
 
         assertEquals("ghfast.top", candidates.first().label)
-        assertTrue(candidates.size >= 4)
+        assertTrue(candidates.size >= 3)
         assertEquals(original, candidates.last().url)
         assertTrue(candidates.dropLast(1).all { it.url.startsWith("https://") })
     }
