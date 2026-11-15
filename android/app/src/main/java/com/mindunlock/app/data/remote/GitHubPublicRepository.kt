@@ -70,16 +70,35 @@ class GitHubPublicRepository(
         require(safePath.isNotBlank()) { "مسیر فایل خالی است." }
         require(GitHubPathPolicy.isPreviewableTextPath(safePath)) { "پیش‌نمایش این نوع فایل متنی پشتیبانی نمی‌شود." }
         val url = "https://api.github.com/repos/$owner/$repository/contents/${GitHubPathPolicy.encodePath(safePath)}?ref=${encode(branch)}"
-        val json = getJson(url)
-        require(json.isJsonObject) { "پاسخ فایل معتبر نیست." }
-        val item = json.asJsonObject
+        val itemJson = getJson(url)
+        require(itemJson.isJsonObject) { "پاسخ فایل معتبر نیست." }
+        val item = itemJson.asJsonObject
         require(item.get("type")?.asString == "file") { "این مسیر یک فایل متنی نیست." }
         val size = item.get("size")?.asLong ?: 0L
-        require(size in 0..MAX_TEXT_FILE_BYTES) { "فایل بزرگ‌تر از سقف پیش‌نمایش ۱ مگابایت است." }
-        val encoding = item.get("encoding")?.asString
-        require(encoding == "base64") { "قالب فایل برای پیش‌نمایش متنی پشتیبانی نمی‌شود." }
-        val encoded = item.get("content")?.asString ?: throw IllegalStateException("محتوای فایل در پاسخ GitHub وجود ندارد.")
-        val bytes = Base64.decode(encoded.filterNot(Char::isWhitespace), Base64.DEFAULT)
+        require(size in 0..MAX_TEXT_FILE_BYTES) { "فایل بزرگ‌تر از سقف پیش‌نمایش ۲۰ مگابایت است." }
+        val rawUrl = item.get("download_url")?.asString
+            ?: "https://raw.githubusercontent.com/$owner/$repository/${encode(branch)}/${GitHubPathPolicy.encodePath(safePath)}"
+        val request = Request.Builder()
+            .url(rawUrl)
+            .header("User-Agent", "MindUnlock-Android")
+            .header("Accept", "application/octet-stream")
+            .get()
+            .build()
+        val bytes = client.newCall(request).execute().use { response ->
+            require(response.isSuccessful) { "دریافت محتوای خام فایل ناموفق بود (HTTP ${response.code})." }
+            val body = response.body ?: throw IllegalStateException("پاسخ فایل خالی است.")
+            require(body.contentLength() <= MAX_TEXT_FILE_BYTES || body.contentLength() == -1L) {
+                "فایل بزرگ‌تر از سقف پیش‌نمایش ۲۰ مگابایت است."
+            }
+            val source = body.source()
+            val buffer = okio.Buffer()
+            while (true) {
+                val read = source.read(buffer, 64L * 1024L)
+                if (read < 0L) break
+                require(buffer.size <= MAX_TEXT_FILE_BYTES) { "فایل بزرگ‌تر از سقف پیش‌نمایش ۲۰ مگابایت است." }
+            }
+            buffer.readByteArray()
+        }
         require(bytes.size.toLong() == size) { "اندازه محتوای دریافت‌شده با اندازه اعلام‌شده یکسان نیست." }
         val text = try {
             StandardCharsets.UTF_8.newDecoder()
@@ -89,7 +108,7 @@ class GitHubPublicRepository(
         } catch (_: Exception) {
             throw IllegalArgumentException("فایل UTF-8 معتبر نیست و به‌عنوان متن باز نمی‌شود.")
         }
-        require(!text.contains('\u0000')) { "فایل باینری است و به‌عنوان متن باز نمی‌شود." }
+        require(text.none { character -> character == 0.toChar() }) { "فایل باینری است و به‌عنوان متن باز نمی‌شود." }
         GitHubPublicFile(
             name = item.get("name")?.asString ?: safePath.substringAfterLast('/'),
             path = safePath,
@@ -97,6 +116,38 @@ class GitHubPublicRepository(
             size = size,
             text = text
         )
+    }
+
+    suspend fun listBranches(): List<String> = withContext(Dispatchers.IO) {
+        val json = getJson("https://api.github.com/repos/$owner/$repository/branches?per_page=100")
+        require(json.isJsonArray) { "فهرست شاخه‌های GitHub معتبر نیست." }
+        json.asJsonArray.mapNotNull { item ->
+            item.takeIf { it.isJsonObject }?.asJsonObject?.get("name")?.asString
+        }.distinct().sorted()
+    }
+
+    suspend fun searchAllFiles(query: String): List<GitHubPublicEntry> = withContext(Dispatchers.IO) {
+        val term = query.trim()
+        require(term.isNotBlank()) { "عبارت جست‌وجو را وارد کن." }
+        val tree = getJson("https://api.github.com/repos/$owner/$repository/git/trees/${encode(branch)}?recursive=1")
+        require(tree.isJsonObject) { "فهرست درخت مخزن معتبر نیست." }
+        require(tree.asJsonObject.get("truncated")?.asBoolean != true) { "فهرست مخزن برای جست‌وجوی سراسری بیش از حد بزرگ است؛ جست‌وجو را در پوشه انجام بده." }
+        val nodes = tree.asJsonObject.getAsJsonArray("tree")
+            ?: throw IllegalStateException("درخت فایل‌های مخزن در پاسخ GitHub وجود ندارد.")
+        nodes.mapNotNull { node ->
+            if (!node.isJsonObject) return@mapNotNull null
+            val value = node.asJsonObject
+            if (value.get("type")?.asString != "blob") return@mapNotNull null
+            val path = value.get("path")?.asString ?: return@mapNotNull null
+            if (!path.contains(term, ignoreCase = true)) return@mapNotNull null
+            GitHubPublicEntry(
+                name = path.substringAfterLast('/'),
+                path = GitHubPathPolicy.normalize(path),
+                type = "file",
+                size = value.get("size")?.asLong ?: 0L,
+                sha = value.get("sha")?.asString.orEmpty()
+            )
+        }.sortedBy { it.path.lowercase() }
     }
 
     private fun getJson(url: String) = run {
@@ -132,8 +183,8 @@ class GitHubPublicRepository(
         const val DEFAULT_OWNER = "MrUtility01"
         const val DEFAULT_REPOSITORY = "MindUnlock"
         const val DEFAULT_BRANCH = "main"
-        const val MAX_TEXT_FILE_BYTES = 1_000_000L
-        private const val MAX_RESPONSE_CHARS = 5_000_000
+        const val MAX_TEXT_FILE_BYTES = 20L * 1024L * 1024L
+        private const val MAX_RESPONSE_CHARS = 20_000_000
     }
 }
 

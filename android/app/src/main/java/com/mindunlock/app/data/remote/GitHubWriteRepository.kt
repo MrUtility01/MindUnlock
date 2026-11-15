@@ -32,8 +32,9 @@ class GitHubWriteRepository(
     private val baseBranch: String = "main",
     private val http: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(45, TimeUnit.SECONDS)
-        .callTimeout(60, TimeUnit.SECONDS)
+        .readTimeout(90, TimeUnit.SECONDS)
+        .writeTimeout(90, TimeUnit.SECONDS)
+        .callTimeout(120, TimeUnit.SECONDS)
         .followRedirects(false)
         .build()
 ) {
@@ -50,8 +51,8 @@ class GitHubWriteRepository(
         require(!safeName.contains("..") && !safeName.startsWith(".")) { "نام فایل معتبر نیست." }
         val bytes = text.toByteArray(StandardCharsets.UTF_8)
         require(bytes.isNotEmpty()) { "فایل خالی است." }
-        require(bytes.size <= MAX_UPLOAD_BYTES) { "حداکثر اندازه فایل قابل ارسال ۱ مگابایت است." }
-        require(!text.contains(0.toChar())) { "محتوا شامل داده باینری است." }
+        require(bytes.size <= MAX_UPLOAD_BYTES) { "حداکثر اندازه فایل قابل ارسال ۲۰ مگابایت است." }
+        require(!text.orEmpty().contains(0.toChar())) { "محتوا شامل داده باینری است." }
         val cleanTitle = title.trim().take(120).ifBlank { safeName }
         val source = GitHubRepositorySettingsStore.read(context)
         val owner = source.owner
@@ -108,6 +109,73 @@ class GitHubWriteRepository(
         )
     }
 
+    /**
+     * Creates or updates a repository file (or deletes it when text is null) on an isolated
+     * feature branch, then opens a PR. The configured base branch is never modified directly.
+     */
+    suspend fun submitManagedFile(
+        context: Context,
+        path: String,
+        text: String?,
+        title: String
+    ): GitHubUploadResult = withContext(Dispatchers.IO) {
+        val safePath = GitHubPathPolicy.normalize(path)
+        require(safePath.isNotBlank() && safePath.split('/').all { it.isNotBlank() }) {
+            "مسیر مقصد فایل معتبر نیست."
+        }
+        val bytes = text?.toByteArray(StandardCharsets.UTF_8)
+        if (bytes != null) {
+            require(bytes.isNotEmpty()) { "فایل خالی است." }
+            require(bytes.size <= MAX_UPLOAD_BYTES) { "حداکثر اندازه فایل قابل ثبت ۲۰ مگابایت است." }
+            require(!text.orEmpty().contains(0.toChar())) { "محتوا شامل داده باینری است." }
+        }
+        val source = GitHubRepositorySettingsStore.read(context)
+        val owner = source.owner
+        val repository = source.repository
+        val baseBranch = source.branch
+        val token = auth.getValidAccessToken(context)
+            ?: throw IllegalStateException("نشست GitHub معتبر نیست؛ دوباره وارد GitHub شو.")
+        val repoInfo = api("GET", "/repos/$owner/$repository", token)
+        val permissions = repoInfo.optJSONObject("permissions")
+        require(permissions?.optBoolean("push", true) != false) {
+            "حساب متصل اجازه نوشتن در این مخزن را ندارد؛ مجوز Contents و Pull requests را بررسی کن."
+        }
+        val baseRef = api("GET", "/repos/$owner/$repository/git/ref/heads/${encodePathSegment(baseBranch)}", token)
+        val baseSha = baseRef.getJSONObject("object").getString("sha")
+        val branch = "mindunlock-manage-" + UUID.randomUUID().toString().replace("-", "").take(16)
+        api("POST", "/repos/$owner/$repository/git/refs", token,
+            JSONObject().put("ref", "refs/heads/$branch").put("sha", baseSha))
+
+        val encodedPath = GitHubPathPolicy.encodePath(safePath)
+        val existing = runCatching {
+            api("GET", "/repos/$owner/$repository/contents/$encodedPath?ref=${encodePathSegment(baseBranch)}", token)
+        }.getOrNull()
+        val existingSha = existing?.optString("sha")?.takeIf { it.isNotBlank() }
+        val cleanTitle = title.trim().take(120).ifBlank {
+            if (bytes == null) "حذف $safePath" else "به‌روزرسانی $safePath"
+        }
+        if (bytes == null) {
+            require(existingSha != null) { "فایل برای حذف در شاخه پایه پیدا نشد." }
+            api("DELETE", "/repos/$owner/$repository/contents/$encodedPath", token,
+                JSONObject().put("message", "content: delete $safePath")
+                    .put("sha", existingSha).put("branch", branch))
+        } else {
+            val payload = JSONObject()
+                .put("message", if (existingSha == null) "content: add $safePath" else "content: update $safePath")
+                .put("content", Base64.encodeToString(bytes, Base64.NO_WRAP))
+                .put("branch", branch)
+            if (existingSha != null) payload.put("sha", existingSha)
+            api("PUT", "/repos/$owner/$repository/contents/$encodedPath", token, payload)
+        }
+        val pull = api("POST", "/repos/$owner/$repository/pulls", token,
+            JSONObject().put("title", cleanTitle).put("head", branch).put("base", baseBranch)
+                .put("body", "این تغییر از ابزار مدیریت GitHub در MindUnlock ارسال شده است.\n\nمسیر: `$safePath`\n\nتغییر در شاخه جداگانه ثبت شده و برای اعمال به شاخه پایه نیازمند بازبینی و ادغام Pull Request است."))
+        GitHubUploadResult(branch, pull.getInt("number"), pull.getString("html_url"), safePath)
+    }
+
+    private fun encodePathSegment(value: String): String =
+        java.net.URLEncoder.encode(value, StandardCharsets.UTF_8.name()).replace("+", "%20")
+
     private fun api(method: String, path: String, token: String, json: JSONObject? = null): JSONObject {
         val builder = Request.Builder()
             .url("https://api.github.com$path")
@@ -120,6 +188,7 @@ class GitHubWriteRepository(
             "GET" -> builder.get()
             "POST" -> builder.post(body ?: "{}".toRequestBody("application/json".toMediaType()))
             "PUT" -> builder.put(body ?: "{}".toRequestBody("application/json".toMediaType()))
+            "DELETE" -> builder.delete(body ?: "{}".toRequestBody("application/json".toMediaType()))
             else -> error("روش HTTP پشتیبانی نمی‌شود.")
         }
         http.newCall(builder.build()).execute().use { response ->
@@ -141,6 +210,6 @@ class GitHubWriteRepository(
     }
 
     companion object {
-        private const val MAX_UPLOAD_BYTES = 1_000_000
+        private const val MAX_UPLOAD_BYTES = 20 * 1024 * 1024
     }
 }

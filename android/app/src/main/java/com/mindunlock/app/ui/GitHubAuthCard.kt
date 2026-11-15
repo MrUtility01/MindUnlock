@@ -73,7 +73,7 @@ fun GitHubAuthCard() {
                                 val count = input.read(buffer)
                                 if (count < 0) break
                                 total += count
-                                require(total <= 1_000_000) { "حداکثر اندازه فایل ۱ مگابایت است." }
+                                require(total <= 20 * 1024 * 1024) { "حداکثر اندازه فایل ۲۰ مگابایت است." }
                                 output.write(buffer, 0, count)
                             }
                             output.toByteArray().toString(Charsets.UTF_8)

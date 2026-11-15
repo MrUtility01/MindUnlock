@@ -225,7 +225,7 @@ class PersianSpeech(context: Context) {
             downloadProgress.value = 0f
             val connection = (URL(mirror.url).openConnection() as HttpURLConnection).apply {
                 connectTimeout = 20_000
-                readTimeout = 180_000
+                readTimeout = 45_000
                 instanceFollowRedirects = true
                 requestMethod = "GET"
                 setRequestProperty("User-Agent", "MindUnlock-Android/0.6.28")
