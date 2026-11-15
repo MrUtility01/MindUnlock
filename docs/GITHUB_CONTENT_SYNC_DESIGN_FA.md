@@ -187,7 +187,7 @@
 - برای جلوگیری از بازنویسی ناخواسته، فقط محتوای جدید و به‌روزرسانی راه‌دور بدون تغییر محلی به‌صورت گروهی وارد می‌شود.
 - برای وضعیت‌های `REMOTE_UPDATE`، `LOCAL_MODIFIED`، `CONFLICT` و `UNTRACKED_LOCAL` گزینه‌ها بر اساس وضعیت مجاز می‌شوند: «حفظ نسخه محلی» و/یا «جایگزینی با نسخه GitHub». انتخاب نسخه راه‌دور، هش را دوباره کنترل می‌کند و fingerprint محلی را در تراکنش Room پیش از جایگزینی مقایسه می‌کند. این قواعد در `GitHubContentSyncStatusTest` پوشش داده شده‌اند.
 - حذف خودکار و ادغام دستی/سه‌طرفه متن هنوز پیاده‌سازی نشده‌اند؛ نسخه‌های محلی مدیریت‌نشده بدون تأیید صریح دست‌کاری نمی‌شوند.
-- اجرای CI روی commit `1c7c3fdb3f936fc225ea6f4a5c2efbf4e3693808` موفق بود و تست JVM، ساخت Debug APK، بررسی سلامت APK و بارگذاری artifact را گذراند. commitهای اصلاح رابط اسکرول، سیاست تعارض و تست‌های جدید پس از آن در HEAD فعلی شاخه قرار دارند؛ برای این HEAD هنوز نتیجه CI ثبت نشده است.
+- اجرای CI روی commit `e228e6fd0c8b10027ed1ce49a61724ea4180a7da` موفق شد: ۱۵۵ تست JVM، صفر شکست/خطا، ساخت Debug APK، بررسی سلامت/مشخصات بسته و بارگذاری artifact. فایل APK نسخه `0.6.31-debug` در اجرای [GitHub Actions #43683063955](https://github.com/MrUtility01/MindUnlock/actions/runs/43683063955) موجود است.
 - ورود واقعی، ارسال PR و واردسازی/حل تعارض از داخل گوشی هنوز تست میدانی نشده‌اند.
 
 **تنظیمات لازم در GitHub App:** Device Flow فعال؛ Repository permissions شامل Metadata = Read، Contents = Read and write و Pull requests = Read and write؛ نصب App روی مخزن `MrUtility01/MindUnlock` (نه همه مخازن).
