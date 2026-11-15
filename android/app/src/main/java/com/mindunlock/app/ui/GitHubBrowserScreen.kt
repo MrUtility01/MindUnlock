@@ -3,7 +3,6 @@ package com.mindunlock.app.ui
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -63,120 +62,134 @@ fun GitHubBrowserScreen() {
     }
 
     LaunchedEffect(Unit) { load("") }
+    val visible = entries.filter { it.name.contains(filter.trim(), ignoreCase = true) }
 
-    Column(
-        Modifier.fillMaxSize().padding(16.dp),
+    // One lazy list owns the entire screen so the authentication and sync cards remain
+    // reachable on small displays instead of being clipped above a nested file list.
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Text("مخزن عمومی MindUnlock", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-        GitHubAuthCard()
-        GitHubContentSyncCard()
-        Text(
-            "MrUtility01/MindUnlock · شاخه main · فقط خواندن عمومی",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Text(
-            "مرور عمومی بدون ورود انجام می‌شود. واردسازی محتوا از Manifest با بررسی هش و حفاظت از نسخه‌های محلی انجام می‌شود؛ ارسال فایل نیز با GitHub App و Pull Request است.",
-            style = MaterialTheme.typography.bodySmall
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(
-                enabled = currentPath.isNotBlank() && !loading,
-                onClick = {
-                    val parent = currentPath.substringBeforeLast('/', "")
-                    load(parent)
-                }
-            ) { Text("پوشه بالاتر") }
-            OutlinedButton(enabled = !loading, onClick = { load(currentPath) }) { Text("تازه‌سازی") }
+        item {
+            Text("مخزن عمومی MindUnlock", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         }
-        Text("مسیر: /" + currentPath, style = MaterialTheme.typography.labelMedium)
-        OutlinedTextField(
-            value = filter,
-            onValueChange = { filter = it },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            label = { Text("جست‌وجو در نام فایل‌ها") }
-        )
+        item { GitHubAuthCard() }
+        item { GitHubContentSyncCard() }
+        item {
+            Text(
+                "MrUtility01/MindUnlock · شاخه main · فقط خواندن عمومی",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        item {
+            Text(
+                "مرور عمومی بدون ورود انجام می‌شود. واردسازی محتوا از Manifest با بررسی هش و حفاظت از نسخه‌های محلی انجام می‌شود؛ ارسال فایل نیز با GitHub App و Pull Request است.",
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
+        item {
+            androidx.compose.foundation.layout.Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(
+                    enabled = currentPath.isNotBlank() && !loading,
+                    onClick = {
+                        val parent = currentPath.substringBeforeLast('/', "")
+                        load(parent)
+                    }
+                ) { Text("پوشه بالاتر") }
+                OutlinedButton(enabled = !loading, onClick = { load(currentPath) }) { Text("تازه‌سازی") }
+            }
+        }
+        item { Text("مسیر: /" + currentPath, style = MaterialTheme.typography.labelMedium) }
+        item {
+            OutlinedTextField(
+                value = filter,
+                onValueChange = { filter = it },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                label = { Text("جست‌وجو در نام فایل‌ها") }
+            )
+        }
 
         if (loading) {
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                CircularProgressIndicator()
-                Text("در حال دریافت از GitHub…")
+            item {
+                androidx.compose.foundation.layout.Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    CircularProgressIndicator()
+                    Text("در حال دریافت از GitHub…")
+                }
             }
         }
         if (error.isNotBlank()) {
-            Card(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(error, color = MaterialTheme.colorScheme.error)
-                    Button(onClick = { load(currentPath) }) { Text("تلاش دوباره") }
+            item {
+                Card(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(error, color = MaterialTheme.colorScheme.error)
+                        Button(onClick = { load(currentPath) }) { Text("تلاش دوباره") }
+                    }
                 }
             }
         }
 
         preview?.let { file ->
-            Card(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("پیش‌نمایش فایل", fontWeight = FontWeight.Bold)
-                    Text(file.path, style = MaterialTheme.typography.labelSmall)
-                    Text("اندازه: ${file.size} بایت · SHA: ${file.sha.take(12)}…", style = MaterialTheme.typography.labelSmall)
-                    HorizontalDivider()
-                    Text(
-                        file.text,
-                        style = MaterialTheme.typography.bodySmall,
-                        maxLines = 18,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text("پیش‌نمایش محدود به ۱۸ خط نمایشی است؛ محتوای اصلی در مخزن تغییر نمی‌کند.", style = MaterialTheme.typography.labelSmall)
-                    OutlinedButton(onClick = { preview = null }) { Text("بستن پیش‌نمایش") }
+            item(key = "preview:${file.path}") {
+                Card(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("پیش‌نمایش فایل", fontWeight = FontWeight.Bold)
+                        Text(file.path, style = MaterialTheme.typography.labelSmall)
+                        Text("اندازه: ${file.size} بایت · SHA: ${file.sha.take(12)}…", style = MaterialTheme.typography.labelSmall)
+                        HorizontalDivider()
+                        Text(
+                            file.text,
+                            style = MaterialTheme.typography.bodySmall,
+                            maxLines = 18,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text("پیش‌نمایش محدود به ۱۸ خط نمایشی است؛ محتوای اصلی در مخزن تغییر نمی‌کند.", style = MaterialTheme.typography.labelSmall)
+                        OutlinedButton(onClick = { preview = null }) { Text("بستن پیش‌نمایش") }
+                    }
                 }
             }
         }
 
-        val visible = entries.filter { it.name.contains(filter.trim(), ignoreCase = true) }
-        Text("${visible.size} مورد", style = MaterialTheme.typography.labelSmall)
-        LazyColumn(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(7.dp)
-        ) {
-            items(visible, key = { it.path }) { entry ->
-                Card(Modifier.fillMaxWidth().clickable(enabled = !loading) {
-                    if (entry.isDirectory) load(entry.path)
-                    else {
-                        scope.launch {
-                            loading = true
-                            error = ""
-                            try {
-                                preview = repository.readTextFile(entry.path)
-                            } catch (failure: Exception) {
-                                error = failure.message ?: "خواندن فایل ناموفق بود."
-                            } finally {
-                                loading = false
-                            }
+        item { Text("${visible.size} مورد", style = MaterialTheme.typography.labelSmall) }
+        items(visible, key = { it.path }) { entry ->
+            Card(Modifier.fillMaxWidth().clickable(enabled = !loading) {
+                if (entry.isDirectory) {
+                    load(entry.path)
+                } else {
+                    scope.launch {
+                        loading = true
+                        error = ""
+                        try {
+                            preview = repository.readTextFile(entry.path)
+                        } catch (failure: Exception) {
+                            error = failure.message ?: "خواندن فایل ناموفق بود."
+                        } finally {
+                            loading = false
                         }
-                    }
-                }) {
-                    Row(
-                        Modifier.fillMaxWidth().padding(12.dp),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Text(if (entry.isDirectory) "📁" else "📄")
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Text(entry.name, fontWeight = FontWeight.SemiBold)
-                            Text(
-                                if (entry.isDirectory) "پوشه" else "${entry.size} بایت · ${entry.path}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Text(if (entry.isDirectory) "باز کردن" else "پیش‌نمایش", style = MaterialTheme.typography.labelSmall)
                     }
                 }
+            }) {
+                androidx.compose.foundation.layout.Row(
+                    Modifier.fillMaxWidth().padding(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(if (entry.isDirectory) "📁" else "📄")
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(entry.name, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            if (entry.isDirectory) "پوشه" else "${entry.size} بایت · ${entry.path}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Text(if (entry.isDirectory) "باز کردن" else "پیش‌نمایش", style = MaterialTheme.typography.labelSmall)
+                }
             }
-            if (visible.isEmpty() && !loading && error.isBlank()) {
-                item { Text("در این مسیر موردی پیدا نشد.", modifier = Modifier.padding(12.dp)) }
-            }
-            item { Spacer(Modifier.height(8.dp)) }
         }
+        if (visible.isEmpty() && !loading && error.isBlank()) {
+            item { Text("در این مسیر موردی پیدا نشد.", modifier = Modifier.padding(12.dp)) }
+        }
+        item { Spacer(Modifier.height(8.dp)) }
     }
 }
