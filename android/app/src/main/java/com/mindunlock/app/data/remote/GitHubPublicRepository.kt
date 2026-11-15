@@ -149,7 +149,7 @@ internal object GitHubPathPolicy {
             ".md", ".markdown", ".txt", ".json", ".yaml", ".yml", ".xml",
             ".kt", ".kts", ".gradle", ".properties", ".toml", ".csv",
             ".py", ".sh", ".html", ".css", ".js", ".java", ".sql",
-            ".log", ".ini", ".conf"
+            ".log", ".ini", ".conf", ".b64"
         )
         return name == "readme" || extensions.any { name.endsWith(it) }
     }
