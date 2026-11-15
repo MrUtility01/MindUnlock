@@ -97,8 +97,26 @@ fun GitHubAuthCard() {
     }
 
     LaunchedEffect(Unit) {
-        tokenPresent = GitHubTokenVault.read(context) != null
-        if (tokenPresent) status = "توکن GitHub به‌صورت رمزگذاری‌شده روی این دستگاه ذخیره شده است."
+        val saved = GitHubTokenVault.read(context) != null
+        if (!saved) {
+            tokenPresent = false
+        } else {
+            status = "در حال اعتبارسنجی نشست ذخیره‌شده GitHub…"
+            try {
+                val verified = auth.currentAccount(context)
+                if (verified != null) {
+                    account = verified
+                    tokenPresent = true
+                    status = "اتصال فعال و تأیید شد: ${verified.login}"
+                } else {
+                    tokenPresent = false
+                    status = "نشست قبلی معتبر نیست یا منقضی شده است؛ دوباره با GitHub وارد شو."
+                }
+            } catch (failure: Exception) {
+                tokenPresent = false
+                status = "اعتبارسنجی اتصال GitHub ناموفق بود: ${failure.message ?: "خطای ارتباط"}"
+            }
+        }
     }
 
     Card(Modifier.fillMaxWidth()) {
