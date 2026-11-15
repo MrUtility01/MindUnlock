@@ -29,14 +29,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
 import com.mindunlock.app.data.remote.GitHubPublicEntry
 import com.mindunlock.app.data.remote.GitHubPublicFile
 import com.mindunlock.app.data.remote.GitHubPublicRepository
+import com.mindunlock.app.data.remote.GitHubRepositorySettingsStore
 import kotlinx.coroutines.launch
 
 @Composable
 fun GitHubBrowserScreen() {
-    val repository = remember { GitHubPublicRepository() }
+    val context = LocalContext.current
+    val repository = remember(context) { GitHubPublicRepository.configured(context) }
     val scope = rememberCoroutineScope()
     var currentPath by remember { mutableStateOf("") }
     var entries by remember { mutableStateOf<List<GitHubPublicEntry>>(emptyList()) }
@@ -77,7 +80,7 @@ fun GitHubBrowserScreen() {
         item { GitHubContentSyncCard() }
         item {
             Text(
-                "MrUtility01/MindUnlock · شاخه main · فقط خواندن عمومی",
+                "مخزن و شاخه از تنظیمات GitHub خوانده می‌شوند.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
