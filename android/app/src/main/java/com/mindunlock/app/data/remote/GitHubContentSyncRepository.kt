@@ -45,7 +45,8 @@ enum class GitHubContentSyncStatus(
     REMOTE_UPDATE("نسخه جدید در GitHub", canKeepLocal = true, canTakeRemote = true),
     LOCAL_MODIFIED("نسخه محلی تغییر کرده", canKeepLocal = true),
     CONFLICT("تعارض دوطرفه", canKeepLocal = true, canTakeRemote = true),
-    UNTRACKED_LOCAL("محتوای محلیِ مدیریت‌نشده", canKeepLocal = true, canTakeRemote = true)
+    UNTRACKED_LOCAL("محتوای محلیِ مدیریت‌نشده", canKeepLocal = true, canTakeRemote = true),
+    UNAVAILABLE("فایل منبع در شاخه انتخاب‌شده پیدا نشد")
 }
 
 data class GitHubContentSyncResult(
