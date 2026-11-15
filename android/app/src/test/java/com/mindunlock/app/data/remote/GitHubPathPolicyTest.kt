@@ -27,6 +27,7 @@ class GitHubPathPolicyTest {
         assertEquals(true, GitHubPathPolicy.isPreviewableTextPath("README"))
         assertEquals(false, GitHubPathPolicy.isPreviewableTextPath("assets/photo.png"))
         assertEquals(false, GitHubPathPolicy.isPreviewableTextPath("archive.zip"))
+        assertEquals(true, GitHubPathPolicy.isPreviewableTextPath("content/technology-path/complete-course.b64"))
     }
 
     @Test
