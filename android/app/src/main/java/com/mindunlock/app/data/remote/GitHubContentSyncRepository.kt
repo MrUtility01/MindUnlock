@@ -28,13 +28,17 @@ data class GitHubContentSyncEntry(
     val localTitle: String? = null
 )
 
-enum class GitHubContentSyncStatus(val label: String) {
+enum class GitHubContentSyncStatus(
+    val label: String,
+    val canKeepLocal: Boolean = false,
+    val canTakeRemote: Boolean = false
+) {
     NEW("محتوای جدید"),
     UP_TO_DATE("به‌روز"),
-    REMOTE_UPDATE("نسخه جدید در GitHub"),
-    LOCAL_MODIFIED("نسخه محلی تغییر کرده"),
-    CONFLICT("تعارض دوطرفه"),
-    UNTRACKED_LOCAL("محتوای محلیِ مدیریت‌نشده")
+    REMOTE_UPDATE("نسخه جدید در GitHub", canKeepLocal = true, canTakeRemote = true),
+    LOCAL_MODIFIED("نسخه محلی تغییر کرده", canKeepLocal = true),
+    CONFLICT("تعارض دوطرفه", canKeepLocal = true, canTakeRemote = true),
+    UNTRACKED_LOCAL("محتوای محلیِ مدیریت‌نشده", canKeepLocal = true, canTakeRemote = true)
 }
 
 data class GitHubContentSyncResult(
@@ -166,10 +170,7 @@ class GitHubContentSyncRepository(
     suspend fun keepLocalVersion(id: String) {
         val entry = inspect().singleOrNull { it.item.id == id }
             ?: throw IllegalArgumentException("محتوا در Manifest فعلی پیدا نشد.")
-        require(entry.status in setOf(
-            GitHubContentSyncStatus.LOCAL_MODIFIED,
-            GitHubContentSyncStatus.CONFLICT
-        )) { "این محتوا تعارض محلیِ قابل تأیید ندارد." }
+        require(entry.status.canKeepLocal) { "حفظ نسخه محلی برای این وضعیت مجاز نیست." }
         val localId = localChapterId(id)
         val local = database.chapterDao().get(localId)
             ?: throw IllegalStateException("نسخه محلی دیگر وجود ندارد؛ فهرست را تازه‌سازی کن.")
@@ -188,10 +189,7 @@ class GitHubContentSyncRepository(
     suspend fun takeRemoteVersion(id: String) {
         val entry = inspect().singleOrNull { it.item.id == id }
             ?: throw IllegalArgumentException("محتوا در Manifest فعلی پیدا نشد.")
-        require(entry.status in setOf(
-            GitHubContentSyncStatus.REMOTE_UPDATE,
-            GitHubContentSyncStatus.CONFLICT
-        )) { "نسخه راه‌دور برای این محتوا نیاز به حل تعارض ندارد." }
+        require(entry.status.canTakeRemote) { "جایگزینی با نسخه GitHub برای این وضعیت مجاز نیست." }
         val localId = localChapterId(id)
         val expectedLocal = database.withTransaction {
             val chapter = database.chapterDao().get(localId)
