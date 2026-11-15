@@ -32,8 +32,9 @@ class GitHubWriteRepository(
     private val baseBranch: String = "main",
     private val http: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(45, TimeUnit.SECONDS)
-        .callTimeout(60, TimeUnit.SECONDS)
+        .readTimeout(90, TimeUnit.SECONDS)
+        .writeTimeout(90, TimeUnit.SECONDS)
+        .callTimeout(120, TimeUnit.SECONDS)
         .followRedirects(false)
         .build()
 ) {
@@ -126,7 +127,7 @@ class GitHubWriteRepository(
         if (bytes != null) {
             require(bytes.isNotEmpty()) { "فایل خالی است." }
             require(bytes.size <= MAX_UPLOAD_BYTES) { "حداکثر اندازه فایل قابل ثبت ۲۰ مگابایت است." }
-            require(!text.contains(0.toChar())) { "محتوا شامل داده باینری است." }
+            require(!text.orEmpty().contains(0.toChar())) { "محتوا شامل داده باینری است." }
         }
         val source = GitHubRepositorySettingsStore.read(context)
         val owner = source.owner
