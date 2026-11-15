@@ -34,6 +34,7 @@ import com.mindunlock.app.data.remote.GitHubPublicEntry
 import com.mindunlock.app.data.remote.GitHubPublicFile
 import com.mindunlock.app.data.remote.GitHubPublicRepository
 import com.mindunlock.app.data.remote.GitHubRepositorySettingsStore
+import com.mindunlock.app.ui.GitHubRepositorySettingsCard
 import kotlinx.coroutines.launch
 
 @Composable
@@ -77,6 +78,7 @@ fun GitHubBrowserScreen() {
             Text("مخزن عمومی MindUnlock", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         }
         item { GitHubAuthCard() }
+        item { GitHubRepositorySettingsCard(onSaved = { load("") }) }
         item { GitHubContentSyncCard() }
         item {
             Text(
