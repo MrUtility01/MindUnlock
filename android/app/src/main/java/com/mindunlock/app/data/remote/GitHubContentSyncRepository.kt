@@ -9,6 +9,13 @@ import com.mindunlock.app.data.local.AppDatabase
 import com.mindunlock.app.data.local.ChapterEntity
 import com.mindunlock.app.data.local.ContentItemEntity
 import java.security.MessageDigest
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
+import java.util.Base64
+import java.util.zip.GZIPInputStream
+import java.nio.ByteBuffer
+import java.nio.charset.CodingErrorAction
+import java.nio.charset.StandardCharsets
 
 data class GitHubManifestItem(
     val id: String,
@@ -64,28 +71,51 @@ class GitHubContentSyncRepository(
         require(manifestFile.size <= MAX_MANIFEST_BYTES) { "فایل فهرست محتوا بیش از حد بزرگ است." }
         val manifest = GitHubManifestPolicy.parse(manifestFile.text)
         return manifest.map { item ->
-            val local = database.chapterDao().get(localChapterId(item.id))
-            if (local == null) {
-                GitHubContentSyncEntry(item, GitHubContentSyncStatus.NEW)
-            } else {
-                val localItems = database.contentItemDao().getForChapter(localChapterId(item.id))
-                val currentFingerprint = fingerprint(local, localItems)
+            if (item.format == COMPRESSED_COURSE_FORMAT) {
+                val existing = githubBundleChapters()
+                val rootLocal = database.chapterDao().get(localChapterId(item.id))
                 val baseRemote = preferences.getString(remoteBaseKey(item.id), null)
                 val baseLocal = preferences.getString(localBaseKey(item.id), null)
-                val status = when {
-                    baseRemote == null || baseLocal == null -> GitHubContentSyncStatus.UNTRACKED_LOCAL
-                    else -> {
-                        val localChanged = currentFingerprint != baseLocal
-                        val remoteChanged = item.contentHash != baseRemote
-                        when {
-                            !localChanged && !remoteChanged -> GitHubContentSyncStatus.UP_TO_DATE
-                            !localChanged && remoteChanged -> GitHubContentSyncStatus.REMOTE_UPDATE
-                            localChanged && !remoteChanged -> GitHubContentSyncStatus.LOCAL_MODIFIED
-                            else -> GitHubContentSyncStatus.CONFLICT
+                if (existing.isEmpty()) {
+                    GitHubContentSyncEntry(item, GitHubContentSyncStatus.NEW)
+                } else if (baseRemote == null || baseLocal == null || rootLocal == null) {
+                    GitHubContentSyncEntry(item, GitHubContentSyncStatus.UNTRACKED_LOCAL, rootLocal?.title)
+                } else {
+                    val currentFingerprint = githubBundleFingerprint()
+                    val localChanged = currentFingerprint != baseLocal
+                    val remoteChanged = item.contentHash != baseRemote
+                    val status = when {
+                        !localChanged && !remoteChanged -> GitHubContentSyncStatus.UP_TO_DATE
+                        !localChanged && remoteChanged -> GitHubContentSyncStatus.REMOTE_UPDATE
+                        localChanged && !remoteChanged -> GitHubContentSyncStatus.LOCAL_MODIFIED
+                        else -> GitHubContentSyncStatus.CONFLICT
+                    }
+                    GitHubContentSyncEntry(item, status, rootLocal.title)
+                }
+            } else {
+                val local = database.chapterDao().get(localChapterId(item.id))
+                if (local == null) {
+                    GitHubContentSyncEntry(item, GitHubContentSyncStatus.NEW)
+                } else {
+                    val localItems = database.contentItemDao().getForChapter(localChapterId(item.id))
+                    val currentFingerprint = fingerprint(local, localItems)
+                    val baseRemote = preferences.getString(remoteBaseKey(item.id), null)
+                    val baseLocal = preferences.getString(localBaseKey(item.id), null)
+                    val status = when {
+                        baseRemote == null || baseLocal == null -> GitHubContentSyncStatus.UNTRACKED_LOCAL
+                        else -> {
+                            val localChanged = currentFingerprint != baseLocal
+                            val remoteChanged = item.contentHash != baseRemote
+                            when {
+                                !localChanged && !remoteChanged -> GitHubContentSyncStatus.UP_TO_DATE
+                                !localChanged && remoteChanged -> GitHubContentSyncStatus.REMOTE_UPDATE
+                                localChanged && !remoteChanged -> GitHubContentSyncStatus.LOCAL_MODIFIED
+                                else -> GitHubContentSyncStatus.CONFLICT
+                            }
                         }
                     }
+                    GitHubContentSyncEntry(item, status, local.title)
                 }
-                GitHubContentSyncEntry(item, status, local.title)
             }
         }
     }
@@ -108,6 +138,16 @@ class GitHubContentSyncRepository(
         var skipped = 0
         eligible.forEachIndexed { index, entry ->
             onProgress(index + 1, eligible.size, entry.item.title)
+            if (entry.item.format == COMPRESSED_COURSE_FORMAT) {
+                val bundleResult = importCompressedCourse(entry)
+                if (bundleResult.second != null) {
+                    blocked += "${entry.item.title}: ${bundleResult.second}"
+                    skipped++
+                } else {
+                    imported += bundleResult.first
+                }
+                return@forEachIndexed
+            }
             val file = remote.readTextFile(entry.item.path)
             require(file.size <= MAX_CONTENT_BYTES) { "فایل «${entry.item.title}» از سقف مجاز بزرگ‌تر است." }
             val actualHash = sha256(file.text.toByteArray(Charsets.UTF_8))
@@ -171,11 +211,14 @@ class GitHubContentSyncRepository(
         val entry = inspect().singleOrNull { it.item.id == id }
             ?: throw IllegalArgumentException("محتوا در Manifest فعلی پیدا نشد.")
         require(entry.status.canKeepLocal) { "حفظ نسخه محلی برای این وضعیت مجاز نیست." }
-        val localId = localChapterId(id)
-        val local = database.chapterDao().get(localId)
-            ?: throw IllegalStateException("نسخه محلی دیگر وجود ندارد؛ فهرست را تازه‌سازی کن.")
-        val localItems = database.contentItemDao().getForChapter(localId)
-        val localHash = fingerprint(local, localItems)
+        val localHash = if (entry.item.format == COMPRESSED_COURSE_FORMAT) {
+            githubBundleFingerprint()
+        } else {
+            val localId = localChapterId(id)
+            val local = database.chapterDao().get(localId)
+                ?: throw IllegalStateException("نسخه محلی دیگر وجود ندارد؛ فهرست را تازه‌سازی کن.")
+            fingerprint(local, database.contentItemDao().getForChapter(localId))
+        }
         preferences.edit()
             .putString(remoteBaseKey(id), entry.item.contentHash)
             .putString(localBaseKey(id), localHash)
@@ -190,6 +233,10 @@ class GitHubContentSyncRepository(
         val entry = inspect().singleOrNull { it.item.id == id }
             ?: throw IllegalArgumentException("محتوا در Manifest فعلی پیدا نشد.")
         require(entry.status.canTakeRemote) { "جایگزینی با نسخه GitHub برای این وضعیت مجاز نیست." }
+        if (entry.item.format == COMPRESSED_COURSE_FORMAT) {
+            takeRemoteCompressedCourse(entry)
+            return
+        }
         val localId = localChapterId(id)
         val expectedLocal = database.withTransaction {
             val chapter = database.chapterDao().get(localId)
@@ -226,6 +273,166 @@ class GitHubContentSyncRepository(
             .putString(remoteBaseKey(id), entry.item.contentHash)
             .putString(localBaseKey(id), fingerprint(saved, savedItems))
             .apply()
+    }
+
+    private data class ParsedCourseBundle(
+        val packages: List<Pair<ChapterEntity, List<ContentItemEntity>>>,
+        val itemCount: Int
+    )
+
+    private suspend fun importCompressedCourse(
+        entry: GitHubContentSyncEntry
+    ): Pair<Int, String?> {
+        val parsed = readAndParseCourseBundle(entry.item)
+        val expectedLocal = if (entry.status == GitHubContentSyncStatus.REMOTE_UPDATE) {
+            preferences.getString(localBaseKey(entry.item.id), null)
+        } else null
+        val rejection = database.withTransaction {
+            val existingChapters = githubBundleChapters()
+            when {
+                entry.status == GitHubContentSyncStatus.NEW && existingChapters.isNotEmpty() ->
+                    "بخشی از این دوره از قبل در دستگاه وجود دارد؛ ابتدا وضعیت همگام‌سازی را بررسی کن."
+                entry.status == GitHubContentSyncStatus.REMOTE_UPDATE && existingChapters.isEmpty() ->
+                    "نسخه محلی دوره هنگام واردسازی حذف شده؛ فهرست را تازه‌سازی کن."
+                entry.status == GitHubContentSyncStatus.REMOTE_UPDATE &&
+                    (expectedLocal == null || githubBundleFingerprint() != expectedLocal) ->
+                    "یکی از صفحات دوره هنگام واردسازی تغییر کرده؛ برای جلوگیری از ازدست‌رفتن یادداشت‌ها عملیات متوقف شد."
+                else -> {
+                    val targetIds = parsed.packages.map { it.first.id }.toSet()
+                    val candidateUids = parsed.packages.flatMap { it.second }.map { it.uid }.distinct()
+                    if (candidateUids.size != parsed.itemCount) {
+                        "شناسه یادداشت‌ها در بسته یکتا نیست؛ واردسازی متوقف شد."
+                    } else {
+                        val collisions = candidateUids.chunked(500).flatMap { chunk ->
+                            database.contentItemDao().getByUids(chunk)
+                        }.firstOrNull { it.chapterId !in targetIds }
+                        if (collisions != null) {
+                            "شناسه یادداشت ${collisions.uid} در فصل دیگری استفاده شده است."
+                        } else {
+                            parsed.packages.forEach { (chapter, items) ->
+                                database.chapterDao().upsert(chapter)
+                                database.contentItemDao().deleteForChapter(chapter.id)
+                                if (items.isNotEmpty()) database.contentItemDao().upsertAll(items)
+                            }
+                            null
+                        }
+                    }
+                }
+            }
+        }
+        if (rejection != null) return 0 to rejection
+        val localHash = githubBundleFingerprint()
+        preferences.edit()
+            .putString(remoteBaseKey(entry.item.id), entry.item.contentHash)
+            .putString(localBaseKey(entry.item.id), localHash)
+            .apply()
+        return parsed.packages.size to null
+    }
+
+    private suspend fun takeRemoteCompressedCourse(entry: GitHubContentSyncEntry) {
+        val parsed = readAndParseCourseBundle(entry.item)
+        val expectedLocal = githubBundleFingerprint()
+        database.withTransaction {
+            require(githubBundleFingerprint() == expectedLocal) {
+                "یکی از صفحات دوره هنگام حل تعارض تغییر کرده؛ عملیات متوقف شد و باید دوباره بررسی کنی."
+            }
+            val targetIds = parsed.packages.map { it.first.id }.toSet()
+            val candidateUids = parsed.packages.flatMap { it.second }.map { it.uid }.distinct()
+            require(candidateUids.size == parsed.itemCount) {
+                "شناسه یادداشت‌ها در بسته یکتا نیست؛ جایگزینی متوقف شد."
+            }
+            val collisions = candidateUids.chunked(500).flatMap { chunk ->
+                database.contentItemDao().getByUids(chunk)
+            }.firstOrNull { it.chapterId !in targetIds }
+            require(collisions == null) {
+                "شناسه یادداشت ${collisions?.uid} در فصل دیگری استفاده شده است."
+            }
+            parsed.packages.forEach { (chapter, items) ->
+                database.chapterDao().upsert(chapter)
+                database.contentItemDao().deleteForChapter(chapter.id)
+                if (items.isNotEmpty()) database.contentItemDao().upsertAll(items)
+            }
+        }
+        preferences.edit()
+            .putString(remoteBaseKey(entry.item.id), entry.item.contentHash)
+            .putString(localBaseKey(entry.item.id), githubBundleFingerprint())
+            .apply()
+    }
+
+    private suspend fun readAndParseCourseBundle(item: GitHubManifestItem): ParsedCourseBundle {
+        val file = remote.readTextFile(item.path)
+        require(file.size <= MAX_CONTENT_BYTES) { "بسته دوره از سقف حجم مجاز دانلود بزرگ‌تر است." }
+        val actualHash = sha256(file.text.toByteArray(Charsets.UTF_8))
+        require(actualHash.equals(item.contentHash, ignoreCase = true)) {
+            "هش بسته دوره با Manifest مطابقت ندارد؛ واردسازی متوقف شد."
+        }
+        val json = GitHubContentCompression.decodeBase64Gzip(
+            file.text,
+            MAX_BUNDLE_UNCOMPRESSED_BYTES
+        )
+        val root = JsonParser.parseString(json)
+        require(root.isJsonObject) { "ساختار بسته فشرده دوره معتبر نیست." }
+        val obj = root.asJsonObject
+        require(obj.int("schema_version", -1) == 1) { "نسخه ساختار بسته دوره پشتیبانی نمی‌شود." }
+        val rawPackages = obj.get("packages")
+        require(rawPackages != null && rawPackages.isJsonArray) { "بسته دوره باید آرایه packages داشته باشد." }
+        require(rawPackages.asJsonArray.size() in 1..MAX_COURSE_PACKAGES) { "تعداد فصل‌های بسته خارج از محدوده مجاز است." }
+        val parsed = rawPackages.asJsonArray.map { element ->
+            require(element.isJsonObject) { "یکی از بسته‌های فصل ساختار معتبری ندارد." }
+            val packageObject = element.asJsonObject
+            val chapter = packageObject.get("chapter")?.takeIf { it.isJsonObject }?.asJsonObject
+                ?: throw IllegalArgumentException("یکی از بسته‌ها اطلاعات chapter ندارد.")
+            val id = chapter.string("id")?.trim().orEmpty()
+            require(id.matches(Regex("[A-Za-z0-9][A-Za-z0-9._-]{0,79}"))) { "شناسه فصل در بسته معتبر نیست." }
+            val packageTitle = chapter.string("title")?.trim().orEmpty()
+            require(packageTitle.isNotBlank()) { "عنوان فصل در بسته خالی است." }
+            val group = chapter.string("group")?.trim().orEmpty()
+            val order = chapter.int("order", 0)
+            parseContent(
+                GitHubManifestItem(
+                    id = id,
+                    title = packageTitle,
+                    groupName = group,
+                    orderNum = order,
+                    path = "content/library/technology-path/$id.json",
+                    format = "json",
+                    contentHash = sha256(packageObject.toString().toByteArray(Charsets.UTF_8)),
+                    updatedAt = item.updatedAt,
+                    schemaVersion = 1
+                ),
+                packageObject.toString()
+            )
+        }
+        val ids = parsed.map { it.first.id }
+        require(ids.distinct().size == ids.size) { "شناسه فصل‌های بسته تکراری است." }
+        val itemCount = parsed.sumOf { it.second.size }
+        val declaredItems = obj.int("content_item_count", -1)
+        require(itemCount == declaredItems) {
+            "تعداد یادداشت‌های بسته با مقدار اعلام‌شده مطابقت ندارد (دریافت‌شده: $itemCount)."
+        }
+        val declaredPackages = obj.int("package_count", parsed.size)
+        require(parsed.size == declaredPackages) { "تعداد فصل‌های بسته با مقدار اعلام‌شده مطابقت ندارد." }
+        require(obj.int("domain_count", -1) == 16) { "فهرست حوزه‌های دوره ناقص یا ناسازگار است." }
+        require(obj.int("numbered_chapter_count", -1) == 68) { "تعداد فصل‌های اصلی دوره معتبر نیست." }
+        require(obj.int("supplemental_specialty_count", -1) == 3) { "تعداد تخصص‌های تکمیلی معتبر نیست." }
+        val uniqueUids = parsed.flatMap { it.second }.map { it.uid }
+        require(uniqueUids.distinct().size == uniqueUids.size) { "شناسه یادداشت‌ها در بسته تکراری است." }
+        return ParsedCourseBundle(parsed, itemCount)
+    }
+
+    private suspend fun githubBundleChapters(): List<ChapterEntity> =
+        database.chapterDao().getAll()
+            .filter { it.id.startsWith(GITHUB_BUNDLE_CHAPTER_PREFIX) }
+
+    private suspend fun githubBundleFingerprint(): String {
+        val chapters = githubBundleChapters().sortedBy { it.id }
+        val canonical = buildString {
+            chapters.forEach { chapter ->
+                append(fingerprint(chapter, database.contentItemDao().getForChapter(chapter.id)))
+                    .append('\\n')
+            }
+        }
+        return sha256(canonical.toByteArray(Charsets.UTF_8))
     }
 
     private fun parseContent(
@@ -339,9 +546,13 @@ class GitHubContentSyncRepository(
 
     companion object {
         const val MANIFEST_PATH = "content/manifest.json"
+        const val COMPRESSED_COURSE_FORMAT = "json-gzip-base64"
+        const val GITHUB_BUNDLE_CHAPTER_PREFIX = "github_technology-path-"
         private const val PREFS = "github_content_sync_v1"
         private const val MAX_MANIFEST_BYTES = 1_000_000
         private const val MAX_CONTENT_BYTES = 1_000_000
+        private const val MAX_BUNDLE_UNCOMPRESSED_BYTES = 25_000_000
+        private const val MAX_COURSE_PACKAGES = 100
     }
 }
 
@@ -375,12 +586,15 @@ internal object GitHubManifestPolicy {
                 "فایل محتوا باید داخل content/library باشد."
             }
             require(GitHubPathPolicy.isPreviewableTextPath(safePath)) { "نوع فایل Manifest پشتیبانی نمی‌شود." }
-            require(format in setOf("json", "md", "markdown", "txt")) { "قالب محتوا پشتیبانی نمی‌شود." }
+            require(format in setOf("json", "md", "markdown", "txt", COMPRESSED_COURSE_FORMAT)) { "قالب محتوا پشتیبانی نمی‌شود." }
             require(hash.matches(Regex("[a-f0-9]{64}"))) { "SHA-256 ورودی Manifest معتبر نیست." }
             require(updated.isNotBlank() && updated.length <= 40) { "زمان به‌روزرسانی Manifest معتبر نیست." }
             require(itemSchema == 1) { "نسخه ساختار ورودی پشتیبانی نمی‌شود." }
-            require(safePath.substringAfterLast('.').lowercase() == format ||
-                (format == "markdown" && (safePath.endsWith(".md", true) || safePath.endsWith(".markdown", true)))) {
+            require(
+                (format == COMPRESSED_COURSE_FORMAT && safePath.endsWith(".b64", true)) ||
+                    safePath.substringAfterLast('.').lowercase() == format ||
+                    (format == "markdown" && (safePath.endsWith(".md", true) || safePath.endsWith(".markdown", true)))
+            ) {
                 "پسوند فایل با قالب اعلام‌شده در Manifest یکسان نیست."
             }
             GitHubManifestItem(
@@ -414,6 +628,37 @@ private fun JsonObject.int(name: String, default: Int): Int {
 private fun sha256(bytes: ByteArray): String = MessageDigest.getInstance("SHA-256")
     .digest(bytes).joinToString("") { "%02x".format(it) }
 
+
+internal object GitHubContentCompression {
+    fun decodeBase64Gzip(encoded: String, maxOutputBytes: Int): String {
+        require(maxOutputBytes in 1..100_000_000) { "حد خروجی فشرده‌گشایی معتبر نیست." }
+        val compressed = try {
+            Base64.getMimeDecoder().decode(encoded)
+        } catch (_: IllegalArgumentException) {
+            throw IllegalArgumentException("بسته دوره Base64 معتبر نیست.")
+        }
+        val output = ByteArrayOutputStream()
+        GZIPInputStream(ByteArrayInputStream(compressed)).use { gzip ->
+            val buffer = ByteArray(16 * 1024)
+            while (true) {
+                val count = gzip.read(buffer)
+                if (count < 0) break
+                require(output.size() + count <= maxOutputBytes) {
+                    "حجم محتوای بازشده از سقف امن مجاز بیشتر است."
+                }
+                output.write(buffer, 0, count)
+            }
+        }
+        val decoder = StandardCharsets.UTF_8.newDecoder()
+            .onMalformedInput(CodingErrorAction.REPORT)
+            .onUnmappableCharacter(CodingErrorAction.REPORT)
+        return try {
+            decoder.decode(ByteBuffer.wrap(output.toByteArray())).toString()
+        } catch (_: Exception) {
+            throw IllegalArgumentException("محتوای بازشده UTF-8 معتبر نیست.")
+        }
+    }
+}
 
 /** Stable namespace for GitHub-imported chapters, isolated from Windows LAN content. */
 internal fun githubContentChapterId(id: String): String = "github_$id"
