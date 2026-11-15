@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-11-15T07:30:00Z",
+  "items": [
+    {
+      "id": "technology-path-index",
+      "title": "مسیر پیشرفت فناوری",
+      "group_name": "مسیر پیشرفت فناوری",
+      "order_num": 0,
+      "path": "content/library/technology-path/complete-course.part-001-of-016.b64",
+      "format": "json-gzip-base64-multipart",
+      "content_hash": "7457b92898be367243caa2d9d6983dec836fb2b8c057c79af3ee75cc1560b53f",
+      "updated_at": "2026-11-15T00:00:00Z",
+      "schema_version": 1
+    },
+    {
+      "id": "it-network-foundations",
+      "title": "مبانی شبکه و زیرساخت سازمانی",
+      "group_name": "شبکه و زیرساخت",
+      "order_num": 1,
+      "path": "content/library/it-network-foundations.json",
+      "format": "json",
+      "content_hash": "a331d69c3fd1b94938faf842a3facb4a51dbc0d284c1b44acc023a8a1056613d",
+      "updated_at": "2026-11-15T00:00:00Z",
+      "schema_version": 1
+    }
+  ]
+}
