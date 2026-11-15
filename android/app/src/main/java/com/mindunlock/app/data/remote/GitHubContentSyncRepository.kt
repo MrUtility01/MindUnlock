@@ -61,13 +61,14 @@ data class GitHubContentSyncResult(
  */
 class GitHubContentSyncRepository(
     context: Context,
-    private val remote: GitHubPublicRepository = GitHubPublicRepository(),
-    private val database: AppDatabase = AppDatabase.getInstance(context)
+    private val remote: GitHubPublicRepository = GitHubPublicRepository.configured(context),
+    private val database: AppDatabase = AppDatabase.getInstance(context),
+    private val manifestPath: String = GitHubRepositorySettingsStore.read(context).manifestPath
 ) {
     private val preferences = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
     suspend fun inspect(): List<GitHubContentSyncEntry> {
-        val manifestFile = remote.readTextFile(MANIFEST_PATH)
+        val manifestFile = remote.readTextFile(manifestPath)
         require(manifestFile.size <= MAX_MANIFEST_BYTES) { "فایل فهرست محتوا بیش از حد بزرگ است." }
         val manifest = GitHubManifestPolicy.parse(manifestFile.text)
         return manifest.map { item ->
