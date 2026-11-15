@@ -40,7 +40,8 @@ import kotlinx.coroutines.launch
 @Composable
 fun GitHubBrowserScreen() {
     val context = LocalContext.current
-    val repository = remember(context) { GitHubPublicRepository.configured(context) }
+    var repository by remember(context) { mutableStateOf(GitHubPublicRepository.configured(context)) }
+    var settingsVersion by remember { mutableStateOf(0) }
     val scope = rememberCoroutineScope()
     var currentPath by remember { mutableStateOf("") }
     var entries by remember { mutableStateOf<List<GitHubPublicEntry>>(emptyList()) }
@@ -78,8 +79,8 @@ fun GitHubBrowserScreen() {
             Text("مخزن عمومی MindUnlock", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         }
         item { GitHubAuthCard() }
-        item { GitHubRepositorySettingsCard(onSaved = { load("") }) }
-        item { GitHubContentSyncCard() }
+        item { GitHubRepositorySettingsCard(onSaved = { repository = GitHubPublicRepository.configured(context); settingsVersion++; load("") }) }
+        item { androidx.compose.runtime.key(settingsVersion) { GitHubContentSyncCard() } }
         item {
             Text(
                 "مخزن و شاخه از تنظیمات GitHub خوانده می‌شوند.",
