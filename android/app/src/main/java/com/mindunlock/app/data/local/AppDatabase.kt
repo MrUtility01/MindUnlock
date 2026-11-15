@@ -84,6 +84,9 @@ interface ContentItemDao {
     @Query("SELECT * FROM content_items WHERE uid = :uid LIMIT 1")
     suspend fun get(uid: String): ContentItemEntity?
 
+    @Query("SELECT * FROM content_items WHERE uid IN (:uids)")
+    suspend fun getByUids(uids: List<String>): List<ContentItemEntity>
+
     @Query("SELECT ci.* FROM content_items ci LEFT JOIN chapters c ON c.id = ci.chapterId WHERE lower(ci.type) IN (:types) ORDER BY COALESCE(c.orderIndex, 2147483647), ci.orderIndex, ci.title COLLATE NOCASE")
     fun observeByTypes(types: List<String>): Flow<List<ContentItemEntity>>
 
