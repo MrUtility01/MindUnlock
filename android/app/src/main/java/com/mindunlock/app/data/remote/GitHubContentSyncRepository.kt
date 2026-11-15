@@ -73,13 +73,13 @@ class GitHubContentSyncRepository(
         return manifest.map { item ->
             if (item.format in COMPRESSED_COURSE_FORMATS) {
                 val existing = githubBundleChapters()
-                val rootLocal = database.chapterDao().get(localChapterId(item.id))
+                val bundleTitle = existing.firstOrNull()?.title ?: item.title
                 val baseRemote = preferences.getString(remoteBaseKey(item.id), null)
                 val baseLocal = preferences.getString(localBaseKey(item.id), null)
                 if (existing.isEmpty()) {
                     GitHubContentSyncEntry(item, GitHubContentSyncStatus.NEW)
-                } else if (baseRemote == null || baseLocal == null || rootLocal == null) {
-                    GitHubContentSyncEntry(item, GitHubContentSyncStatus.UNTRACKED_LOCAL, rootLocal?.title)
+                } else if (baseRemote == null || baseLocal == null) {
+                    GitHubContentSyncEntry(item, GitHubContentSyncStatus.UNTRACKED_LOCAL, bundleTitle)
                 } else {
                     val currentFingerprint = githubBundleFingerprint()
                     val localChanged = currentFingerprint != baseLocal
@@ -90,7 +90,7 @@ class GitHubContentSyncRepository(
                         localChanged && !remoteChanged -> GitHubContentSyncStatus.LOCAL_MODIFIED
                         else -> GitHubContentSyncStatus.CONFLICT
                     }
-                    GitHubContentSyncEntry(item, status, rootLocal.title)
+                    GitHubContentSyncEntry(item, status, bundleTitle)
                 }
             } else {
                 val local = database.chapterDao().get(localChapterId(item.id))
