@@ -108,7 +108,7 @@ class GitHubPublicRepository(
         } catch (_: Exception) {
             throw IllegalArgumentException("فایل UTF-8 معتبر نیست و به‌عنوان متن باز نمی‌شود.")
         }
-        require(!text.contains(0.toChar())) { "فایل باینری است و به‌عنوان متن باز نمی‌شود." }
+        require(text.none { character -> character == 0.toChar() }) { "فایل باینری است و به‌عنوان متن باز نمی‌شود." }
         GitHubPublicFile(
             name = item.get("name")?.asString ?: safePath.substringAfterLast('/'),
             path = safePath,
