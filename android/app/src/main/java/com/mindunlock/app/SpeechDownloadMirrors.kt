@@ -36,8 +36,7 @@ internal object SpeechDownloadMirrors {
      */
     fun defaultAddresses(source: SpeechMirrorSource): List<String> = when (source) {
         SpeechMirrorSource.HUGGING_FACE -> listOf(
-            "https://hf-mirror.com",
-            "https://beta.hf-mirror.com"
+            "https://hf-mirror.com"
         )
         SpeechMirrorSource.GITHUB_RELEASE -> listOf(
             "https://ghfast.top/{url}",
