@@ -1,5 +1,6 @@
 package com.mindunlock.app.data.remote
 
+import android.content.Context
 import android.util.Base64
 import com.google.gson.JsonParser
 import kotlinx.coroutines.Dispatchers
@@ -123,6 +124,11 @@ class GitHubPublicRepository(
         URLEncoder.encode(value, StandardCharsets.UTF_8.name()).replace("+", "%20")
 
     companion object {
+        fun configured(context: Context): GitHubPublicRepository {
+            val settings = GitHubRepositorySettingsStore.read(context)
+            return GitHubPublicRepository(settings.owner, settings.repository, settings.branch)
+        }
+
         const val DEFAULT_OWNER = "MrUtility01"
         const val DEFAULT_REPOSITORY = "MindUnlock"
         const val DEFAULT_BRANCH = "main"
