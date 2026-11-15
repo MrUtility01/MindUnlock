@@ -30,7 +30,7 @@ object GitHubRepositorySettingsStore {
         val cleanOwner = owner.trim()
         val cleanRepository = repository.trim()
         val cleanBranch = branch.trim()
-        val cleanManifest = manifestPath.trim().replace('\\\\', '/').trim('/')
+        val cleanManifest = manifestPath.trim().replace('\\', '/').trim('/')
         require(cleanOwner.matches(Regex("[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})"))) { "نام مالک GitHub معتبر نیست." }
         require(cleanRepository.matches(Regex("[A-Za-z0-9._-]{1,100}"))) { "نام مخزن GitHub معتبر نیست." }
         require(cleanBranch.isNotBlank() && cleanBranch.length <= 250 && !cleanBranch.startsWith("/") &&
