@@ -41,7 +41,6 @@ internal object SpeechDownloadMirrors {
         )
         SpeechMirrorSource.GITHUB_RELEASE -> listOf(
             "https://ghfast.top/{url}",
-            "https://gh-proxy.com/{url}",
             "https://ghproxy.net/{url}"
         )
     }
