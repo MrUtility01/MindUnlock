@@ -25,19 +25,23 @@ fun GitHubRepositorySettingsCard(onSaved: () -> Unit) {
     val initial = remember(context) { GitHubRepositorySettingsStore.read(context) }
     var owner by remember { mutableStateOf(initial.owner) }
     var repository by remember { mutableStateOf(initial.repository) }
+    var repositoryReference by remember { mutableStateOf("") }
     var branch by remember { mutableStateOf(initial.branch) }
     var manifest by remember { mutableStateOf(initial.manifestPath) }
     var message by remember { mutableStateOf("") }
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("تنظیم دستی منبع GitHub", style = MaterialTheme.typography.titleMedium)
+            OutlinedTextField(repositoryReference, { repositoryReference = it; message = "" }, Modifier.fillMaxWidth(), singleLine = true, label = { Text("نشانی مخزن یا owner/repository (اختیاری)") })
+            Text("نمونه: https://github.com/MrUtility01/MindUnlock", style = MaterialTheme.typography.bodySmall)
             OutlinedTextField(owner, { owner = it; message = "" }, Modifier.fillMaxWidth(), singleLine = true, label = { Text("مالک / Organization") })
             OutlinedTextField(repository, { repository = it; message = "" }, Modifier.fillMaxWidth(), singleLine = true, label = { Text("نام مخزن") })
             OutlinedTextField(branch, { branch = it; message = "" }, Modifier.fillMaxWidth(), singleLine = true, label = { Text("شاخه (Branch)") })
             OutlinedTextField(manifest, { manifest = it; message = "" }, Modifier.fillMaxWidth(), singleLine = true, label = { Text("مسیر Manifest") })
             Button(onClick = {
                 try {
-                    GitHubRepositorySettingsStore.save(context, owner, repository, branch, manifest)
+                    val parsed = repositoryReference.trim().takeIf { it.isNotBlank() }?.let { GitHubRepositorySettingsStore.parseRepositoryReference(it) }
+                    GitHubRepositorySettingsStore.save(context, parsed?.first ?: owner, parsed?.second ?: repository, branch, manifest)
                     message = "تنظیمات ذخیره شد."
                     onSaved()
                 } catch (failure: Exception) {
