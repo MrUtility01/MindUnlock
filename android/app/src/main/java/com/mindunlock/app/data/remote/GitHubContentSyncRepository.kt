@@ -670,16 +670,22 @@ internal object GitHubContentCompression {
             throw IllegalArgumentException("بسته دوره Base64 معتبر نیست.")
         }
         val output = ByteArrayOutputStream()
-        GZIPInputStream(ByteArrayInputStream(compressed)).use { gzip ->
-            val buffer = ByteArray(16 * 1024)
-            while (true) {
-                val count = gzip.read(buffer)
-                if (count < 0) break
-                require(output.size() + count <= maxOutputBytes) {
-                    "حجم محتوای بازشده از سقف امن مجاز بیشتر است."
+        try {
+            GZIPInputStream(ByteArrayInputStream(compressed)).use { gzip ->
+                val buffer = ByteArray(16 * 1024)
+                while (true) {
+                    val count = gzip.read(buffer)
+                    if (count < 0) break
+                    require(output.size() + count <= maxOutputBytes) {
+                        "حجم محتوای بازشده از سقف امن مجاز بیشتر است."
+                    }
+                    output.write(buffer, 0, count)
                 }
-                output.write(buffer, 0, count)
             }
+        } catch (error: IllegalArgumentException) {
+            throw error
+        } catch (_: Exception) {
+            throw IllegalArgumentException("بسته GZIP معتبر نیست یا ناقص دریافت شده است.")
         }
         val decoder = StandardCharsets.UTF_8.newDecoder()
             .onMalformedInput(CodingErrorAction.REPORT)
