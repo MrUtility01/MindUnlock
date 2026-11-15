@@ -28,7 +28,7 @@ fun GitHubBrowserScreen() {
     val context = LocalContext.current
     var repository by remember(context) { mutableStateOf(GitHubPublicRepository.configured(context)) }
     val writer = remember { GitHubWriteRepository(GitHubDeviceAuth()) }
-    var settingsVersion by remember { mutableIntStateOf(0) }
+    var settingsVersion by remember { mutableStateOf(0) }
     val scope = rememberCoroutineScope()
     var currentPath by remember { mutableStateOf("") }
     var entries by remember { mutableStateOf<List<GitHubPublicEntry>>(emptyList()) }
