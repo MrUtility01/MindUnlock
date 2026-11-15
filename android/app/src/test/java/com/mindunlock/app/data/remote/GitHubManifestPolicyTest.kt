@@ -59,6 +59,12 @@ class GitHubManifestPolicyTest {
         assertEquals(1, parsed.size)
         assertEquals("technology-path-index", parsed.single().id)
         assertEquals("json-gzip-base64", parsed.single().format)
+        val multipart = compressed
+            .replace("technology-path-index", "technology-path-multipart-index")
+            .replace("complete-course.b64", "complete-course.part-001-of-016.b64")
+            .replace("json-gzip-base64", "json-gzip-base64-multipart")
+        val parsedMultipart = GitHubManifestPolicy.parse(manifest("[$multipart]"))
+        assertEquals("json-gzip-base64-multipart", parsedMultipart.single().format)
     }
 
     @Test
