@@ -71,7 +71,7 @@ class GitHubContentSyncRepository(
         require(manifestFile.size <= MAX_MANIFEST_BYTES) { "فایل فهرست محتوا بیش از حد بزرگ است." }
         val manifest = GitHubManifestPolicy.parse(manifestFile.text)
         return manifest.map { item ->
-            if (item.format == COMPRESSED_COURSE_FORMAT) {
+            if (item.format in COMPRESSED_COURSE_FORMATS) {
                 val existing = githubBundleChapters()
                 val rootLocal = database.chapterDao().get(localChapterId(item.id))
                 val baseRemote = preferences.getString(remoteBaseKey(item.id), null)
@@ -138,7 +138,7 @@ class GitHubContentSyncRepository(
         var skipped = 0
         eligible.forEachIndexed { index, entry ->
             onProgress(index + 1, eligible.size, entry.item.title)
-            if (entry.item.format == COMPRESSED_COURSE_FORMAT) {
+            if (entry.item.format in COMPRESSED_COURSE_FORMATS) {
                 val bundleResult = importCompressedCourse(entry)
                 if (bundleResult.second != null) {
                     blocked += "${entry.item.title}: ${bundleResult.second}"
@@ -211,7 +211,7 @@ class GitHubContentSyncRepository(
         val entry = inspect().singleOrNull { it.item.id == id }
             ?: throw IllegalArgumentException("محتوا در Manifest فعلی پیدا نشد.")
         require(entry.status.canKeepLocal) { "حفظ نسخه محلی برای این وضعیت مجاز نیست." }
-        val localHash = if (entry.item.format == COMPRESSED_COURSE_FORMAT) {
+        val localHash = if (entry.item.format in COMPRESSED_COURSE_FORMATS) {
             githubBundleFingerprint()
         } else {
             val localId = localChapterId(id)
@@ -233,7 +233,7 @@ class GitHubContentSyncRepository(
         val entry = inspect().singleOrNull { it.item.id == id }
             ?: throw IllegalArgumentException("محتوا در Manifest فعلی پیدا نشد.")
         require(entry.status.canTakeRemote) { "جایگزینی با نسخه GitHub برای این وضعیت مجاز نیست." }
-        if (entry.item.format == COMPRESSED_COURSE_FORMAT) {
+        if (entry.item.format in COMPRESSED_COURSE_FORMATS) {
             takeRemoteCompressedCourse(entry)
             return
         }
@@ -360,14 +360,20 @@ class GitHubContentSyncRepository(
     }
 
     private suspend fun readAndParseCourseBundle(item: GitHubManifestItem): ParsedCourseBundle {
-        val file = remote.readTextFile(item.path)
-        require(file.size <= MAX_CONTENT_BYTES) { "بسته دوره از سقف حجم مجاز دانلود بزرگ‌تر است." }
-        val actualHash = sha256(file.text.toByteArray(Charsets.UTF_8))
+        val encodedPayload = if (item.format == COMPRESSED_COURSE_MULTIPART_FORMAT) {
+            readMultipartBase64(item.path)
+        } else {
+            remote.readTextFile(item.path).text
+        }
+        require(encodedPayload.toByteArray(Charsets.UTF_8).size <= MAX_CONTENT_BYTES) {
+            "بسته دوره از سقف حجم مجاز دانلود بزرگ‌تر است."
+        }
+        val actualHash = sha256(encodedPayload.toByteArray(Charsets.UTF_8))
         require(actualHash.equals(item.contentHash, ignoreCase = true)) {
             "هش بسته دوره با Manifest مطابقت ندارد؛ واردسازی متوقف شد."
         }
         val json = GitHubContentCompression.decodeBase64Gzip(
-            file.text,
+            encodedPayload,
             MAX_BUNDLE_UNCOMPRESSED_BYTES
         )
         val root = JsonParser.parseString(json)
@@ -418,6 +424,27 @@ class GitHubContentSyncRepository(
         val uniqueUids = parsed.flatMap { it.second }.map { it.uid }
         require(uniqueUids.distinct().size == uniqueUids.size) { "شناسه یادداشت‌ها در بسته تکراری است." }
         return ParsedCourseBundle(parsed, itemCount)
+    }
+
+    private suspend fun readMultipartBase64(firstPartPath: String): String {
+        val match = Regex("^(.*)\\.part-001-of-(\\d{3})\\.b64$", RegexOption.IGNORE_CASE)
+            .matchEntire(firstPartPath)
+            ?: throw IllegalArgumentException("مسیر بخش اول بسته چندقسمتی معتبر نیست.")
+        val basePath = match.groupValues[1]
+        val partCount = match.groupValues[2].toInt()
+        require(partCount in 1..32) { "تعداد بخش‌های بسته از حد مجاز بیشتر است." }
+        val combined = StringBuilder()
+        for (index in 1..partCount) {
+            val suffix = index.toString().padStart(3, '0')
+            val partPath = "$basePath.part-$suffix-of-${partCount.toString().padStart(3, '0')}.b64"
+            val part = remote.readTextFile(partPath)
+            require(part.size in 1..MAX_CONTENT_BYTES) { "یکی از بخش‌های بسته خالی یا بیش از حد بزرگ است." }
+            combined.append(part.text.trim())
+            require(combined.length <= MAX_CONTENT_BYTES) {
+                "حجم کل بخش‌های بسته از سقف مجاز بیشتر است."
+            }
+        }
+        return combined.toString()
     }
 
     private suspend fun githubBundleChapters(): List<ChapterEntity> =
@@ -547,6 +574,11 @@ class GitHubContentSyncRepository(
     companion object {
         const val MANIFEST_PATH = "content/manifest.json"
         const val COMPRESSED_COURSE_FORMAT = "json-gzip-base64"
+        const val COMPRESSED_COURSE_MULTIPART_FORMAT = "json-gzip-base64-multipart"
+        private val COMPRESSED_COURSE_FORMATS = setOf(
+            COMPRESSED_COURSE_FORMAT,
+            COMPRESSED_COURSE_MULTIPART_FORMAT
+        )
         const val GITHUB_BUNDLE_CHAPTER_PREFIX = "github_technology-path-"
         private const val PREFS = "github_content_sync_v1"
         private const val MAX_MANIFEST_BYTES = 1_000_000
@@ -586,12 +618,12 @@ internal object GitHubManifestPolicy {
                 "فایل محتوا باید داخل content/library باشد."
             }
             require(GitHubPathPolicy.isPreviewableTextPath(safePath)) { "نوع فایل Manifest پشتیبانی نمی‌شود." }
-            require(format in setOf("json", "md", "markdown", "txt", COMPRESSED_COURSE_FORMAT)) { "قالب محتوا پشتیبانی نمی‌شود." }
+            require(format in setOf("json", "md", "markdown", "txt", COMPRESSED_COURSE_FORMAT, COMPRESSED_COURSE_MULTIPART_FORMAT)) { "قالب محتوا پشتیبانی نمی‌شود." }
             require(hash.matches(Regex("[a-f0-9]{64}"))) { "SHA-256 ورودی Manifest معتبر نیست." }
             require(updated.isNotBlank() && updated.length <= 40) { "زمان به‌روزرسانی Manifest معتبر نیست." }
             require(itemSchema == 1) { "نسخه ساختار ورودی پشتیبانی نمی‌شود." }
             require(
-                (format == COMPRESSED_COURSE_FORMAT && safePath.endsWith(".b64", true)) ||
+                (format in setOf(COMPRESSED_COURSE_FORMAT, COMPRESSED_COURSE_MULTIPART_FORMAT) && safePath.endsWith(".b64", true)) ||
                     safePath.substringAfterLast('.').lowercase() == format ||
                     (format == "markdown" && (safePath.endsWith(".md", true) || safePath.endsWith(".markdown", true)))
             ) {
