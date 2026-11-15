@@ -72,7 +72,14 @@ class GitHubContentSyncRepository(
         require(manifestFile.size <= MAX_MANIFEST_BYTES) { "فایل فهرست محتوا بیش از حد بزرگ است." }
         val manifest = GitHubManifestPolicy.parse(manifestFile.text)
         return manifest.map { item ->
-            if (item.format in COMPRESSED_COURSE_FORMATS) {
+            val parentPath = item.path.substringBeforeLast('/', "")
+            val fileName = item.path.substringAfterLast('/')
+            val sourceAvailable = runCatching {
+                remote.list(parentPath).any { it.name == fileName && !it.isDirectory }
+            }.getOrDefault(false)
+            if (!sourceAvailable) {
+                GitHubContentSyncEntry(item, GitHubContentSyncStatus.UNAVAILABLE)
+            } else if (item.format in COMPRESSED_COURSE_FORMATS) {
                 val existing = githubBundleChapters()
                 val bundleTitle = existing.firstOrNull()?.title ?: item.title
                 val baseRemote = preferences.getString(remoteBaseKey(item.id), null)
