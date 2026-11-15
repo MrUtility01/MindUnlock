@@ -80,6 +80,7 @@ fun GitHubBrowserScreen() {
         }
         item { GitHubAuthCard() }
         item { GitHubRepositorySettingsCard(onSaved = { repository = GitHubPublicRepository.configured(context); settingsVersion++; load("") }) }
+        item { SpeechMirrorSettingsCard() }
         item { androidx.compose.runtime.key(settingsVersion) { GitHubContentSyncCard() } }
         item {
             Text(
