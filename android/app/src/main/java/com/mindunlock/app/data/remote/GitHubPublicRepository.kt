@@ -131,6 +131,7 @@ class GitHubPublicRepository(
         require(term.isNotBlank()) { "عبارت جست‌وجو را وارد کن." }
         val tree = getJson("https://api.github.com/repos/$owner/$repository/git/trees/${encode(branch)}?recursive=1")
         require(tree.isJsonObject) { "فهرست درخت مخزن معتبر نیست." }
+        require(tree.asJsonObject.get("truncated")?.asBoolean != true) { "فهرست مخزن برای جست‌وجوی سراسری بیش از حد بزرگ است؛ جست‌وجو را در پوشه انجام بده." }
         val nodes = tree.asJsonObject.getAsJsonArray("tree")
             ?: throw IllegalStateException("درخت فایل‌های مخزن در پاسخ GitHub وجود ندارد.")
         nodes.mapNotNull { node ->
@@ -183,7 +184,7 @@ class GitHubPublicRepository(
         const val DEFAULT_REPOSITORY = "MindUnlock"
         const val DEFAULT_BRANCH = "main"
         const val MAX_TEXT_FILE_BYTES = 20L * 1024L * 1024L
-        private const val MAX_RESPONSE_CHARS = 5_000_000
+        private const val MAX_RESPONSE_CHARS = 20_000_000
     }
 }
 
