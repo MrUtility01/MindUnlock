@@ -111,34 +111,41 @@ class GitHubContentSyncRepository(
                 "هش فایل «${entry.item.title}» با Manifest مطابقت ندارد؛ واردسازی متوقف شد."
             }
             val parsed = parseContent(entry.item, file.text)
-            val uidCollision = parsed.second.firstNotNullOfOrNull { candidate ->
-                database.contentItemDao().get(candidate.uid)?.takeIf { it.chapterId != localChapterId(entry.item.id) }?.uid
+            val expectedLocal = if (entry.status == GitHubContentSyncStatus.REMOTE_UPDATE) {
+                preferences.getString(localBaseKey(entry.item.id), null)
+            } else null
+            val rejection = database.withTransaction {
+                val localId = localChapterId(entry.item.id)
+                val latest = database.chapterDao().get(localId)
+                when {
+                    entry.status == GitHubContentSyncStatus.NEW && latest != null ->
+                        "هم‌زمان در دستگاه ایجاد شده؛ برای جلوگیری از بازنویسی نادیده گرفته شد."
+                    entry.status == GitHubContentSyncStatus.REMOTE_UPDATE && latest == null ->
+                        "نسخه محلی هنگام واردسازی حذف شده؛ فهرست را تازه‌سازی کن."
+                    entry.status == GitHubContentSyncStatus.REMOTE_UPDATE && (
+                        expectedLocal == null ||
+                            fingerprint(latest!!, database.contentItemDao().getForChapter(localId)) != expectedLocal
+                    ) -> "نسخه محلی هنگام واردسازی تغییر کرده؛ برای جلوگیری از ازدست‌رفتن تغییرات متوقف شد."
+                    else -> {
+                        val uidCollision = parsed.second.firstNotNullOfOrNull { candidate ->
+                            database.contentItemDao().get(candidate.uid)
+                                ?.takeIf { it.chapterId != localId }?.uid
+                        }
+                        if (uidCollision != null) {
+                            "شناسه آیتم $uidCollision قبلاً در فصل دیگری استفاده شده است."
+                        } else {
+                            database.chapterDao().upsert(parsed.first)
+                            database.contentItemDao().deleteForChapter(localId)
+                            if (parsed.second.isNotEmpty()) database.contentItemDao().upsertAll(parsed.second)
+                            null
+                        }
+                    }
+                }
             }
-            require(uidCollision == null) { "شناسه آیتم $uidCollision قبلاً در فصل دیگری استفاده شده است؛ برای جلوگیری از جابه‌جایی داده واردسازی متوقف شد." }
-            val latest = database.chapterDao().get(localChapterId(entry.item.id))
-            if (entry.status == GitHubContentSyncStatus.NEW && latest != null) {
-                blocked += "${entry.item.title}: هم‌زمان در دستگاه ایجاد شده؛ برای جلوگیری از بازنویسی نادیده گرفته شد."
+            if (rejection != null) {
+                blocked += "${entry.item.title}: $rejection"
                 skipped++
                 return@forEachIndexed
-            }
-            if (entry.status == GitHubContentSyncStatus.REMOTE_UPDATE) {
-                val latestChapter = latest ?: run {
-                    blocked += "${entry.item.title}: نسخه محلی هنگام واردسازی حذف شده؛ فهرست را تازه‌سازی کن."
-                    skipped++
-                    return@forEachIndexed
-                }
-                val latestItems = database.contentItemDao().getForChapter(localChapterId(entry.item.id))
-                val expectedLocal = preferences.getString(localBaseKey(entry.item.id), null)
-                if (expectedLocal == null || fingerprint(latestChapter, latestItems) != expectedLocal) {
-                    blocked += "${entry.item.title}: نسخه محلی هنگام واردسازی تغییر کرده؛ برای جلوگیری از ازدست‌رفتن تغییرات متوقف شد."
-                    skipped++
-                    return@forEachIndexed
-                }
-            }
-            database.withTransaction {
-                database.chapterDao().upsert(parsed.first)
-                database.contentItemDao().deleteForChapter(localChapterId(entry.item.id))
-                if (parsed.second.isNotEmpty()) database.contentItemDao().upsertAll(parsed.second)
             }
             val saved = database.chapterDao().get(localChapterId(entry.item.id))
                 ?: error("ثبت فصل «${entry.item.title}» در پایگاه داده تأیید نشد.")
