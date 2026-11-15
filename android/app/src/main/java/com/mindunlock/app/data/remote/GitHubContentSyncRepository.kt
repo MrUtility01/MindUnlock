@@ -192,6 +192,12 @@ class GitHubContentSyncRepository(
             GitHubContentSyncStatus.REMOTE_UPDATE,
             GitHubContentSyncStatus.CONFLICT
         )) { "نسخه راه‌دور برای این محتوا نیاز به حل تعارض ندارد." }
+        val localId = localChapterId(id)
+        val expectedLocal = database.withTransaction {
+            val chapter = database.chapterDao().get(localId)
+                ?: throw IllegalStateException("نسخه محلی حذف شده؛ فهرست را تازه‌سازی کن.")
+            fingerprint(chapter, database.contentItemDao().getForChapter(localId))
+        }
         val file = remote.readTextFile(entry.item.path)
         require(file.size <= MAX_CONTENT_BYTES) { "فایل از سقف مجاز بزرگ‌تر است." }
         val actualHash = sha256(file.text.toByteArray(Charsets.UTF_8))
@@ -199,12 +205,14 @@ class GitHubContentSyncRepository(
             "هش فایل با Manifest مطابقت ندارد؛ واردسازی متوقف شد."
         }
         val parsed = parseContent(entry.item, file.text)
-        val localId = localChapterId(id)
-        val expectedLocal = database.withTransaction {
+        database.withTransaction {
             val latest = database.chapterDao().get(localId)
                 ?: throw IllegalStateException("نسخه محلی حذف شده؛ فهرست را تازه‌سازی کن.")
             val items = database.contentItemDao().getForChapter(localId)
             val current = fingerprint(latest, items)
+            require(current == expectedLocal) {
+                "نسخه محلی هنگام حل تعارض تغییر کرده؛ عملیات متوقف شد و باید دوباره بررسی کنی."
+            }
             val collision = parsed.second.firstNotNullOfOrNull { candidate ->
                 database.contentItemDao().get(candidate.uid)?.takeIf { it.chapterId != localId }?.uid
             }
@@ -212,13 +220,10 @@ class GitHubContentSyncRepository(
             database.chapterDao().upsert(parsed.first)
             database.contentItemDao().deleteForChapter(localId)
             if (parsed.second.isNotEmpty()) database.contentItemDao().upsertAll(parsed.second)
-            current
         }
         val saved = database.chapterDao().get(localId)
             ?: error("ثبت نسخه راه‌دور تأیید نشد.")
         val savedItems = database.contentItemDao().getForChapter(localId)
-        // The old local fingerprint is intentionally read above as a transaction guard.
-        require(expectedLocal.isNotBlank())
         preferences.edit()
             .putString(remoteBaseKey(id), entry.item.contentHash)
             .putString(localBaseKey(id), fingerprint(saved, savedItems))
