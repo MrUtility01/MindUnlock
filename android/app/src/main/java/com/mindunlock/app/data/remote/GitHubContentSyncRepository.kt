@@ -201,7 +201,7 @@ class GitHubContentSyncRepository(
             val options = item.get("options") ?: metadata?.get("options")
             ContentItemEntity(
                 uid = uid,
-                chapterId = manifest.id,
+                chapterId = localChapterId(manifest.id),
                 type = item.string("kind") ?: item.string("type") ?: "lesson",
                 title = title,
                 summary = item.string("summary"),
@@ -219,7 +219,7 @@ class GitHubContentSyncRepository(
             "شناسه آیتم‌های فصل تکراری است؛ واردسازی امن نیست."
         }
         val chapter = ChapterEntity(
-            id = manifest.id,
+            id = localChapterId(manifest.id),
             title = detail.string("title") ?: manifest.title,
             orderIndex = detail.int("order_num", detail.int("order", manifest.orderNum)),
             groupName = detail.string("group_name") ?: detail.string("group") ?: manifest.groupName,
@@ -256,7 +256,7 @@ class GitHubContentSyncRepository(
         return sha256(canonical.toByteArray(Charsets.UTF_8))
     }
 
-    private fun localChapterId(id: String) = "github_$id"
+    private fun localChapterId(id: String) = githubContentChapterId(id)
 
     private fun remoteBaseKey(id: String) = "remote:$id"
     private fun localBaseKey(id: String) = "local:$id"
@@ -337,3 +337,7 @@ private fun JsonObject.int(name: String, default: Int): Int {
 
 private fun sha256(bytes: ByteArray): String = MessageDigest.getInstance("SHA-256")
     .digest(bytes).joinToString("") { "%02x".format(it) }
+
+
+/** Stable namespace for GitHub-imported chapters, isolated from Windows LAN content. */
+internal fun githubContentChapterId(id: String): String = "github_$id"
