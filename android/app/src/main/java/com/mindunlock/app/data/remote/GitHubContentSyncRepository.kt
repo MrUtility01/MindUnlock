@@ -618,12 +618,12 @@ internal object GitHubManifestPolicy {
                 "فایل محتوا باید داخل content/library باشد."
             }
             require(GitHubPathPolicy.isPreviewableTextPath(safePath)) { "نوع فایل Manifest پشتیبانی نمی‌شود." }
-            require(format in setOf("json", "md", "markdown", "txt", COMPRESSED_COURSE_FORMAT, COMPRESSED_COURSE_MULTIPART_FORMAT)) { "قالب محتوا پشتیبانی نمی‌شود." }
+            require(format in setOf("json", "md", "markdown", "txt", "json-gzip-base64", "json-gzip-base64-multipart")) { "قالب محتوا پشتیبانی نمی‌شود." }
             require(hash.matches(Regex("[a-f0-9]{64}"))) { "SHA-256 ورودی Manifest معتبر نیست." }
             require(updated.isNotBlank() && updated.length <= 40) { "زمان به‌روزرسانی Manifest معتبر نیست." }
             require(itemSchema == 1) { "نسخه ساختار ورودی پشتیبانی نمی‌شود." }
             require(
-                (format in setOf(COMPRESSED_COURSE_FORMAT, COMPRESSED_COURSE_MULTIPART_FORMAT) && safePath.endsWith(".b64", true)) ||
+                (format in setOf("json-gzip-base64", "json-gzip-base64-multipart") && safePath.endsWith(".b64", true)) ||
                     safePath.substringAfterLast('.').lowercase() == format ||
                     (format == "markdown" && (safePath.endsWith(".md", true) || safePath.endsWith(".markdown", true)))
             ) {
