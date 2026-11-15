@@ -429,7 +429,7 @@ class GitHubContentSyncRepository(
         val canonical = buildString {
             chapters.forEach { chapter ->
                 append(fingerprint(chapter, database.contentItemDao().getForChapter(chapter.id)))
-                    .append('\\n')
+                    .append('\n')
             }
         }
         return sha256(canonical.toByteArray(Charsets.UTF_8))
