@@ -165,6 +165,12 @@ class GitHubDeviceAuth(
         newAccess
     }
 
+    /** Validates the saved session and returns the signed-in GitHub account. */
+    suspend fun currentAccount(context: Context): GitHubAccount? = withContext(Dispatchers.IO) {
+        val token = getValidAccessToken(context) ?: return@withContext null
+        fetchAccount(token)
+    }
+
     private fun fetchAccount(token: String): GitHubAccount {
         val request = Request.Builder()
             .url("https://api.github.com/user")
