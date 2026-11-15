@@ -159,6 +159,72 @@ class GitHubContentSyncRepository(
         return GitHubContentSyncResult(imported, skipped, blocked)
     }
 
+    /**
+     * Explicitly keeps the current local revision and records the currently reviewed remote
+     * revision as the comparison base. No local content is modified or uploaded.
+     */
+    suspend fun keepLocalVersion(id: String) {
+        val entry = inspect().singleOrNull { it.item.id == id }
+            ?: throw IllegalArgumentException("محتوا در Manifest فعلی پیدا نشد.")
+        require(entry.status in setOf(
+            GitHubContentSyncStatus.LOCAL_MODIFIED,
+            GitHubContentSyncStatus.CONFLICT
+        )) { "این محتوا تعارض محلیِ قابل تأیید ندارد." }
+        val localId = localChapterId(id)
+        val local = database.chapterDao().get(localId)
+            ?: throw IllegalStateException("نسخه محلی دیگر وجود ندارد؛ فهرست را تازه‌سازی کن.")
+        val localItems = database.contentItemDao().getForChapter(localId)
+        val localHash = fingerprint(local, localItems)
+        preferences.edit()
+            .putString(remoteBaseKey(id), entry.item.contentHash)
+            .putString(localBaseKey(id), localHash)
+            .apply()
+    }
+
+    /**
+     * Explicitly accepts the GitHub copy for a conflicting item. The local fingerprint is
+     * rechecked inside the Room transaction so a concurrent edit is never overwritten.
+     */
+    suspend fun takeRemoteVersion(id: String) {
+        val entry = inspect().singleOrNull { it.item.id == id }
+            ?: throw IllegalArgumentException("محتوا در Manifest فعلی پیدا نشد.")
+        require(entry.status in setOf(
+            GitHubContentSyncStatus.REMOTE_UPDATE,
+            GitHubContentSyncStatus.CONFLICT
+        )) { "نسخه راه‌دور برای این محتوا نیاز به حل تعارض ندارد." }
+        val file = remote.readTextFile(entry.item.path)
+        require(file.size <= MAX_CONTENT_BYTES) { "فایل از سقف مجاز بزرگ‌تر است." }
+        val actualHash = sha256(file.text.toByteArray(Charsets.UTF_8))
+        require(actualHash.equals(entry.item.contentHash, ignoreCase = true)) {
+            "هش فایل با Manifest مطابقت ندارد؛ واردسازی متوقف شد."
+        }
+        val parsed = parseContent(entry.item, file.text)
+        val localId = localChapterId(id)
+        val expectedLocal = database.withTransaction {
+            val latest = database.chapterDao().get(localId)
+                ?: throw IllegalStateException("نسخه محلی حذف شده؛ فهرست را تازه‌سازی کن.")
+            val items = database.contentItemDao().getForChapter(localId)
+            val current = fingerprint(latest, items)
+            val collision = parsed.second.firstNotNullOfOrNull { candidate ->
+                database.contentItemDao().get(candidate.uid)?.takeIf { it.chapterId != localId }?.uid
+            }
+            require(collision == null) { "شناسه آیتم $collision در فصل دیگری استفاده شده است." }
+            database.chapterDao().upsert(parsed.first)
+            database.contentItemDao().deleteForChapter(localId)
+            if (parsed.second.isNotEmpty()) database.contentItemDao().upsertAll(parsed.second)
+            current
+        }
+        val saved = database.chapterDao().get(localId)
+            ?: error("ثبت نسخه راه‌دور تأیید نشد.")
+        val savedItems = database.contentItemDao().getForChapter(localId)
+        // The old local fingerprint is intentionally read above as a transaction guard.
+        require(expectedLocal.isNotBlank())
+        preferences.edit()
+            .putString(remoteBaseKey(id), entry.item.contentHash)
+            .putString(localBaseKey(id), fingerprint(saved, savedItems))
+            .apply()
+    }
+
     private fun parseContent(
         manifest: GitHubManifestItem,
         text: String
