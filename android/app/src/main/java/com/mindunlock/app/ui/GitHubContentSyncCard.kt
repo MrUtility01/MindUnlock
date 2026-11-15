@@ -124,10 +124,7 @@ fun GitHubContentSyncCard() {
                                         color = if (eligible) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                     Text(entry.item.path, style = MaterialTheme.typography.labelSmall)
-                                    if (entry.status == GitHubContentSyncStatus.CONFLICT ||
-                                        entry.status == GitHubContentSyncStatus.LOCAL_MODIFIED ||
-                                        entry.status == GitHubContentSyncStatus.REMOTE_UPDATE
-                                    ) {
+                                    if (entry.status.canKeepLocal || entry.status.canTakeRemote) {
                                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                             OutlinedButton(
                                                 enabled = !busy,
@@ -147,9 +144,7 @@ fun GitHubContentSyncCard() {
                                                     }
                                                 }
                                             ) { Text("حفظ نسخه محلی") }
-                                            if (entry.status == GitHubContentSyncStatus.CONFLICT ||
-                                                entry.status == GitHubContentSyncStatus.REMOTE_UPDATE
-                                            ) {
+                                            if (entry.status.canTakeRemote) {
                                                 OutlinedButton(
                                                     enabled = !busy,
                                                     onClick = {
