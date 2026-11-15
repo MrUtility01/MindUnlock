@@ -21,9 +21,30 @@ object GitHubRepositorySettingsStore {
         return GitHubRepositorySettings(
             owner = prefs.getString(OWNER, null)?.takeIf(String::isNotBlank) ?: "MrUtility01",
             repository = prefs.getString(REPOSITORY, null)?.takeIf(String::isNotBlank) ?: "MindUnlock",
-            branch = prefs.getString(BRANCH, null)?.takeIf(String::isNotBlank) ?: "feature/github-public-browser",
+            branch = prefs.getString(BRANCH, null)?.takeIf(String::isNotBlank) ?: "main",
             manifestPath = prefs.getString(MANIFEST, null)?.takeIf(String::isNotBlank) ?: "content/manifest.json"
         )
+    }
+
+
+    fun parseRepositoryReference(value: String): Pair<String, String> {
+        val raw = value.trim().trimEnd('/')
+        val normalized = when {
+            raw.startsWith("https://", ignoreCase = true) || raw.startsWith("http://", ignoreCase = true) -> {
+                val uri = java.net.URI(raw)
+                require(uri.scheme.equals("https", true) && uri.host.equals("github.com", true) &&
+                    uri.userInfo == null && uri.query == null && uri.fragment == null) {
+                    "فقط نشانی امن مخزن در github.com پذیرفته می‌شود."
+                }
+                uri.path.trim('/').split('/').take(2).joinToString("/")
+            }
+            else -> raw
+        }
+        val parts = normalized.split('/')
+        require(parts.size == 2 && parts.all { it.isNotBlank() }) {
+            "مسیر مخزن را به شکل owner/repository یا https://github.com/owner/repository وارد کن."
+        }
+        return parts[0] to parts[1].removeSuffix(".git")
     }
 
     fun save(context: Context, owner: String, repository: String, branch: String, manifestPath: String) {
