@@ -41,6 +41,27 @@ class GitHubManifestPolicyTest {
     }
 
     @Test
+    fun acceptsCompressedCourseBundleManifestEntry() {
+        val compressed = """
+            {
+              "id": "technology-path-index",
+              "title": "مسیر پیشرفت فناوری",
+              "group_name": "مسیر پیشرفت فناوری",
+              "order_num": 0,
+              "path": "content/library/technology-path/complete-course.b64",
+              "format": "json-gzip-base64",
+              "content_hash": "${"a".repeat(64)}",
+              "updated_at": "2026-11-15T00:00:00Z",
+              "schema_version": 1
+            }
+        """.trimIndent()
+        val parsed = GitHubManifestPolicy.parse(manifest("[$compressed]"))
+        assertEquals(1, parsed.size)
+        assertEquals("technology-path-index", parsed.single().id)
+        assertEquals("json-gzip-base64", parsed.single().format)
+    }
+
+    @Test
     fun rejectsUnsupportedManifestSchema() {
         assertThrows(IllegalArgumentException::class.java) {
             GitHubManifestPolicy.parse("""{"schema_version":2,"items":[]}""")
