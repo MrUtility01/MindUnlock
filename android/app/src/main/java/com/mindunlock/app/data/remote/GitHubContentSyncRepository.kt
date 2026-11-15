@@ -432,7 +432,7 @@ class GitHubContentSyncRepository(
             ?: throw IllegalArgumentException("مسیر بخش اول بسته چندقسمتی معتبر نیست.")
         val basePath = match.groupValues[1]
         val partCount = match.groupValues[2].toInt()
-        require(partCount in 1..32) { "تعداد بخش‌های بسته از حد مجاز بیشتر است." }
+        require(partCount in 1..100) { "تعداد بخش‌های بسته از حد مجاز بیشتر است." }
         val combined = StringBuilder()
         for (index in 1..partCount) {
             val suffix = index.toString().padStart(3, '0')
