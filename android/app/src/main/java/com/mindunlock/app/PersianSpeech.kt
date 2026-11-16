@@ -370,7 +370,6 @@ class PersianSpeech(context: Context) {
             check(audio.sampleRate > 0 && audio.samples.isNotEmpty()) { "مدل خروجی صوتی معتبری تولید نکرد." }
             if (closed || !playbackQueue.isCurrent(request)) return
 
-            val pcm = SpeechAudioPcm16.convert(audio.samples)
             val minBuffer = AudioTrack.getMinBufferSize(
                 audio.sampleRate,
                 AudioFormat.CHANNEL_OUT_MONO,
@@ -405,18 +404,29 @@ class PersianSpeech(context: Context) {
             }
             status.value = "در حال پخش: ${voiceOptions.first { it.first == request.voiceId }.second}"
 
-            var offset = 0
-            while (offset < pcm.size) {
+            var sampleOffset = 0
+            while (sampleOffset < audio.samples.size) {
                 if (closed || !playbackQueue.isCurrent(request)) return
-                val length = minOf(4096, pcm.size - offset)
-                val written = track.write(pcm, offset, length, AudioTrack.WRITE_BLOCKING)
-                check(written > 0) { "ارسال صدای تولیدشده به خروجی گوشی ناموفق بود (کد $written)." }
-                offset += written
+                val sampleCount = minOf(4096, audio.samples.size - sampleOffset)
+                val pcmChunk = SpeechAudioPcm16.convert(audio.samples, sampleOffset, sampleCount)
+                var chunkOffset = 0
+                while (chunkOffset < pcmChunk.size) {
+                    if (closed || !playbackQueue.isCurrent(request)) return
+                    val written = track.write(
+                        pcmChunk,
+                        chunkOffset,
+                        pcmChunk.size - chunkOffset,
+                        AudioTrack.WRITE_BLOCKING
+                    )
+                    check(written > 0) { "ارسال صدای تولیدشده به خروجی گوشی ناموفق بود (کد $written)." }
+                    chunkOffset += written
+                }
+                sampleOffset += sampleCount
             }
 
             while (!closed && playbackQueue.isCurrent(request) &&
                 track.playState == AudioTrack.PLAYSTATE_PLAYING &&
-                track.playbackHeadPosition < pcm.size
+                track.playbackHeadPosition < audio.samples.size
             ) {
                 Thread.sleep(40)
             }
@@ -488,9 +498,18 @@ class PersianSpeech(context: Context) {
 
 /** Converts sherpa-onnx float output to the broadly supported PCM16 AudioTrack format. */
 internal object SpeechAudioPcm16 {
-    fun convert(samples: FloatArray): ShortArray = ShortArray(samples.size) { index ->
-        val sample = samples[index].let { if (it.isFinite()) it.coerceIn(-1f, 1f) else 0f }
-        val scale = if (sample < 0f) 32768f else 32767f
-        (sample * scale).roundToInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
+    fun convert(samples: FloatArray): ShortArray = convert(samples, 0, samples.size)
+
+    fun convert(samples: FloatArray, offset: Int, length: Int): ShortArray {
+        require(offset >= 0 && length >= 0 && offset + length <= samples.size) {
+            "بازه نمونه‌های صوتی معتبر نیست."
+        }
+        return ShortArray(length) { index ->
+            val raw = samples[offset + index]
+            val sample = if (raw.isFinite()) raw.coerceIn(-1f, 1f) else 0f
+            val scale = if (sample < 0f) 32768f else 32767f
+            (sample * scale).roundToInt()
+                .coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
+        }
     }
 }
