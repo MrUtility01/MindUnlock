@@ -18,4 +18,10 @@ class SpeechAudioPcm16Test {
         val result = SpeechAudioPcm16.convert(floatArrayOf(-2f, 2f, Float.NaN, Float.POSITIVE_INFINITY))
         assertArrayEquals(shortArrayOf(Short.MIN_VALUE, Short.MAX_VALUE, 0, 0), result)
     }
+
+    @Test
+    fun convertsOnlyRequestedChunk() {
+        val result = SpeechAudioPcm16.convert(floatArrayOf(-1f, -0.5f, 0.5f, 1f), 1, 2)
+        assertArrayEquals(shortArrayOf(-16384, 16384), result)
+    }
 }
