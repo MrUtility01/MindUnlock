@@ -177,8 +177,10 @@ fun KnowledgeArchiveScreen(db: AppDatabase, speech: PersianSpeech, onOpenItem: (
     val selectedType = when (kind) {
         "درس" -> "lesson"
         "سؤال" -> "question"
+        "آزمون" -> "exam"
         "فلش‌کارت" -> "flashcard"
         "آزمایشگاه" -> "lab"
+        "تمرین" -> "exercise"
         "دستور" -> "command"
         "مثال" -> "example"
         "یادداشت" -> "note"
@@ -716,8 +718,8 @@ fun ChapterContentScreen(db: AppDatabase, chapterId: String, onItemClick: (Strin
     val chapters by db.chapterDao().observeAll().collectAsState(initial = emptyList())
     val chapter = chapters.firstOrNull { it.id == chapterId }
     var query by rememberSaveable(chapterId) { mutableStateOf("") }
-    var kind by rememberSaveable(chapterId) { mutableStateOf("همه") }
-    val kindOptions = listOf("همه", "درس", "سؤال", "فلش‌کارت", "آزمایشگاه", "دستور", "مثال", "یادداشت")
+    var kind by rememberSaveable(chapterId) { mutableStateOf("مطالب اصلی") }
+    val kindOptions = listOf("مطالب اصلی", "همه", "درس", "سؤال", "آزمون", "فلش‌کارت", "آزمایشگاه", "تمرین", "دستور", "مثال", "نکته", "عیب‌یابی", "چک‌لیست", "پروژه", "واژه‌نامه", "مرجع", "قالب‌ها", "یادداشت")
     val selectedType = when (kind) {
         "درس" -> "lesson"
         "سؤال" -> "question"
@@ -726,6 +728,17 @@ fun ChapterContentScreen(db: AppDatabase, chapterId: String, onItemClick: (Strin
         "دستور" -> "command"
         "مثال" -> "example"
         "یادداشت" -> "note"
+        "نکته" -> "tip"
+        "عیب‌یابی" -> "troubleshooting"
+        "پروژه" -> "project"
+        "چک‌لیست" -> "checklist"
+        "واژه‌نامه" -> "glossary"
+        "مرجع" -> "reference"
+        else -> ""
+    }
+    val selectedSourceStatus = when (kind) {
+        "مطالب اصلی" -> "verified"
+        "قالب‌ها" -> "draft"
         else -> ""
     }
     val loadedItems = remember(chapterId) { mutableStateListOf<ContentItemListEntry>() }
@@ -737,14 +750,14 @@ fun ChapterContentScreen(db: AppDatabase, chapterId: String, onItemClick: (Strin
     val scope = rememberCoroutineScope()
     val pageSize = 30
 
-    LaunchedEffect(chapterId, selectedType, query, lessonLoadAttempt) {
+    LaunchedEffect(chapterId, selectedType, selectedSourceStatus, query, lessonLoadAttempt) {
         loading = true
         loadedItems.clear()
         lessonLoadError = ""
         try {
             val normalizedQuery = query.trim()
-            totalCount = db.contentItemDao().getChapterFilteredCount(chapterId, selectedType, normalizedQuery)
-            val firstPage = db.contentItemDao().getChapterPage(chapterId, selectedType, normalizedQuery, pageSize, 0)
+            totalCount = db.contentItemDao().getChapterFilteredCount(chapterId, selectedType, normalizedQuery, selectedSourceStatus)
+            val firstPage = db.contentItemDao().getChapterPage(chapterId, selectedType, normalizedQuery, pageSize, 0, selectedSourceStatus)
             loadedItems.addAll(firstPage)
         } catch (error: kotlinx.coroutines.CancellationException) {
             throw error
@@ -791,7 +804,7 @@ fun ChapterContentScreen(db: AppDatabase, chapterId: String, onItemClick: (Strin
                                 try {
                                     val normalizedQuery = query.trim()
                                     val nextPage = db.contentItemDao().getChapterPage(
-                                        chapterId, selectedType, normalizedQuery, pageSize, loadedItems.size
+                                        chapterId, selectedType, normalizedQuery, pageSize, loadedItems.size, selectedSourceStatus
                                     )
                                     loadedItems.addAll(nextPage)
                                 } catch (error: kotlinx.coroutines.CancellationException) {
@@ -820,7 +833,7 @@ private fun ContentItemCard(item: ContentItemListEntry, onClick: () -> Unit) {
         Column(Modifier.fillMaxWidth().padding(13.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(kindLabel(item.type), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall)
-                if (item.sourceStatus != "verified") Text("غیرقابل مطالعه", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall)
+                if (item.sourceStatus != "verified") Text("قالب / نیازمند تکمیل", color = MaterialTheme.colorScheme.tertiary, style = MaterialTheme.typography.labelSmall)
             }
             Text(item.title ?: "بدون عنوان", fontWeight = FontWeight.SemiBold)
             if (!item.summary.isNullOrBlank()) Text(item.summary, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
@@ -942,12 +955,10 @@ fun ReaderScreen(db: AppDatabase, userDb: UserDatabase, itemUid: String, speech:
             LabScenarioReaderPanel(item = current, details = labDetails, userDb = userDb, speech = speech, preferences = preferences)
         }
         if (!current.content.isNullOrBlank()) {
-                Text(
-                    cleanHtml(current.content),
+                GrowthMarkdownContent(
+                    source = current.content,
                     modifier = Modifier.padding(horizontal = readingHorizontalMargin.dp),
-                    style = MaterialTheme.typography.bodyLarge.copy(
-                        lineHeight = MaterialTheme.typography.bodyLarge.fontSize * readingLineSpacing
-                    )
+                    lineSpacing = readingLineSpacing
                 )
             }
         if (imageRefs.isNotEmpty() && localImages.isEmpty()) Text("تصاویر این مطلب در همگام‌سازی موجود نبودند؛ فصل را دوباره از ویندوز دریافت کن.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
@@ -986,7 +997,10 @@ fun ReaderScreen(db: AppDatabase, userDb: UserDatabase, itemUid: String, speech:
                     }) { Text("بررسی پاسخ") }
                     if (answerMessage.isNotBlank()) Text(answerMessage, color = MaterialTheme.colorScheme.primary)
                     if (answerVisible || answerMessage.isNotBlank()) metadata?.get("explanation")?.let { Text("توضیح: ${it.asString}") }
-                } else Text("گزینه‌ای برای این سؤال ثبت نشده است.")
+                } else if (!current.answer.isNullOrBlank()) {
+                    Text("پاسخ", fontWeight = FontWeight.Bold)
+                    Text(cleanHtml(current.answer.orEmpty()))
+                }
             }
             "flashcard" -> {
                 val back = metadata?.get("back")?.let { runCatching { it.asString }.getOrNull() }.orEmpty().ifBlank { current.summary ?: current.content.orEmpty() }
@@ -1646,7 +1660,7 @@ fun NotesScreen(userDb: UserDatabase, speech: PersianSpeech) {
 
 @Composable
 fun LabsScreen(db: AppDatabase, userDb: UserDatabase, speech: PersianSpeech, onOpenItem: (String) -> Unit) {
-    val content by db.contentItemDao().observeByTypes(listOf("lab", "command", "example", "exercise", "practice", "project")).collectAsState(initial = emptyList())
+    val content by db.contentItemDao().observeByTypes(listOf("lab", "command", "example", "exercise", "practice", "project", "troubleshooting", "checklist")).collectAsState(initial = emptyList())
     val tasks by userDb.studyTaskDao().observeAll().collectAsState(initial = emptyList())
     val progress by userDb.progressDao().observeAll().collectAsState(initial = emptyList())
     var selected by rememberSaveable { mutableStateOf("همه") }
@@ -3304,8 +3318,136 @@ private fun kindLabel(kind: String?): String = when (kind?.lowercase(Locale.ROOT
     "project" -> "پروژه"
     "example" -> "مثال"
     "note" -> "یادداشت"
+    "tip" -> "نکته"
+    "troubleshooting" -> "عیب‌یابی"
+    "checklist" -> "چک‌لیست"
+    "glossary" -> "واژه‌نامه"
+    "reference" -> "مرجع"
     "asset" -> "رسانه"
     else -> kind ?: "مطلب"
+}
+
+private data class GrowthMarkdownBlock(val kind: String, val text: String, val level: Int = 0)
+
+private fun parseGrowthMarkdown(source: String): List<GrowthMarkdownBlock> {
+    val result = mutableListOf<GrowthMarkdownBlock>()
+    val paragraph = mutableListOf<String>()
+    val lines = source.replace("\r\n", "\n").replace('\r', '\n').lines()
+    fun flushParagraph() {
+        if (paragraph.isNotEmpty()) {
+            result += GrowthMarkdownBlock("paragraph", paragraph.joinToString(" ").trim())
+            paragraph.clear()
+        }
+    }
+    var code = false
+    val codeLines = mutableListOf<String>()
+    for (line in lines) {
+        val trimmed = line.trim()
+        if (trimmed.startsWith("```") || trimmed.startsWith("~~~")) {
+            flushParagraph()
+            if (code) {
+                result += GrowthMarkdownBlock("code", codeLines.joinToString("\n"))
+                codeLines.clear()
+                code = false
+            } else code = true
+            continue
+        }
+        if (code) {
+            codeLines += line
+            continue
+        }
+        if (trimmed.isBlank()) {
+            flushParagraph()
+            continue
+        }
+        val heading = Regex("^(#{1,6})\\s+(.+)$").matchEntire(trimmed)
+        if (heading != null) {
+            flushParagraph()
+            result += GrowthMarkdownBlock("heading", heading.groupValues[2], heading.groupValues[1].length)
+            continue
+        }
+        if (trimmed.matches(Regex("^([-*_])\\1{2,}$"))) {
+            flushParagraph()
+            result += GrowthMarkdownBlock("divider", "")
+            continue
+        }
+        val bullet = Regex("^\\s*[-*+]\\s+(.+)$").matchEntire(line)
+        if (bullet != null) {
+            flushParagraph()
+            result += GrowthMarkdownBlock("bullet", bullet.groupValues[1])
+            continue
+        }
+        val numbered = Regex("^\\s*\\d+[.)]\\s+(.+)$").matchEntire(line)
+        if (numbered != null) {
+            flushParagraph()
+            result += GrowthMarkdownBlock("numbered", numbered.groupValues[1])
+            continue
+        }
+        val quote = Regex("^\\s*>\\s?(.*)$").matchEntire(line)
+        if (quote != null) {
+            flushParagraph()
+            result += GrowthMarkdownBlock("quote", quote.groupValues[1])
+            continue
+        }
+        paragraph += trimmed
+    }
+    flushParagraph()
+    if (codeLines.isNotEmpty()) result += GrowthMarkdownBlock("code", codeLines.joinToString("\n"))
+    return result
+}
+
+@Composable
+private fun GrowthMarkdownContent(source: String, modifier: Modifier = Modifier, lineSpacing: Float = 1.45f) {
+    val blocks = remember(source) { parseGrowthMarkdown(source) }
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+        blocks.forEachIndexed { index, block ->
+            when (block.kind) {
+                "heading" -> Text(
+                    cleanHtml(block.text),
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                    style = when (block.level) {
+                        1 -> MaterialTheme.typography.titleLarge
+                        2 -> MaterialTheme.typography.titleMedium
+                        3 -> MaterialTheme.typography.titleSmall
+                        else -> MaterialTheme.typography.bodyLarge
+                    },
+                    modifier = Modifier.padding(top = if (index == 0) 0.dp else 8.dp)
+                )
+                "code" -> Surface(
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    shape = MaterialTheme.shapes.medium,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        block.text,
+                        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(12.dp),
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                        style = MaterialTheme.typography.bodySmall,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Start
+                    )
+                }
+                "bullet", "numbered" -> Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Text(if (block.kind == "bullet") "•" else "${index + 1}.", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                    Text(cleanHtml(block.text), modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge.copy(lineHeight = MaterialTheme.typography.bodyLarge.fontSize * lineSpacing))
+                }
+                "quote" -> Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = MaterialTheme.shapes.small) {
+                    Text(cleanHtml(block.text), modifier = Modifier.fillMaxWidth().padding(10.dp), style = MaterialTheme.typography.bodyMedium)
+                }
+                "divider" -> HorizontalDivider()
+                else -> Text(
+                    cleanHtml(block.text),
+                    style = MaterialTheme.typography.bodyLarge.copy(
+                        lineHeight = MaterialTheme.typography.bodyLarge.fontSize * lineSpacing
+                    )
+                )
+            }
+        }
+    }
 }
 
 private fun cleanHtml(value: String): String = Html.fromHtml(value, Html.FROM_HTML_MODE_COMPACT).toString()

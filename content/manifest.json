@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-11-16T20:20:35Z",
+  "generated_at": "2026-11-16T20:38:07Z",
   "items": [
     {
       "id": "technology-path-index",
@@ -9,8 +9,8 @@
       "order_num": 0,
       "path": "content/library/growth-path/complete-course.part-001-of-004.b64",
       "format": "json-gzip-base64-multipart",
-      "content_hash": "ad4381ef279025312d6f1642a41c13c0de357615086f9813fb3c408f992c4702",
-      "updated_at": "2026-11-16T20:20:35Z",
+      "content_hash": "7cfd3902629b0633c228a6eb34c968294a1400d3d409bff3b35d51cbacf28a28",
+      "updated_at": "2026-11-16T20:38:07Z",
       "schema_version": 1
     },
     {

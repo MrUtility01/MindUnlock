@@ -6,11 +6,16 @@ on:
       - main
       - feature/growth-path-course-import
       - fix/growth-path-import-schema
+      - fix/growth-path-learning-structure
     paths:
       - .github/workflows/build-growth-path.yml
       - .github/scripts/build_growth_path.py
       - MindUnlock_IT_Joplin_FA_v13_Deep_Integrated_Troubleshooting_Cisco_MikroTik_Issabel_ESXi.zip
   workflow_dispatch:
+
+concurrency:
+  group: growth-path-conversion-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: write
@@ -63,6 +68,7 @@ jobs:
             echo "No generated changes to commit."
           else
             git commit -m "feat(content): add مسیر رشد Joplin course"
+            git pull --rebase origin "$GITHUB_REF_NAME"
             git push
           fi
 

@@ -33,12 +33,76 @@ def extra_type(rel,suffix):
     if "پروژه" in n: return "project"
     return "lesson"
 
+def classify_content_kind(rel,title,content,source_type):
+    identity=(Path(rel).stem+" "+title).casefold()
+    patterns=[
+        ("question",r"سؤال|سوال|پرسش|question|quiz|q[ ]*&[ ]*a"),
+        ("exam",r"آزمون|امتحان|ارزیابی|exam|test"),
+        ("lab",r"آزمایشگاه|لابراتوار|lab|کارگاه عملی|سناریوی عملی"),
+        ("troubleshooting",r"عیب.?یابی|رفع.?اشکال|troubleshoot|runbook|incident"),
+        ("checklist",r"چک.?لیست|checklist|pre.?flight"),
+        ("tip",r"نکته|ترفند|best.?practice|tips?"),
+        ("command",r"دستور(?:ات)?|فرمان|command|cli|terminal"),
+        ("example",r"مثال|نمونه|example|نمونه.?پیکربندی"),
+        ("exercise",r"تمرین|exercise|practice|کار.?عملی"),
+        ("project",r"پروژه|project|تحویل.?واقعی"),
+        ("glossary",r"واژه.?نامه|اصطلاحات|glossary"),
+        ("reference",r"مرجع|reference|cheat.?sheet"),
+    ]
+    for kind,pattern in patterns:
+        if re.search(pattern,identity,re.I): return kind
+    source=str(source_type or "").casefold()
+    if source in ("todo","task","2"): return "checklist"
+    if source in ("code","script"): return "command"
+    return "lesson" if content.strip() else "note"
+
+def split_markdown_sections(title,content):
+    headings=list(re.finditer(r"(?m)^(#{1,6})[ \t]+(.+?)[ \t]*$",content))
+    category_pattern=r"سؤال|سوال|پرسش|question|quiz|آزمون|امتحان|exam|آزمایشگاه|لابراتوار|lab|سناریوی عملی|عیب.?یابی|رفع.?اشکال|troubleshoot|runbook|چک.?لیست|checklist|نکته|ترفند|best.?practice|دستور(?:ات)?|فرمان|command|cli|مثال|نمونه|example|تمرین|exercise|practice|پروژه|project|واژه.?نامه|اصطلاحات|glossary|مرجع|reference"
+    selected=[match for match in headings if re.search(category_pattern,match.group(2),re.I)]
+    if not selected: return [(title,content,0)]
+    sections=[]
+    prefix=content[:selected[0].start()].strip()
+    if prefix:
+        sections.append((title+" — محتوای اصلی",prefix,0))
+    for index,match in enumerate(selected):
+        end=selected[index+1].start() if index+1<len(selected) else len(content)
+        block=content[match.start():end]
+        sections.append((match.group(2).strip(),block,len(match.group(1))))
+    return sections
+
+
+def extract_scenario_metadata(content):
+    matches=list(re.finditer(r"(?m)^#{1,6}[ \t]+(.+?)[ \t]*$",content))
+    sections={}
+    for index,match in enumerate(matches):
+        end=matches[index+1].start() if index+1<len(matches) else len(content)
+        sections[match.group(1).strip().casefold()]=content[match.end():end].strip()
+    def find(pattern):
+        for heading,body in sections.items():
+            if re.search(pattern,heading,re.I) and body:
+                return body
+        return ""
+    def values(pattern):
+        value=find(pattern)
+        return [re.sub(r"^(?:[-*+] |[0-9]+[.)] )","",line).strip() for line in value.splitlines() if line.strip()]
+    result={}
+    scalar_fields={"goal":r"هدف|objective","topology":r"توپولوژی|ساختار شبکه|topology"}
+    list_fields={"prerequisites":r"پیش.?نیاز|قبل از شروع|prerequisite","equipment":r"تجهیزات|سخت.?افزار|equipment","services":r"سرویس.?ها|services","commands":r"مراحل|دستورات|فرمان.?ها|commands|procedure","expected_output":r"خروجی مورد انتظار|نتیجه مورد انتظار|اعتبارسنجی|expected","troubleshooting":r"عیب.?یابی|خطاهای رایج|troubleshooting","questions":r"سوالات|سؤالات|پرسش.?ها|questions","question_answers":r"پاسخ.?ها|جواب.?ها|answers"}
+    for key,pattern in scalar_fields.items():
+        value=find(pattern)
+        if value: result[key]=value
+    for key,pattern in list_fields.items():
+        value=values(pattern)
+        if value: result[key]=value
+    return result
+
 def main():
     if not ROOT.is_dir() or not IMPORTER.is_dir(): raise SystemExit("Joplin source folders were not extracted.")
     src_manifest=json.loads((ROOT/"MANIFEST.json").read_text(encoding="utf-8"))
     src_by_path={x["path"]:x for x in src_manifest}
     files=sorted([p for p in ROOT.rglob("*") if p.is_file()]+[p for p in IMPORTER.rglob("*") if p.is_file()])
-    groups=defaultdict(list); md_count=0; substantial=0
+    groups=defaultdict(list); md_count=0; substantial=0; draft_count=0; category_counts=defaultdict(int)
     for p in files:
         rel=p.relative_to(ROOT).as_posix() if p.is_relative_to(ROOT) else "joplin_importer/"+p.relative_to(IMPORTER).as_posix()
         ext=p.suffix.lower(); entry=src_by_path.get(rel); kind,key,domain,sub=group_for(rel); data=p.read_bytes()
@@ -54,6 +118,8 @@ def main():
                 title=next((x.strip().lstrip("#").strip() for x in t.splitlines() if x.strip()),p.stem)[:180]
         meta={"source_path":rel,"source_uid":uid,"source_type":typ,"source_format":ext.lstrip(".") or "binary","language":"fa" if ext in (".md",".csv",".json",".py") else "und","import_origin":"Joplin Markdown Directory export"}
         if entry: meta.update({"source_manifest_type":entry["type"],"stable_id":entry["id"]})
+        content_kind=typ
+        source_status="verified"
         if ext in (".md",".csv",".json",".py"):
             content=data.decode("utf-8-sig",errors="replace")
             if ext==".md":
@@ -64,14 +130,41 @@ def main():
                 stripped=re.sub(r"(?m)^\s*\|.*\|\s*$","",stripped)
                 stripped=re.sub(r"<!--.*?-->","",stripped,flags=re.S)
                 meaningful=re.sub(r"[\s*_>#|\-]","",stripped)
-                meta["content_completeness"]="substantive" if len(meaningful)>500 else "scaffold_or_short"
-                if len(meaningful)>500: substantial+=1
+                content_kind=classify_content_kind(rel,title,content,typ)
+                is_substantive=len(meaningful)>180
+                meta["content_completeness"]="substantive" if is_substantive else "scaffold_or_short"
+                meta["content_kind"]=content_kind
+                scenario=extract_scenario_metadata(content)
+                if scenario: meta["scenario"]=scenario
+                if is_substantive: substantial+=1
+                source_status="verified" if is_substantive or (content_kind not in ("lesson","note") and len(meaningful)>80) else "draft"
+                meta["review_status"]="ready" if source_status=="verified" else "template_or_incomplete"
         else:
             ASSETS.mkdir(parents=True,exist_ok=True); shutil.copy2(p,ASSETS/p.name)
             asset="content/library/growth-path/assets/"+p.name
             meta.update({"asset_mime_type":mimetypes.guess_type(p.name)[0] or "application/octet-stream","asset_size_bytes":len(data),"asset_sha256":sha(data),"asset_path":asset})
             content=f"![{p.name}](https://raw.githubusercontent.com/MrUtility01/MindUnlock/main/{asset})\n\nفایل تصویری اصلی در مخزن دوره نگهداری می‌شود."
-        groups[(kind,key)].append((rel,{"source_uid":uid,"type":typ,"title":title,"content":content,"order":0,"metadata":meta}))
+        source_items=[]
+        if ext==".md":
+            sections=split_markdown_sections(title,content)
+            for section_index,(section_heading,section_content,section_level) in enumerate(sections):
+                section_kind=classify_content_kind(rel+" "+section_heading,section_heading,section_content,typ)
+                section_plain=re.sub(r"(?m)^#{1,6}.*$","",section_content)
+                section_plain=re.sub(r"<!--.*?-->","",section_plain,flags=re.S)
+                section_meaningful=re.sub(r"[\s*_>#|\-]","",section_plain)
+                section_status="verified" if len(section_meaningful)>180 or (section_kind not in ("lesson","note") and len(section_meaningful)>80) else "draft"
+                section_meta=dict(meta)
+                section_meta.update({"content_kind":section_kind,"section_index":section_index+1,"section_heading":section_heading,"section_level":section_level,"source_note_title":title,"review_status":"ready" if section_status=="verified" else "template_or_incomplete","content_completeness":"substantive" if len(section_meaningful)>180 else "scaffold_or_short"})
+                section_uid=uid if section_index==0 else uid+"-section-"+str(section_index+1).zfill(3)
+                section_title=title if len(sections)==1 or section_heading.casefold()==title.casefold() else title+" — "+section_heading
+                source_items.append((section_uid,section_kind,section_title,section_content,section_status,section_meta,section_index))
+                category_counts[section_kind]+=1
+                if section_status=="draft": draft_count+=1
+        else:
+            source_items.append((uid,content_kind or "note",title,content,source_status,meta,0))
+        for section_uid,section_kind,section_title,section_content,section_status,section_meta,section_index in source_items:
+            row_path=rel+"#"+str(section_index).zfill(4)
+            groups[(kind,key)].append((row_path,{"source_uid":section_uid,"type":section_kind or "note","source_status":section_status,"title":section_title,"content":section_content,"order":0,"metadata":section_meta}))
     packages=[]
     def add(key,title,group,order,rows,desc):
         rows.sort(key=lambda x:natural(x[0])); items=[]
@@ -90,14 +183,14 @@ def main():
     add("operations","پروژه جامع عملیاتی Issabel، Cisco و MikroTik","پروژه‌های عملیاتی",74,groups.get(("operations","operations"),[]),"پروژه عملیاتی یکپارچه شبکه و تلفن سازمانی؛ هشدارهای ایمنی منبع حفظ شده‌اند.")
     add("field-appendix","پیوست تحویل واقعی و پروژه حسابداری پدیده","پروژه‌های میدانی",75,groups.get(("appendix","appendix"),[]),"پیوست‌های کشف و تحویل زیرساخت، تصاویر، شواهد، ESXi، MikroTik، Cisco، Issabel و Runbook.")
     items=[it for pkg in packages for it in pkg["items"]]
-    if len(packages)!=75 or len(items)!=len(files): raise SystemExit(f"Count mismatch: packages={len(packages)}, items={len(items)}, files={len(files)}")
+    if len(packages)!=75 or len(items)<len(files): raise SystemExit(f"Count mismatch: packages={len(packages)}, items={len(items)}, files={len(files)}")
     if len({x["source_uid"] for x in items})!=len(items): raise SystemExit("Duplicate source_uid")
     if md_count!=2804: raise SystemExit(f"Unexpected Markdown count: {md_count}")
     now=datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00","Z")
     bundle={"schema_version":1,"course":{"id":"technology-path","title":"مسیر رشد","language":"fa","description":"تبدیل وفادار ساختار Joplin به بسته‌های بومی MindUnlock؛ متن منبع بدون بازنویسی حفظ شده و وضعیت تکمیل هر یادداشت در metadata مشخص است.","source":"MindUnlock_IT_Joplin_Knowledge_Base_FA","source_format":"Joplin Markdown Directory ZIP","domain_count":16,"numbered_chapter_count":68,"supplemental_specialty_count":3},"domain_count":16,"numbered_chapter_count":68,"supplemental_specialty_count":3,"package_count":75,"content_item_count":len(items),"packages":packages}
     raw=json.dumps(bundle,ensure_ascii=False,separators=(",",":")).encode("utf-8")
     encoded=base64.b64encode(gzip.compress(raw,compresslevel=9,mtime=0)).decode("ascii")
-    if len(encoded.encode())>=1_000_000: raise SystemExit(f"Bundle exceeds app limit: {len(encoded)}")
+    if len(encoded.encode())>=2_000_000: raise SystemExit(f"Bundle exceeds app limit: {len(encoded)}")
     n=4; size=math.ceil(len(encoded)/n); LIB.mkdir(parents=True,exist_ok=True)
     for old in LIB.glob("complete-course.part-*.b64"): old.unlink()
     for i in range(n):
@@ -145,6 +238,9 @@ def main():
 - فایل‌های Markdown: {md_count}
 - رکوردهای Manifest اصلی Joplin: {len(src_manifest)}
 - یادداشت‌های دارای متن نسبتاً پرحجم: {substantial}
+- آیتم‌های آماده مطالعه: {len([it for it in items if it.get("source_status")=="verified"])}
+- قالب‌ها/یادداشت‌های نیازمند تکمیل: {draft_count}
+- دسته‌بندی خودکار: {json.dumps(dict(sorted(category_counts.items())),ensure_ascii=False)}
 - بسته‌ها: {len(packages)} (۶۸ فصل، ۳ تخصص و ۴ بسته راهنما/حوزه/پروژه)
 - آیتم‌ها: {len(items)}
 - اندازه JSON بازشده: {len(raw):,} بایت

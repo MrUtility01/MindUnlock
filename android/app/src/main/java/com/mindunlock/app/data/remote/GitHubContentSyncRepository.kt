@@ -605,8 +605,8 @@ class GitHubContentSyncRepository(
         const val GITHUB_BUNDLE_CHAPTER_PREFIX = "github_technology-path-"
         private const val PREFS = "github_content_sync_v1"
         private const val MAX_MANIFEST_BYTES = 1_000_000
-        private const val MAX_CONTENT_BYTES = 1_000_000
-        private const val MAX_BUNDLE_UNCOMPRESSED_BYTES = 25_000_000
+        private const val MAX_CONTENT_BYTES = 2_000_000
+        private const val MAX_BUNDLE_UNCOMPRESSED_BYTES = 40_000_000
         private const val MAX_COURSE_PACKAGES = 100
     }
 }
