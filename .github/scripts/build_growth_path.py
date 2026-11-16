@@ -61,7 +61,7 @@ def main():
     src_manifest=json.loads((ROOT/"MANIFEST.json").read_text(encoding="utf-8"))
     src_by_path={x["path"]:x for x in src_manifest}
     files=sorted([p for p in ROOT.rglob("*") if p.is_file()]+[p for p in IMPORTER.rglob("*") if p.is_file()])
-    groups=defaultdict(list); md_count=0; substantial=0
+    groups=defaultdict(list); md_count=0; substantial=0; draft_count=0; category_counts=defaultdict(int)
     for p in files:
         rel=p.relative_to(ROOT).as_posix() if p.is_relative_to(ROOT) else "joplin_importer/"+p.relative_to(IMPORTER).as_posix()
         ext=p.suffix.lower(); entry=src_by_path.get(rel); kind,key,domain,sub=group_for(rel); data=p.read_bytes()
@@ -96,6 +96,8 @@ def main():
                 if is_substantive: substantial+=1
                 source_status="verified" if is_substantive or (content_kind not in ("lesson","note") and len(meaningful)>80) else "draft"
                 meta["review_status"]="ready" if source_status=="verified" else "template_or_incomplete"
+                category_counts[content_kind]+=1
+                if source_status=="draft": draft_count+=1
         else:
             ASSETS.mkdir(parents=True,exist_ok=True); shutil.copy2(p,ASSETS/p.name)
             asset="content/library/growth-path/assets/"+p.name
@@ -175,6 +177,9 @@ def main():
 - فایل‌های Markdown: {md_count}
 - رکوردهای Manifest اصلی Joplin: {len(src_manifest)}
 - یادداشت‌های دارای متن نسبتاً پرحجم: {substantial}
+- آیتم‌های آماده مطالعه: {len([it for it in items if it.get("source_status")=="verified"])}
+- قالب‌ها/یادداشت‌های نیازمند تکمیل: {draft_count}
+- دسته‌بندی خودکار: {json.dumps(dict(sorted(category_counts.items())),ensure_ascii=False)}
 - بسته‌ها: {len(packages)} (۶۸ فصل، ۳ تخصص و ۴ بسته راهنما/حوزه/پروژه)
 - آیتم‌ها: {len(items)}
 - اندازه JSON بازشده: {len(raw):,} بایت
