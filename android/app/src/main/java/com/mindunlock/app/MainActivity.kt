@@ -258,7 +258,8 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onPause() {
-        if (::speech.isInitialized) speech.stop()
+        if (::speech.isInitialized) speech.stop(showStatus = false)
+        CrashDiagnostics.markLaunchBackgrounded(this)
         super.onPause()
     }
 
