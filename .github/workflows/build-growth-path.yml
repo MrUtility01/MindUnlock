@@ -3,6 +3,7 @@ name: Build native Growth Path course
 on:
   push:
     branches:
+      - main
       - feature/growth-path-course-import
       - fix/growth-path-import-schema
     paths:
