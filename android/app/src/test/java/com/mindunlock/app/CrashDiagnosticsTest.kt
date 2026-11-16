@@ -47,6 +47,28 @@ class CrashDiagnosticsTest {
     }
 
     @Test
+    fun backgroundingBeforeFirstFrameDoesNotForceRecoveryOnNextLaunch() {
+        assertFalse(CrashDiagnostics.beginLaunch(context))
+
+        CrashDiagnostics.markLaunchBackgrounded(context)
+
+        assertFalse(CrashDiagnostics.beginLaunch(context))
+    }
+
+    @Test
+    fun aRecordedCrashStillRequiresRecoveryAfterBackgrounding() {
+        assertFalse(CrashDiagnostics.beginLaunch(context))
+        CrashDiagnostics.markLaunchBackgrounded(context)
+        CrashDiagnostics.recordStartupFailure(
+            context,
+            "MainActivity.onCreate",
+            IllegalStateException("crash after background")
+        )
+
+        assertTrue(CrashDiagnostics.beginLaunch(context))
+    }
+
+    @Test
     fun recoveryActivityRendersWithoutOpeningApplicationDatabases() {
         val controller = Robolectric.buildActivity(StartupRecoveryActivity::class.java).setup()
 
