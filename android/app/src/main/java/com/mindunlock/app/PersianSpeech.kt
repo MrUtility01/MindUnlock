@@ -183,8 +183,8 @@ class PersianSpeech(context: Context) {
     private fun downloadAndExtract(spec: ModelSpec, destination: File) {
         val archive = File(appContext.cacheDir, spec.directory + ".tar.bz2")
         val partial = File(appContext.cacheDir, spec.directory + ".tar.bz2.part")
-        archive.delete()
-        partial.delete()
+        if (archive.isFile && archive.length() != spec.archiveBytes) archive.delete()
+        if (partial.exists() && partial.length() > spec.archiveBytes) partial.delete()
         downloadProgress.value = 0f
         downloadedBytes.value = 0L
         status.value = "در حال اتصال به سرور دریافت مدل…"
@@ -240,49 +240,56 @@ class PersianSpeech(context: Context) {
     }
 
     private fun downloadArchiveWithFallback(spec: ModelSpec, archive: File, partial: File) {
-        val mirrors = SpeechDownloadMirrors.candidates(
-            appContext,
-            SpeechMirrorSource.GITHUB_RELEASE,
-            spec.archive
-        )
+        if (archive.isFile && archive.length() == spec.archiveBytes) return
+        val sources = SpeechDownloadMirrors.candidates(appContext, SpeechMirrorSource.GITHUB_RELEASE, spec.archive)
         val failures = mutableListOf<String>()
-        check(mirrors.isNotEmpty()) { "میروری برای دریافت مدل گفتار تنظیم نشده است." }
-
-        for ((index, mirror) in mirrors.withIndex()) {
-            archive.delete()
-            partial.delete()
-            downloadedBytes.value = 0L
-            downloadProgress.value = 0f
-            val connection = (URL(mirror.url).openConnection() as HttpURLConnection).apply {
+        check(sources.isNotEmpty()) { "منبع اصلی یا هیچ میروری برای دریافت مدل گفتار در دسترس نیست." }
+        for ((index, source) in sources.withIndex()) {
+            val offset = partial.length().takeIf { it in 1 until spec.archiveBytes } ?: 0L
+            if (offset == 0L && partial.exists()) partial.delete()
+            downloadedBytes.value = offset
+            downloadProgress.value = (offset.toFloat() / spec.archiveBytes.toFloat()).coerceIn(0f, 1f)
+            val connection = (URL(source.url).openConnection() as HttpURLConnection).apply {
                 connectTimeout = 20_000
-                readTimeout = 500_000
+                readTimeout = 600_000
                 instanceFollowRedirects = true
                 requestMethod = "GET"
-                setRequestProperty("User-Agent", "MindUnlock-Android/0.6.28")
+                setRequestProperty("User-Agent", "MindUnlock-Android/0.6.32")
                 setRequestProperty("Accept", "application/octet-stream")
+                if (offset > 0L) setRequestProperty("Range", "bytes=$offset-")
             }
             try {
-                DownloadAuditLog.record(appContext, "TTS", "attempt=${index + 1}/${mirrors.size} host=${mirror.label} file=${spec.model}")
-                status.value = "آزمایش میرور ${index + 1} از ${mirrors.size}: ${mirror.label}"
+                val role = if (index == 0) "primary_github" else "fallback_mirror"
+                DownloadAuditLog.record(appContext, "TTS", "attempt=${index + 1}/${sources.size} role=$role host=${source.label} file=${spec.model} resume=$offset")
+                status.value = if (index == 0) "آزمایش منبع اصلی GitHub برای دریافت ${spec.model}…" else "منبع اصلی ناموفق بود؛ آزمایش Mirror ${index} از ${sources.lastIndex}: ${source.label}"
                 connection.connect()
                 val response = connection.responseCode
-                check(response in 200..299) { "پاسخ HTTP $response" }
+                check(response == HttpURLConnection.HTTP_OK || response == HttpURLConnection.HTTP_PARTIAL) { "پاسخ HTTP $response" }
                 val contentType = connection.contentType.orEmpty().lowercase(java.util.Locale.US)
-                check(!contentType.contains("text/html")) {
-                    "میرور به‌جای آرشیو مدل، صفحه HTML برگرداند."
-                }
-
-                val announcedLength = connection.contentLengthLong
-                if (announcedLength > 0L) {
-                    check(announcedLength == spec.archiveBytes) {
-                        "اندازه اعلام‌شده با مدل اصلی برابر نیست ($announcedLength بایت)."
+                check(!contentType.contains("text/html")) { "سرور به‌جای آرشیو مدل، صفحه HTML برگرداند." }
+                val appendOffset = if (offset > 0L && response == HttpURLConnection.HTTP_PARTIAL) {
+                    val contentRange = connection.getHeaderField("Content-Range").orEmpty()
+                    val range = Regex("^bytes (\\d+)-(\\d+)/(\\d+)$", RegexOption.IGNORE_CASE).matchEntire(contentRange)
+                        ?: throw IllegalStateException("پاسخ ادامه دانلود فاقد Content-Range معتبر است.")
+                    val first = range.groupValues[1].toLong()
+                    val last = range.groupValues[2].toLong()
+                    val total = range.groupValues[3].toLong()
+                    check(first == offset && last >= first && total == spec.archiveBytes) { "بازه دریافتی با فایل اصلی مطابقت ندارد: $contentRange" }
+                    offset
+                } else {
+                    if (offset > 0L && response == HttpURLConnection.HTTP_OK) {
+                        DownloadAuditLog.record(appContext, "TTS", "range_unsupported host=${source.label}; restarting from byte zero")
+                        partial.delete()
                     }
+                    0L
                 }
-
-                status.value = "دریافت بسته مدل از ${mirror.label}…"
-                var received = 0L
+                val announcedLength = connection.contentLengthLong
+                val expectedResponseBytes = spec.archiveBytes - appendOffset
+                if (announcedLength >= 0L) check(announcedLength == expectedResponseBytes) { "اندازه پاسخ با بازه درخواستی برابر نیست ($announcedLength از $expectedResponseBytes بایت)." }
+                status.value = "دریافت مدل از ${source.label}؛ ${if (appendOffset > 0L) "ادامه از ${appendOffset} بایت" else "شروع از ابتدا"}…"
+                var received = appendOffset
                 connection.inputStream.use { input ->
-                    partial.outputStream().buffered().use { output ->
+                    java.io.FileOutputStream(partial, appendOffset > 0L).buffered().use { output ->
                         val buffer = ByteArray(64 * 1024)
                         while (true) {
                             val count = input.read(buffer)
@@ -290,32 +297,25 @@ class PersianSpeech(context: Context) {
                             output.write(buffer, 0, count)
                             received += count
                             downloadedBytes.value = received
-                            downloadProgress.value =
-                                (received.toFloat() / spec.archiveBytes.toFloat()).coerceIn(0f, 1f)
+                            downloadProgress.value = (received.toFloat() / spec.archiveBytes.toFloat()).coerceIn(0f, 1f)
                         }
                     }
                 }
-                check(received == spec.archiveBytes && partial.length() == spec.archiveBytes) {
-                    "دانلود کامل نیست؛ $received از ${spec.archiveBytes} بایت دریافت شد."
-                }
+                check(received == spec.archiveBytes && partial.length() == spec.archiveBytes) { "دانلود کامل نیست؛ $received از ${spec.archiveBytes} بایت دریافت شد." }
                 check(partial.renameTo(archive)) { "انتقال بسته دانلودشده ناموفق بود." }
-                DownloadAuditLog.record(appContext, "TTS", "success host=${mirror.label} bytes=$received file=${spec.model}")
-                status.value = "بسته از میرور ${mirror.label} دریافت شد؛ اعتبارسنجی و استخراج آغاز می‌شود."
+                DownloadAuditLog.record(appContext, "TTS", "success host=${source.label} bytes=$received file=${spec.model}")
+                status.value = "بسته از ${source.label} دریافت شد؛ اعتبارسنجی و استخراج آغاز می‌شود."
                 return
             } catch (failure: Throwable) {
-                partial.delete()
-                archive.delete()
+                if (partial.length() > spec.archiveBytes) partial.delete()
                 val reason = failure.message ?: failure.javaClass.simpleName
-                DownloadAuditLog.record(appContext, "TTS", "failure host=${mirror.label} reason=$reason")
-                failures += "${index + 1}. ${mirror.label}: $reason"
+                DownloadAuditLog.record(appContext, "TTS", "failure host=${source.label} reason=$reason retained_partial=${partial.length()}")
+                failures += "${index + 1}. ${source.label}: $reason"
             } finally {
                 connection.disconnect()
             }
         }
-
-        throw IllegalStateException(
-            "تمام میرورهای دریافت مدل ناموفق بودند: ${failures.joinToString(" | ")}"
-        )
+        throw IllegalStateException("تمام منابع دریافت مدل ناموفق بودند؛ فایل ناقص برای ادامه دانلود نگهداری شد: ${failures.joinToString(" | ")}")
     }
 
     fun deleteDownloadedVoice(id: String) {
