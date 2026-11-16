@@ -51,9 +51,7 @@ internal object StartupTemporaryCleanup {
                     if (!target.exists()) {
                         // An interrupted atomic replacement may have moved the last
                         // valid model aside. Restore it rather than deleting it.
-                        if (!child.renameTo(target)) {
-                            bytes += 0L // Keep the backup in place if restoration fails.
-                        }
+                        child.renameTo(target) // On failure, leave the backup for a later recovery attempt.
                     } else {
                         bytes += sizeOf(child)
                         child.deleteRecursively()
