@@ -17,6 +17,7 @@ import java.io.FileInputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.Executors
+import kotlin.math.roundToInt
 
 class PersianSpeech(context: Context) {
     private val appContext = context.applicationContext
@@ -99,7 +100,7 @@ class PersianSpeech(context: Context) {
                 loading.value = false
                 ready.value = true
                 error.value = null
-                status.value = "گویندهٔ ${voiceOptions.first { it.first == target }.second} آماده است."
+                status.value = "آزمون بارگذاری و تولید نمونه موفق بود؛ ${voiceOptions.first { it.first == target }.second} آماده است."
 
                 playbackQueue.take(target)?.let { queued ->
                     generateAndPlay(engine, queued)
@@ -117,10 +118,15 @@ class PersianSpeech(context: Context) {
     }
 
     fun isVoiceDownloaded(id: String): Boolean {
-        val modelSpec = spec(id)
+        val validId = voiceOptions.firstOrNull { it.first == id }?.first ?: return false
+        val modelSpec = spec(validId)
         val dir = File(appContext.filesDir, "speech/" + modelSpec.directory)
-        return File(dir, modelSpec.model).let { it.isFile && it.length() > 1_000_000L } &&
-            File(dir, "tokens.txt").isFile && File(dir, "espeak-ng-data").isDirectory
+        val model = File(dir, modelSpec.model)
+        val tokens = File(dir, "tokens.txt")
+        val phonemeData = File(dir, "espeak-ng-data")
+        return model.isFile && model.length() > 1_000_000L &&
+            tokens.isFile && tokens.length() >= 100L &&
+            phonemeData.isDirectory && phonemeData.walkTopDown().any { it.isFile && it.length() > 0L }
     }
 
     fun expectedArchiveBytes(id: String): Long =
@@ -146,13 +152,32 @@ class PersianSpeech(context: Context) {
         if (!model.isFile || model.length() < 1_000_000L || !File(modelDir, "tokens.txt").isFile || !File(modelDir, "espeak-ng-data").isDirectory) {
             downloadAndExtract(spec, modelDir)
         }
+        val tokens = File(modelDir, "tokens.txt")
+        val phonemeData = File(modelDir, "espeak-ng-data")
         check(model.isFile && model.length() > 1_000_000L) { "فایل مدل صوتی کامل نیست." }
-        check(File(modelDir, "tokens.txt").isFile && File(modelDir, "espeak-ng-data").isDirectory) { "فایل‌های زبان فارسی ناقص هستند." }
+        check(tokens.isFile && tokens.length() >= 100L && phonemeData.isDirectory &&
+            phonemeData.walkTopDown().any { it.isFile && it.length() > 0L }) {
+            "فایل‌های واژگان یا داده‌های آوایی فارسی ناقص هستند."
+        }
         val config = OfflineTtsConfig(model = OfflineTtsModelConfig(vits = OfflineTtsVitsModelConfig(
-            model = model.absolutePath, tokens = File(modelDir, "tokens.txt").absolutePath,
-            dataDir = File(modelDir, "espeak-ng-data").absolutePath
+            model = model.absolutePath, tokens = tokens.absolutePath,
+            dataDir = phonemeData.absolutePath
         ), numThreads = cpuThreads(), debug = false, provider = "cpu"))
-        return OfflineTts(config = config).also { check(it.numSpeakers() > 0) { "مدل گوینده‌ای ارائه نکرد." } }
+        val engine = OfflineTts(config = config)
+        try {
+            check(engine.numSpeakers() > 0) { "مدل گوینده‌ای ارائه نکرد." }
+            val probe = engine.generate(text = "سلام", sid = 0, speed = 1f)
+            check(probe.sampleRate > 0 && probe.samples.isNotEmpty()) {
+                "مدل بارگذاری شد اما نتوانست نمونه صدای آزمایشی تولید کند."
+            }
+            return engine
+        } catch (failure: Throwable) {
+            runCatching { engine.release() }
+            throw IllegalStateException(
+                "مدل روی حافظه موجود است، اما آزمون واقعی موتور گفتار ناموفق بود: ${failure.message ?: failure.javaClass.simpleName}",
+                failure
+            )
+        }
     }
 
     private fun downloadAndExtract(spec: ModelSpec, destination: File) {
@@ -182,9 +207,14 @@ class PersianSpeech(context: Context) {
                     entry = tar.nextTarEntry
                 }
             }
-            check(File(extracted, spec.model).let { it.isFile && it.length() > 1_000_000L } &&
-                File(extracted, "tokens.txt").isFile && File(extracted, "espeak-ng-data").isDirectory) {
-                "ساختار بسته معتبر نیست یا فایل‌های مدل و زبان ناقص هستند."
+            val extractedModel = File(extracted, spec.model)
+            val extractedTokens = File(extracted, "tokens.txt")
+            val extractedPhonemeData = File(extracted, "espeak-ng-data")
+            check(extractedModel.isFile && extractedModel.length() > 1_000_000L &&
+                extractedTokens.isFile && extractedTokens.length() >= 100L &&
+                extractedPhonemeData.isDirectory &&
+                extractedPhonemeData.walkTopDown().any { it.isFile && it.length() > 0L }) {
+                "ساختار بسته ناقص است؛ فایل مدل، واژگان یا داده آوایی معتبر نیست."
             }
 
             destination.parentFile?.mkdirs()
@@ -337,19 +367,17 @@ class PersianSpeech(context: Context) {
         try {
             if (closed || !playbackQueue.isCurrent(request)) return
             val audio = engine.generate(text = request.text, sid = 0, speed = request.speed)
-            check(audio.samples.isNotEmpty()) { "مدل خروجی صوتی تولید نکرد." }
+            check(audio.sampleRate > 0 && audio.samples.isNotEmpty()) { "مدل خروجی صوتی معتبری تولید نکرد." }
             if (closed || !playbackQueue.isCurrent(request)) return
 
+            val pcm = SpeechAudioPcm16.convert(audio.samples)
             val minBuffer = AudioTrack.getMinBufferSize(
                 audio.sampleRate,
                 AudioFormat.CHANNEL_OUT_MONO,
-                AudioFormat.ENCODING_PCM_FLOAT
+                AudioFormat.ENCODING_PCM_16BIT
             )
-            val requiredBytes = audio.samples.size.toLong() * 4L
-            val bufferBytes = maxOf(
-                if (minBuffer > 0) minBuffer.toLong() else 0L,
-                requiredBytes
-            ).coerceAtMost(Int.MAX_VALUE.toLong()).toInt().coerceAtLeast(4)
+            check(minBuffer > 0) { "قالب خروجی صوتی روی این دستگاه پشتیبانی نمی‌شود (کد $minBuffer)." }
+            val bufferBytes = maxOf(minBuffer, 8 * 1024)
 
             track = AudioTrack.Builder()
                 .setAudioAttributes(
@@ -362,28 +390,33 @@ class PersianSpeech(context: Context) {
                     AudioFormat.Builder()
                         .setSampleRate(audio.sampleRate)
                         .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
-                        .setEncoding(AudioFormat.ENCODING_PCM_FLOAT)
+                        .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
                         .build()
                 )
                 .setBufferSizeInBytes(bufferBytes)
-                .setTransferMode(AudioTrack.MODE_STATIC)
+                .setTransferMode(AudioTrack.MODE_STREAM)
                 .build()
 
             check(track.state == AudioTrack.STATE_INITIALIZED) { "راه‌اندازی خروجی صوتی گوشی ناموفق بود." }
-            val written = track.write(audio.samples, 0, audio.samples.size, AudioTrack.WRITE_BLOCKING)
-            check(written == audio.samples.size) { "نوشتن داده صوتی کامل انجام نشد (کد $written)." }
-            if (closed || !playbackQueue.isCurrent(request)) return
-
             synchronized(audioLock) {
                 if (closed || !playbackQueue.isCurrent(request)) return
                 audioTrack = track
                 track.play()
             }
             status.value = "در حال پخش: ${voiceOptions.first { it.first == request.voiceId }.second}"
-            while (!closed &&
-                playbackQueue.isCurrent(request) &&
+
+            var offset = 0
+            while (offset < pcm.size) {
+                if (closed || !playbackQueue.isCurrent(request)) return
+                val length = minOf(4096, pcm.size - offset)
+                val written = track.write(pcm, offset, length, AudioTrack.WRITE_BLOCKING)
+                check(written > 0) { "ارسال صدای تولیدشده به خروجی گوشی ناموفق بود (کد $written)." }
+                offset += written
+            }
+
+            while (!closed && playbackQueue.isCurrent(request) &&
                 track.playState == AudioTrack.PLAYSTATE_PLAYING &&
-                track.playbackHeadPosition < audio.samples.size
+                track.playbackHeadPosition < pcm.size
             ) {
                 Thread.sleep(40)
             }
@@ -421,25 +454,43 @@ class PersianSpeech(context: Context) {
         }
     }
 
-    fun stop() {
+    fun stop(showStatus: Boolean = true) {
         playbackQueue.cancel()
         releaseActiveTrack()
-        status.value = "پخش متوقف شد."
+        if (showStatus) status.value = "پخش متوقف شد."
     }
 
     fun close() {
         if (closed) return
         closed = true
-        stop()
+        stop(showStatus = false)
         voiceGeneration.incrementAndGet()
         loadingId = null
         loading.value = false
-        executor.shutdownNow()
         val engine = tts
         tts = null
         loadedId = null
         ready.value = false
-        runCatching { engine?.release() }
+
+        // OfflineTts is backed by native code. Queue release behind any active
+        // generation/load operation instead of freeing the native handle while
+        // another executor task may still be using it.
+        runCatching {
+            executor.execute { runCatching { engine?.release() } }
+            executor.shutdown()
+        }.onFailure {
+            executor.shutdown()
+            runCatching { engine?.release() }
+        }
     }
 
+}
+
+/** Converts sherpa-onnx float output to the broadly supported PCM16 AudioTrack format. */
+internal object SpeechAudioPcm16 {
+    fun convert(samples: FloatArray): ShortArray = ShortArray(samples.size) { index ->
+        val sample = samples[index].let { if (it.isFinite()) it.coerceIn(-1f, 1f) else 0f }
+        val scale = if (sample < 0f) 32768f else 32767f
+        (sample * scale).roundToInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
+    }
 }
