@@ -19,6 +19,7 @@ object CrashDiagnostics {
     private const val BOOT_PREFS = "mindunlock_boot_diagnostics"
     private const val KEY_LAUNCH_IN_PROGRESS = "launch_in_progress"
     private const val KEY_RECOVERY_PENDING = "recovery_pending"
+    private const val MAX_DOWNLOAD_LOG_CHARS = 64_000
 
     @Volatile private var currentScreen = "Application"
     @Volatile private var installed = false
@@ -136,23 +137,40 @@ object CrashDiagnostics {
         }
     }
 
-    fun readLastReport(context: Context): String =
-        runCatching {
-            File(context.filesDir, "diagnostics/last-crash.txt")
-                .takeIf { it.isFile }?.readText(Charsets.UTF_8).orEmpty()
-        }.getOrDefault("")
+    /**
+     * Includes the bounded download audit log because speech download failures are
+     * handled errors, not necessarily crashes. The audit log excludes query strings
+     * and credentials before it is persisted by DownloadAuditLog.
+     */
+    fun readLastReport(context: Context): String = runCatching {
+        val crashFile = File(context.filesDir, "diagnostics/last-crash.txt")
+        val crashReport = crashFile.takeIf { it.isFile }?.readText(Charsets.UTF_8).orEmpty()
+        val downloadFile = File(context.filesDir, "logs/downloads.log")
+        val downloadReport = downloadFile.takeIf { it.isFile }
+            ?.readText(Charsets.UTF_8)
+            ?.takeLast(MAX_DOWNLOAD_LOG_CHARS)
+            .orEmpty()
+
+        buildString {
+            if (crashReport.isNotBlank()) {
+                appendLine(crashReport)
+            } else {
+                appendLine("هنوز گزارش کرشی از MindUnlock ثبت نشده است.")
+            }
+            if (downloadReport.isNotBlank()) {
+                appendLine()
+                appendLine("MindUnlock download diagnostics (latest entries)")
+                append(downloadReport)
+            }
+        }.takeLast(160_000)
+    }.getOrDefault("خواندن گزارش عیب‌یابی ناموفق بود.")
 
     fun shareLastReport(context: Context) {
         val report = readLastReport(context)
-        val text = if (report.isBlank()) {
-            "هنوز گزارش کرشی از MindUnlock ثبت نشده است."
-        } else {
-            report
-        }
         val send = Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"
-            putExtra(Intent.EXTRA_SUBJECT, "MindUnlock crash diagnostics")
-            putExtra(Intent.EXTRA_TEXT, text)
+            putExtra(Intent.EXTRA_SUBJECT, "MindUnlock diagnostics")
+            putExtra(Intent.EXTRA_TEXT, report)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         context.startActivity(Intent.createChooser(send, "ارسال گزارش عیب‌یابی").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
