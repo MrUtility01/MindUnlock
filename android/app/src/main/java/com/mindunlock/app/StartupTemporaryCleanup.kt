@@ -40,11 +40,25 @@ internal object StartupTemporaryCleanup {
         if (!directory.isDirectory) return 0L
         var bytes = 0L
         directory.listFiles()?.forEach { child ->
-            val isTemporaryDirectory = child.isDirectory &&
-                (child.name.endsWith(".installing") || child.name.endsWith(".backup"))
+            val isBackup = child.name.endsWith(".backup")
+            val isTemporaryDirectory = child.isDirectory && child.name.endsWith(".installing")
             val isTemporaryFile = child.isFile &&
-                (child.name.endsWith(".part") || child.name.endsWith(".tmp") || child.name.endsWith(".backup"))
+                (child.name.endsWith(".part") || child.name.endsWith(".tmp"))
             when {
+                isBackup -> {
+                    val targetName = child.name.removePrefix(".").removeSuffix(".backup")
+                    val target = File(directory, targetName)
+                    if (!target.exists()) {
+                        // An interrupted atomic replacement may have moved the last
+                        // valid model aside. Restore it rather than deleting it.
+                        if (!child.renameTo(target)) {
+                            bytes += 0L // Keep the backup in place if restoration fails.
+                        }
+                    } else {
+                        bytes += sizeOf(child)
+                        child.deleteRecursively()
+                    }
+                }
                 isTemporaryDirectory || isTemporaryFile -> {
                     bytes += sizeOf(child)
                     child.deleteRecursively()
