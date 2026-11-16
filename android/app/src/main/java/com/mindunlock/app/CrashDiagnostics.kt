@@ -19,6 +19,7 @@ object CrashDiagnostics {
     private const val BOOT_PREFS = "mindunlock_boot_diagnostics"
     private const val KEY_LAUNCH_IN_PROGRESS = "launch_in_progress"
     private const val KEY_RECOVERY_PENDING = "recovery_pending"
+    private const val KEY_LAUNCH_STARTED_AT = "launch_started_at"
     private const val MAX_DOWNLOAD_LOG_CHARS = 64_000
 
     @Volatile private var currentScreen = "Application"
@@ -57,7 +58,10 @@ object CrashDiagnostics {
         val recoveryRequired = preferences.getBoolean(KEY_RECOVERY_PENDING, false) ||
             preferences.getBoolean(KEY_LAUNCH_IN_PROGRESS, false)
         if (!recoveryRequired) {
-            preferences.edit().putBoolean(KEY_LAUNCH_IN_PROGRESS, true).apply()
+            preferences.edit()
+                .putBoolean(KEY_LAUNCH_IN_PROGRESS, true)
+                .putLong(KEY_LAUNCH_STARTED_AT, System.currentTimeMillis())
+                .commit()
         }
         return recoveryRequired
     }
@@ -66,15 +70,32 @@ object CrashDiagnostics {
         context.getSharedPreferences(BOOT_PREFS, Context.MODE_PRIVATE).edit()
             .putBoolean(KEY_LAUNCH_IN_PROGRESS, false)
             .putBoolean(KEY_RECOVERY_PENDING, false)
+            .remove(KEY_LAUNCH_STARTED_AT)
             .putLong("last_healthy_at", System.currentTimeMillis())
-            .apply()
+            .commit()
+    }
+
+    /**
+     * A user or Android can background/stop the Activity before its first Compose
+     * frame. That is not by itself a crash. Clear only the in-progress marker;
+     * a recorded exception still keeps KEY_RECOVERY_PENDING set.
+     */
+    fun markLaunchBackgrounded(context: Context) {
+        val preferences = context.getSharedPreferences(BOOT_PREFS, Context.MODE_PRIVATE)
+        if (!preferences.getBoolean(KEY_RECOVERY_PENDING, false)) {
+            preferences.edit()
+                .putBoolean(KEY_LAUNCH_IN_PROGRESS, false)
+                .remove(KEY_LAUNCH_STARTED_AT)
+                .commit()
+        }
     }
 
     fun clearRecoveryState(context: Context) {
         context.getSharedPreferences(BOOT_PREFS, Context.MODE_PRIVATE).edit()
             .putBoolean(KEY_LAUNCH_IN_PROGRESS, false)
             .putBoolean(KEY_RECOVERY_PENDING, false)
-            .apply()
+            .remove(KEY_LAUNCH_STARTED_AT)
+            .commit()
     }
 
     fun recordStartupFailure(context: Context, stage: String, error: Throwable) {
@@ -109,7 +130,7 @@ object CrashDiagnostics {
                 app.getSharedPreferences(BOOT_PREFS, Context.MODE_PRIVATE).edit()
                     .putBoolean(KEY_LAUNCH_IN_PROGRESS, false)
                     .putBoolean(KEY_RECOVERY_PENDING, true)
-                    .apply()
+                    .commit()
             }
         } catch (_: Throwable) {
             // Crash reporting must never replace the original failure.
