@@ -56,6 +56,18 @@ def classify_content_kind(rel,title,content,source_type):
     if source in ("code","script"): return "command"
     return "lesson" if content.strip() else "note"
 
+def split_markdown_sections(title,content):
+    headings=list(re.finditer(r"(?m)^(#{1,6})\\s+(.+?)\\s*$",content))
+    if len(headings)<=1: return [(title,content,0)]
+    sections=[]
+    prefix=content[:headings[0].start()].strip()
+    for index,match in enumerate(headings):
+        end=headings[index+1].start() if index+1<len(headings) else len(content)
+        block=content[match.start():end]
+        if index==0 and prefix: block=prefix+"\\n\\n"+block
+        sections.append((match.group(2).strip(),block,len(match.group(1))))
+    return sections
+
 def main():
     if not ROOT.is_dir() or not IMPORTER.is_dir(): raise SystemExit("Joplin source folders were not extracted.")
     src_manifest=json.loads((ROOT/"MANIFEST.json").read_text(encoding="utf-8"))
@@ -90,20 +102,38 @@ def main():
                 stripped=re.sub(r"<!--.*?-->","",stripped,flags=re.S)
                 meaningful=re.sub(r"[\s*_>#|\-]","",stripped)
                 content_kind=classify_content_kind(rel,title,content,typ)
-                is_substantive=len(meaningful)>500
+                is_substantive=len(meaningful)>180
                 meta["content_completeness"]="substantive" if is_substantive else "scaffold_or_short"
                 meta["content_kind"]=content_kind
                 if is_substantive: substantial+=1
                 source_status="verified" if is_substantive or (content_kind not in ("lesson","note") and len(meaningful)>80) else "draft"
                 meta["review_status"]="ready" if source_status=="verified" else "template_or_incomplete"
-                category_counts[content_kind]+=1
-                if source_status=="draft": draft_count+=1
         else:
             ASSETS.mkdir(parents=True,exist_ok=True); shutil.copy2(p,ASSETS/p.name)
             asset="content/library/growth-path/assets/"+p.name
             meta.update({"asset_mime_type":mimetypes.guess_type(p.name)[0] or "application/octet-stream","asset_size_bytes":len(data),"asset_sha256":sha(data),"asset_path":asset})
             content=f"![{p.name}](https://raw.githubusercontent.com/MrUtility01/MindUnlock/main/{asset})\n\nفایل تصویری اصلی در مخزن دوره نگهداری می‌شود."
-        groups[(kind,key)].append((rel,{"source_uid":uid,"type":content_kind or "note","source_status":source_status,"title":title,"content":content,"order":0,"metadata":meta}))
+                source_items=[]
+        if ext==".md":
+            sections=split_markdown_sections(title,content)
+            for section_index,(section_heading,section_content,section_level) in enumerate(sections):
+                section_kind=classify_content_kind(rel+" "+section_heading,section_heading,section_content,typ)
+                section_plain=re.sub(r"(?m)^#{1,6}.*$","",section_content)
+                section_plain=re.sub(r"<!--.*?-->","",section_plain,flags=re.S)
+                section_meaningful=re.sub(r"[\s*_>#|\-]","",section_plain)
+                section_status="verified" if len(section_meaningful)>180 or (section_kind not in ("lesson","note") and len(section_meaningful)>80) else "draft"
+                section_meta=dict(meta)
+                section_meta.update({"content_kind":section_kind,"section_index":section_index+1,"section_heading":section_heading,"section_level":section_level,"source_note_title":title,"review_status":"ready" if section_status=="verified" else "template_or_incomplete"})
+                section_uid=uid if section_index==0 else uid+"-section-"+str(section_index+1).zfill(3)
+                section_title=title if len(sections)==1 or section_heading.casefold()==title.casefold() else title+" — "+section_heading
+                source_items.append((section_uid,section_kind,section_title,section_content,section_status,section_meta,section_index))
+                category_counts[section_kind]+=1
+                if section_status=="draft": draft_count+=1
+        else:
+            source_items.append((uid,content_kind or "note",title,content,source_status,meta,0))
+        for section_uid,section_kind,section_title,section_content,section_status,section_meta,section_index in source_items:
+            row_path=rel+"#"+str(section_index).zfill(4)
+            groups[(kind,key)].append((row_path,{"source_uid":section_uid,"type":section_kind or "note","source_status":section_status,"title":section_title,"content":section_content,"order":0,"metadata":section_meta}))
     packages=[]
     def add(key,title,group,order,rows,desc):
         rows.sort(key=lambda x:natural(x[0])); items=[]
