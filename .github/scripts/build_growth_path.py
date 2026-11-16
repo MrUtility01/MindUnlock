@@ -58,15 +58,19 @@ def classify_content_kind(rel,title,content,source_type):
 
 def split_markdown_sections(title,content):
     headings=list(re.finditer(r"(?m)^(#{1,6})[ \t]+(.+?)[ \t]*$",content))
-    if len(headings)<=1: return [(title,content,0)]
+    category_pattern=r"سؤال|سوال|پرسش|question|quiz|آزمون|امتحان|exam|آزمایشگاه|لابراتوار|lab|سناریوی عملی|عیب.?یابی|رفع.?اشکال|troubleshoot|runbook|چک.?لیست|checklist|نکته|ترفند|best.?practice|دستور(?:ات)?|فرمان|command|cli|مثال|نمونه|example|تمرین|exercise|practice|پروژه|project|واژه.?نامه|اصطلاحات|glossary|مرجع|reference"
+    selected=[match for match in headings if re.search(category_pattern,match.group(2),re.I)]
+    if not selected: return [(title,content,0)]
     sections=[]
-    prefix=content[:headings[0].start()].strip()
-    for index,match in enumerate(headings):
-        end=headings[index+1].start() if index+1<len(headings) else len(content)
+    prefix=content[:selected[0].start()].strip()
+    if prefix:
+        sections.append((title+" — محتوای اصلی",prefix,0))
+    for index,match in enumerate(selected):
+        end=selected[index+1].start() if index+1<len(selected) else len(content)
         block=content[match.start():end]
-        if index==0 and prefix: block=prefix+"\n\n"+block
         sections.append((match.group(2).strip(),block,len(match.group(1))))
     return sections
+
 
 def extract_scenario_metadata(content):
     matches=list(re.finditer(r"(?m)^#{1,6}[ \t]+(.+?)[ \t]*$",content))
@@ -179,7 +183,7 @@ def main():
     add("operations","پروژه جامع عملیاتی Issabel، Cisco و MikroTik","پروژه‌های عملیاتی",74,groups.get(("operations","operations"),[]),"پروژه عملیاتی یکپارچه شبکه و تلفن سازمانی؛ هشدارهای ایمنی منبع حفظ شده‌اند.")
     add("field-appendix","پیوست تحویل واقعی و پروژه حسابداری پدیده","پروژه‌های میدانی",75,groups.get(("appendix","appendix"),[]),"پیوست‌های کشف و تحویل زیرساخت، تصاویر، شواهد، ESXi، MikroTik، Cisco، Issabel و Runbook.")
     items=[it for pkg in packages for it in pkg["items"]]
-    if len(packages)!=75 or len(items)!=len(files): raise SystemExit(f"Count mismatch: packages={len(packages)}, items={len(items)}, files={len(files)}")
+    if len(packages)!=75 or len(items)<len(files): raise SystemExit(f"Count mismatch: packages={len(packages)}, items={len(items)}, files={len(files)}")
     if len({x["source_uid"] for x in items})!=len(items): raise SystemExit("Duplicate source_uid")
     if md_count!=2804: raise SystemExit(f"Unexpected Markdown count: {md_count}")
     now=datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00","Z")
