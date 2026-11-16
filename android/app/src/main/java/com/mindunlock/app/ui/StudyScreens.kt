@@ -997,7 +997,10 @@ fun ReaderScreen(db: AppDatabase, userDb: UserDatabase, itemUid: String, speech:
                     }) { Text("بررسی پاسخ") }
                     if (answerMessage.isNotBlank()) Text(answerMessage, color = MaterialTheme.colorScheme.primary)
                     if (answerVisible || answerMessage.isNotBlank()) metadata?.get("explanation")?.let { Text("توضیح: ${it.asString}") }
-                } else Text("گزینه‌ای برای این سؤال ثبت نشده است.")
+                } else if (!current.answer.isNullOrBlank()) {
+                    Text("پاسخ", fontWeight = FontWeight.Bold)
+                    Text(cleanHtml(current.answer.orEmpty()))
+                }
             }
             "flashcard" -> {
                 val back = metadata?.get("back")?.let { runCatching { it.asString }.getOrNull() }.orEmpty().ifBlank { current.summary ?: current.content.orEmpty() }
