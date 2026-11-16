@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-11-16T20:38:07Z",
+  "generated_at": "2026-11-16T20:43:37Z",
   "items": [
     {
       "id": "technology-path-index",
@@ -10,7 +10,7 @@
       "path": "content/library/growth-path/complete-course.part-001-of-004.b64",
       "format": "json-gzip-base64-multipart",
       "content_hash": "7cfd3902629b0633c228a6eb34c968294a1400d3d409bff3b35d51cbacf28a28",
-      "updated_at": "2026-11-16T20:38:07Z",
+      "updated_at": "2026-11-16T20:43:37Z",
       "schema_version": 1
     },
     {
