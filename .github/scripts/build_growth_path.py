@@ -57,7 +57,7 @@ def classify_content_kind(rel,title,content,source_type):
     return "lesson" if content.strip() else "note"
 
 def split_markdown_sections(title,content):
-    headings=list(re.finditer(r"(?m)^(#{1,6})\\s+(.+?)\\s*$",content))
+    headings=list(re.finditer(r"(?m)^(#{1,6})[ \t]+(.+?)[ \t]*$",content))
     if len(headings)<=1: return [(title,content,0)]
     sections=[]
     prefix=content[:headings[0].start()].strip()
@@ -123,7 +123,7 @@ def main():
                 section_meaningful=re.sub(r"[\s*_>#|\-]","",section_plain)
                 section_status="verified" if len(section_meaningful)>180 or (section_kind not in ("lesson","note") and len(section_meaningful)>80) else "draft"
                 section_meta=dict(meta)
-                section_meta.update({"content_kind":section_kind,"section_index":section_index+1,"section_heading":section_heading,"section_level":section_level,"source_note_title":title,"review_status":"ready" if section_status=="verified" else "template_or_incomplete"})
+                section_meta.update({"content_kind":section_kind,"section_index":section_index+1,"section_heading":section_heading,"section_level":section_level,"source_note_title":title,"review_status":"ready" if section_status=="verified" else "template_or_incomplete","content_completeness":"substantive" if len(section_meaningful)>180 else "scaffold_or_short"})
                 section_uid=uid if section_index==0 else uid+"-section-"+str(section_index+1).zfill(3)
                 section_title=title if len(sections)==1 or section_heading.casefold()==title.casefold() else title+" — "+section_heading
                 source_items.append((section_uid,section_kind,section_title,section_content,section_status,section_meta,section_index))
