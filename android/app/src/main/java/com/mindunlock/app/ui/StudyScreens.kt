@@ -177,6 +177,7 @@ fun KnowledgeArchiveScreen(db: AppDatabase, speech: PersianSpeech, onOpenItem: (
     val selectedType = when (kind) {
         "درس" -> "lesson"
         "سؤال" -> "question"
+        "آزمون" -> "exam"
         "فلش‌کارت" -> "flashcard"
         "آزمایشگاه" -> "lab"
         "تمرین" -> "exercise"
@@ -718,7 +719,7 @@ fun ChapterContentScreen(db: AppDatabase, chapterId: String, onItemClick: (Strin
     val chapter = chapters.firstOrNull { it.id == chapterId }
     var query by rememberSaveable(chapterId) { mutableStateOf("") }
     var kind by rememberSaveable(chapterId) { mutableStateOf("مطالب اصلی") }
-    val kindOptions = listOf("مطالب اصلی", "همه", "درس", "سؤال", "فلش‌کارت", "آزمایشگاه", "تمرین", "دستور", "مثال", "نکته", "عیب‌یابی", "پروژه", "قالب‌ها", "یادداشت")
+    val kindOptions = listOf("مطالب اصلی", "همه", "درس", "سؤال", "آزمون", "فلش‌کارت", "آزمایشگاه", "تمرین", "دستور", "مثال", "نکته", "عیب‌یابی", "چک‌لیست", "پروژه", "واژه‌نامه", "مرجع", "قالب‌ها", "یادداشت")
     val selectedType = when (kind) {
         "درس" -> "lesson"
         "سؤال" -> "question"
@@ -730,6 +731,9 @@ fun ChapterContentScreen(db: AppDatabase, chapterId: String, onItemClick: (Strin
         "نکته" -> "tip"
         "عیب‌یابی" -> "troubleshooting"
         "پروژه" -> "project"
+        "چک‌لیست" -> "checklist"
+        "واژه‌نامه" -> "glossary"
+        "مرجع" -> "reference"
         else -> ""
     }
     val selectedSourceStatus = when (kind) {
