@@ -68,6 +68,31 @@ def split_markdown_sections(title,content):
         sections.append((match.group(2).strip(),block,len(match.group(1))))
     return sections
 
+def extract_scenario_metadata(content):
+    matches=list(re.finditer(r"(?m)^#{1,6}[ \t]+(.+?)[ \t]*$",content))
+    sections={}
+    for index,match in enumerate(matches):
+        end=matches[index+1].start() if index+1<len(matches) else len(content)
+        sections[match.group(1).strip().casefold()]=content[match.end():end].strip()
+    def find(pattern):
+        for heading,body in sections.items():
+            if re.search(pattern,heading,re.I) and body:
+                return body
+        return ""
+    def values(pattern):
+        value=find(pattern)
+        return [re.sub(r"^\\s*(?:[-*+]\\s+|\\d+[.)]\\s+)","",line).strip() for line in value.splitlines() if line.strip()]
+    result={}
+    scalar_fields={"goal":r"هدف|objective","topology":r"توپولوژی|ساختار شبکه|topology"}
+    list_fields={"prerequisites":r"پیش.?نیاز|قبل از شروع|prerequisite","equipment":r"تجهیزات|سخت.?افزار|equipment","services":r"سرویس.?ها|services","commands":r"مراحل|دستورات|فرمان.?ها|commands|procedure","expected_output":r"خروجی مورد انتظار|نتیجه مورد انتظار|اعتبارسنجی|expected","troubleshooting":r"عیب.?یابی|خطاهای رایج|troubleshooting","questions":r"سوالات|سؤالات|پرسش.?ها|questions","question_answers":r"پاسخ.?ها|جواب.?ها|answers"}
+    for key,pattern in scalar_fields.items():
+        value=find(pattern)
+        if value: result[key]=value
+    for key,pattern in list_fields.items():
+        value=values(pattern)
+        if value: result[key]=value
+    return result
+
 def main():
     if not ROOT.is_dir() or not IMPORTER.is_dir(): raise SystemExit("Joplin source folders were not extracted.")
     src_manifest=json.loads((ROOT/"MANIFEST.json").read_text(encoding="utf-8"))
@@ -105,6 +130,8 @@ def main():
                 is_substantive=len(meaningful)>180
                 meta["content_completeness"]="substantive" if is_substantive else "scaffold_or_short"
                 meta["content_kind"]=content_kind
+                scenario=extract_scenario_metadata(content)
+                if scenario: meta["scenario"]=scenario
                 if is_substantive: substantial+=1
                 source_status="verified" if is_substantive or (content_kind not in ("lesson","note") and len(meaningful)>80) else "draft"
                 meta["review_status"]="ready" if source_status=="verified" else "template_or_incomplete"
