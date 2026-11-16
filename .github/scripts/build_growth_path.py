@@ -85,7 +85,7 @@ def extract_scenario_metadata(content):
         return ""
     def values(pattern):
         value=find(pattern)
-        return [re.sub(r"^\\s*(?:[-*+]\\s+|\\d+[.)]\\s+)","",line).strip() for line in value.splitlines() if line.strip()]
+        return [re.sub(r"^(?:[-*+] |[0-9]+[.)] )","",line).strip() for line in value.splitlines() if line.strip()]
     result={}
     scalar_fields={"goal":r"هدف|objective","topology":r"توپولوژی|ساختار شبکه|topology"}
     list_fields={"prerequisites":r"پیش.?نیاز|قبل از شروع|prerequisite","equipment":r"تجهیزات|سخت.?افزار|equipment","services":r"سرویس.?ها|services","commands":r"مراحل|دستورات|فرمان.?ها|commands|procedure","expected_output":r"خروجی مورد انتظار|نتیجه مورد انتظار|اعتبارسنجی|expected","troubleshooting":r"عیب.?یابی|خطاهای رایج|troubleshooting","questions":r"سوالات|سؤالات|پرسش.?ها|questions","question_answers":r"پاسخ.?ها|جواب.?ها|answers"}
