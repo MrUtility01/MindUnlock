@@ -1,0 +1,77 @@
+name: Joplin source extraction
+on:
+  push:
+    branches:
+      - automation/joplin-import
+    paths:
+      - .github/workflows/joplin-extract.yml
+      - MindUnlock_IT_Joplin_FA_v13_Deep_Integrated_Troubleshooting_Cisco_MikroTik_Issabel_ESXi.zip
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: write
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Extract and inventory Joplin archive
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, pathlib, zipfile
+          archive = pathlib.Path("MindUnlock_IT_Joplin_FA_v13_Deep_Integrated_Troubleshooting_Cisco_MikroTik_Issabel_ESXi.zip")
+          if not archive.is_file():
+              raise SystemExit(f"Archive not found: {archive}")
+          out = pathlib.Path("joplin-extracted")
+          out.mkdir(exist_ok=True)
+          inventory = []
+          with zipfile.ZipFile(archive) as z:
+              bad = z.testzip()
+              if bad:
+                  raise SystemExit(f"Corrupt ZIP member: {bad}")
+              for info in z.infolist():
+                  p = pathlib.PurePosixPath(info.filename)
+                  if p.is_absolute() or ".." in p.parts:
+                      raise SystemExit(f"Unsafe archive path: {info.filename}")
+                  if info.is_dir():
+                      continue
+                  target = out.joinpath(*p.parts)
+                  target.parent.mkdir(parents=True, exist_ok=True)
+                  target.write_bytes(z.read(info))
+                  item = {"path": info.filename, "size": info.file_size}
+                  if target.suffix.lower() == ".md":
+                      try:
+                          text = target.read_text(encoding="utf-8")
+                          item["preview"] = text[:500]
+                      except UnicodeDecodeError:
+                          item["text_encoding"] = "non-utf8"
+                  elif target.suffix.lower() == ".json":
+                      try:
+                          data = json.loads(target.read_text(encoding="utf-8"))
+                          item["json_type"] = type(data).__name__
+                          if isinstance(data, dict):
+                              item["keys"] = list(data.keys())[:40]
+                              for key in ("title", "id", "type", "parent_id", "body"):
+                                  if key in data and isinstance(data[key], (str, int, float)):
+                                      item[key] = str(data[key])[:300]
+                      except Exception as e:
+                          item["json_error"] = str(e)[:200]
+                  inventory.append(item)
+          report = {
+              "archive": archive.name,
+              "member_count": len(inventory),
+              "total_uncompressed_bytes": sum(x["size"] for x in inventory),
+              "files": inventory
+          }
+          (out / "_inventory.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+          print(json.dumps({k:v for k,v in report.items() if k != "files"}, ensure_ascii=False))
+          PY
+      - name: Upload extracted source for conversion
+        uses: actions/upload-artifact@v4
+        with:
+          name: joplin-extracted-source
+          path: joplin-extracted/
+          if-no-files-found: error
+          retention-days: 7
