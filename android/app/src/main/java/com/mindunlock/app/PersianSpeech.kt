@@ -241,6 +241,10 @@ class PersianSpeech(context: Context) {
 
     private fun downloadArchiveWithFallback(spec: ModelSpec, archive: File, partial: File) {
         if (archive.isFile && archive.length() == spec.archiveBytes) return
+        if (partial.isFile && partial.length() == spec.archiveBytes) {
+            check(partial.renameTo(archive)) { "تبدیل فایل کامل دریافت‌شده به آرشیو ناموفق بود." }
+            return
+        }
         val sources = SpeechDownloadMirrors.candidates(appContext, SpeechMirrorSource.GITHUB_RELEASE, spec.archive)
         val failures = mutableListOf<String>()
         check(sources.isNotEmpty()) { "منبع اصلی یا هیچ میروری برای دریافت مدل گفتار در دسترس نیست." }
