@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feature/growth-path-course-import
+      - fix/growth-path-import-schema
     paths:
       - .github/workflows/build-growth-path.yml
       - .github/scripts/build_growth_path.py
