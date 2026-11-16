@@ -71,10 +71,14 @@ class StartupRecoveryActivity : Activity() {
             text = "پاک‌کردن فایل‌های موقت و تلاش دوباره"
             setOnClickListener {
                 runCatching {
-                    cacheDir.listFiles()?.forEach { it.deleteRecursively() }
-                    externalCacheDir?.listFiles()?.forEach { it.deleteRecursively() }
-                }.onSuccess {
-                    Toast.makeText(this@StartupRecoveryActivity, "فایل‌های موقت پاک شدند؛ داده‌های شخصی حفظ شدند.", Toast.LENGTH_LONG).show()
+                    StartupTemporaryCleanup.clear(this@StartupRecoveryActivity)
+                }.onSuccess { removedBytes ->
+                    val removedMb = String.format(java.util.Locale.US, "%.1f", removedBytes / (1024.0 * 1024.0))
+                    Toast.makeText(
+                        this@StartupRecoveryActivity,
+                        "فایل‌های موقت پاک شدند ($removedMb MB). دوره‌ها، یادداشت‌ها و مدل‌های نصب‌شده حفظ شدند.",
+                        Toast.LENGTH_LONG
+                    ).show()
                 }.onFailure {
                     Toast.makeText(this@StartupRecoveryActivity, "پاک‌کردن فایل‌های موقت کامل نشد.", Toast.LENGTH_LONG).show()
                 }
