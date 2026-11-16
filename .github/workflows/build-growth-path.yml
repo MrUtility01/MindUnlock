@@ -6,6 +6,7 @@ on:
       - main
       - feature/growth-path-course-import
       - fix/growth-path-import-schema
+      - fix/growth-path-learning-structure
     paths:
       - .github/workflows/build-growth-path.yml
       - .github/scripts/build_growth_path.py
