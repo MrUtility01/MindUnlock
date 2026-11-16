@@ -7,6 +7,7 @@ ROOT=Path("joplin-extracted/MindUnlock_IT_Joplin_Knowledge_Base_FA")
 IMPORTER=Path("joplin-extracted/joplin_importer")
 LIB=Path("content/library/growth-path")
 ASSETS=LIB/"assets"
+REPORT_PATH=Path("docs/GROWTH_PATH_CONVERSION_REPORT_FA.md")
 
 def sha(b): return hashlib.sha256(b).hexdigest()
 def natural(s): return [int(x) if x.isdigit() else x.casefold() for x in re.split(r"(\d+)",s)]
