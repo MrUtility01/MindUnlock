@@ -94,7 +94,7 @@ def main():
     if len({x["source_uid"] for x in items})!=len(items): raise SystemExit("Duplicate source_uid")
     if md_count!=2804: raise SystemExit(f"Unexpected Markdown count: {md_count}")
     now=datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00","Z")
-    bundle={"schema_version":1,"course":{"id":"technology-path","title":"مسیر رشد","language":"fa","description":"تبدیل وفادار ساختار Joplin به بسته‌های بومی MindUnlock؛ متن منبع بدون بازنویسی حفظ شده و وضعیت تکمیل هر یادداشت در metadata مشخص است.","source":"MindUnlock_IT_Joplin_Knowledge_Base_FA","source_format":"Joplin Markdown Directory ZIP","domain_count":16,"numbered_chapter_count":68,"supplemental_specialty_count":3},"package_count":75,"content_item_count":len(items),"packages":packages}
+    bundle={"schema_version":1,"course":{"id":"technology-path","title":"مسیر رشد","language":"fa","description":"تبدیل وفادار ساختار Joplin به بسته‌های بومی MindUnlock؛ متن منبع بدون بازنویسی حفظ شده و وضعیت تکمیل هر یادداشت در metadata مشخص است.","source":"MindUnlock_IT_Joplin_Knowledge_Base_FA","source_format":"Joplin Markdown Directory ZIP","domain_count":16,"numbered_chapter_count":68,"supplemental_specialty_count":3},"domain_count":16,"numbered_chapter_count":68,"supplemental_specialty_count":3,"package_count":75,"content_item_count":len(items),"packages":packages}
     raw=json.dumps(bundle,ensure_ascii=False,separators=(",",":")).encode("utf-8")
     encoded=base64.b64encode(gzip.compress(raw,compresslevel=9,mtime=0)).decode("ascii")
     if len(encoded.encode())>=1_000_000: raise SystemExit(f"Bundle exceeds app limit: {len(encoded)}")
