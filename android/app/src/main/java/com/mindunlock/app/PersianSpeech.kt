@@ -289,7 +289,12 @@ class PersianSpeech(context: Context) {
                 }
                 val announcedLength = connection.contentLengthLong
                 val expectedResponseBytes = spec.archiveBytes - appendOffset
-                if (announcedLength >= 0L) check(announcedLength == expectedResponseBytes) { "اندازه پاسخ با بازه درخواستی برابر نیست ($announcedLength از $expectedResponseBytes بایت)." }
+                val announcedLengthMatches = if (appendOffset == 0L) {
+                    announcedLength == spec.archiveBytes
+                } else {
+                    announcedLength == expectedResponseBytes
+                }
+                if (announcedLength >= 0L) check(announcedLengthMatches) { "اندازه پاسخ با بازه درخواستی برابر نیست ($announcedLength از $expectedResponseBytes بایت)." }
                 status.value = "دریافت مدل از ${source.label}؛ ${if (appendOffset > 0L) "ادامه از ${appendOffset} بایت" else "شروع از ابتدا"}…"
                 var received = appendOffset
                 connection.inputStream.use { input ->
