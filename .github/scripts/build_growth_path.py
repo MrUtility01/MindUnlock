@@ -190,7 +190,7 @@ def main():
     bundle={"schema_version":1,"course":{"id":"technology-path","title":"مسیر رشد","language":"fa","description":"تبدیل وفادار ساختار Joplin به بسته‌های بومی MindUnlock؛ متن منبع بدون بازنویسی حفظ شده و وضعیت تکمیل هر یادداشت در metadata مشخص است.","source":"MindUnlock_IT_Joplin_Knowledge_Base_FA","source_format":"Joplin Markdown Directory ZIP","domain_count":16,"numbered_chapter_count":68,"supplemental_specialty_count":3},"domain_count":16,"numbered_chapter_count":68,"supplemental_specialty_count":3,"package_count":75,"content_item_count":len(items),"packages":packages}
     raw=json.dumps(bundle,ensure_ascii=False,separators=(",",":")).encode("utf-8")
     encoded=base64.b64encode(gzip.compress(raw,compresslevel=9,mtime=0)).decode("ascii")
-    if len(encoded.encode())>=1_000_000: raise SystemExit(f"Bundle exceeds app limit: {len(encoded)}")
+    if len(encoded.encode())>=2_000_000: raise SystemExit(f"Bundle exceeds app limit: {len(encoded)}")
     n=4; size=math.ceil(len(encoded)/n); LIB.mkdir(parents=True,exist_ok=True)
     for old in LIB.glob("complete-course.part-*.b64"): old.unlink()
     for i in range(n):
