@@ -1,0 +1,75 @@
+name: Build native Growth Path course
+
+on:
+  push:
+    branches:
+      - feature/growth-path-course-import
+    paths:
+      - .github/workflows/build-growth-path.yml
+      - .github/scripts/build_growth_path.py
+      - MindUnlock_IT_Joplin_FA_v13_Deep_Integrated_Troubleshooting_Cisco_MikroTik_Issabel_ESXi.zip
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  convert:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source branch
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+
+      - name: Extract and validate Joplin archive
+        shell: bash
+        run: |
+          python - <<'PY'
+          import pathlib, zipfile
+          archive = pathlib.Path("MindUnlock_IT_Joplin_FA_v13_Deep_Integrated_Troubleshooting_Cisco_MikroTik_Issabel_ESXi.zip")
+          if not archive.is_file():
+              raise SystemExit("Joplin source ZIP not found in repository root.")
+          out = pathlib.Path("joplin-extracted")
+          out.mkdir(exist_ok=True)
+          with zipfile.ZipFile(archive) as z:
+              bad = z.testzip()
+              if bad:
+                  raise SystemExit(f"Corrupt ZIP member: {bad}")
+              for info in z.infolist():
+                  p = pathlib.PurePosixPath(info.filename)
+                  if p.is_absolute() or ".." in p.parts:
+                      raise SystemExit(f"Unsafe archive path: {info.filename}")
+                  if info.is_dir():
+                      continue
+                  target = out.joinpath(*p.parts)
+                  target.parent.mkdir(parents=True, exist_ok=True)
+                  target.write_bytes(z.read(info))
+          print("ZIP integrity and safe extraction passed.")
+          PY
+
+      - name: Convert source into native MindUnlock course
+        run: python .github/scripts/build_growth_path.py
+
+      - name: Validate and commit generated course
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add content/manifest.json content/README_FA.md content/library/growth-path docs/GROWTH_PATH_CONVERSION_REPORT_FA.md
+          if git diff --cached --quiet; then
+            echo "No generated changes to commit."
+          else
+            git commit -m "feat(content): add مسیر رشد Joplin course"
+            git push
+          fi
+
+      - name: Upload generated course bundle for audit
+        uses: actions/upload-artifact@v4
+        with:
+          name: growth-path-native-course
+          path: |
+            content/library/growth-path/
+            docs/GROWTH_PATH_CONVERSION_REPORT_FA.md
+          if-no-files-found: error
+          retention-days: 7
