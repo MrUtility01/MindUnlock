@@ -52,7 +52,8 @@ enum class GitHubContentSyncStatus(
 data class GitHubContentSyncResult(
     val imported: Int,
     val skipped: Int,
-    val blocked: List<String>
+    val blocked: List<String>,
+    val importedItems: Int = 0
 )
 
 /**
@@ -144,16 +145,18 @@ class GitHubContentSyncRepository(
             it.status in setOf(GitHubContentSyncStatus.NEW, GitHubContentSyncStatus.REMOTE_UPDATE)
         }
         var imported = 0
+        var importedItems = 0
         var skipped = 0
         eligible.forEachIndexed { index, entry ->
             onProgress(index + 1, eligible.size, entry.item.title)
             if (entry.item.format in COMPRESSED_COURSE_FORMATS) {
                 val bundleResult = importCompressedCourse(entry)
-                if (bundleResult.second != null) {
-                    blocked += "${entry.item.title}: ${bundleResult.second}"
+                if (bundleResult.third != null) {
+                    blocked += "${entry.item.title}: ${bundleResult.third}"
                     skipped++
                 } else {
                     imported += bundleResult.first
+                    importedItems += bundleResult.second
                 }
                 return@forEachIndexed
             }
@@ -208,8 +211,9 @@ class GitHubContentSyncRepository(
                 .putString(localBaseKey(entry.item.id), fingerprint(saved, savedItems))
                 .apply()
             imported++
+            importedItems += parsed.second.size
         }
-        return GitHubContentSyncResult(imported, skipped, blocked)
+        return GitHubContentSyncResult(imported, skipped, blocked, importedItems)
     }
 
     /**
@@ -291,7 +295,7 @@ class GitHubContentSyncRepository(
 
     private suspend fun importCompressedCourse(
         entry: GitHubContentSyncEntry
-    ): Pair<Int, String?> {
+    ): Triple<Int, Int, String?> {
         val parsed = readAndParseCourseBundle(entry.item)
         val expectedLocal = if (entry.status == GitHubContentSyncStatus.REMOTE_UPDATE) {
             preferences.getString(localBaseKey(entry.item.id), null)
@@ -329,13 +333,13 @@ class GitHubContentSyncRepository(
                 }
             }
         }
-        if (rejection != null) return 0 to rejection
+        if (rejection != null) return Triple(0, 0, rejection)
         val localHash = githubBundleFingerprint()
         preferences.edit()
             .putString(remoteBaseKey(entry.item.id), entry.item.contentHash)
             .putString(localBaseKey(entry.item.id), localHash)
             .apply()
-        return parsed.packages.size to null
+        return Triple(parsed.packages.size, parsed.itemCount, null)
     }
 
     private suspend fun takeRemoteCompressedCourse(entry: GitHubContentSyncEntry) {
@@ -537,12 +541,22 @@ class GitHubContentSyncRepository(
         require(mapped.map { it.uid }.distinct().size == mapped.size) {
             "شناسه آیتم‌های فصل تکراری است؛ واردسازی امن نیست."
         }
+        val sourceGroup = detail.string("group_name") ?: detail.string("group") ?: manifest.groupName
+        val isGrowthPathPackage = manifest.id.startsWith("technology-path-")
+        val description = if (isGrowthPathPackage) {
+            listOfNotNull(
+                detail.string("description")?.takeIf { it.isNotBlank() },
+                sourceGroup?.takeIf { it.isNotBlank() }?.let { "حوزه یا بخش اصلی: $it" }
+            ).joinToString("\n\n").takeIf { it.isNotBlank() }
+        } else {
+            detail.string("description")
+        }
         val chapter = ChapterEntity(
             id = localChapterId(manifest.id),
             title = detail.string("title") ?: manifest.title,
             orderIndex = detail.int("order_num", detail.int("order", manifest.orderNum)),
-            groupName = detail.string("group_name") ?: detail.string("group") ?: manifest.groupName,
-            description = detail.string("description"),
+            groupName = githubCourseDisplayGroup(manifest.id, sourceGroup),
+            description = description,
             itemCount = mapped.size,
             contentHash = manifest.contentHash,
             rawJson = detail.toString(),
@@ -709,3 +723,7 @@ internal object GitHubContentCompression {
 
 /** Stable namespace for GitHub-imported chapters, isolated from Windows LAN content. */
 internal fun githubContentChapterId(id: String): String = "github_$id"
+
+/** Makes the imported multi-package archive discoverable as one named course in the app. */
+internal fun githubCourseDisplayGroup(id: String, sourceGroup: String?): String? =
+    if (id.startsWith("technology-path-")) "مسیر رشد" else sourceGroup
