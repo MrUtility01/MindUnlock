@@ -689,10 +689,15 @@ fun ChapterListScreen(db: AppDatabase, subject: String, onChapterClick: (String)
                     chapter.description?.takeIf { it.isNotBlank() },
                     originalGrowthGroup
                 ).joinToString(" · ")
+                val chapterNumber = if (chapter.id.startsWith("github_technology-path-")) {
+                    chapter.orderIndex
+                } else {
+                    chapter.orderIndex + 1
+                }
                 Card(onClick = { onChapterClick(chapter.id) }, modifier = Modifier.fillMaxWidth()) {
                     Row(Modifier.fillMaxWidth().padding(15.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text("فصل ${chapter.orderIndex + 1}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                            Text("فصل $chapterNumber", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                             Text(chapter.title, fontWeight = FontWeight.SemiBold)
                             if (chapterDescription.isNotBlank()) Text(chapterDescription, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
                             Text("${chapter.itemCount} مطلب", style = MaterialTheme.typography.labelSmall)
