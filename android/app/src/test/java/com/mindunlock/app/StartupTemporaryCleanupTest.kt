@@ -11,6 +11,26 @@ import org.robolectric.RuntimeEnvironment
 
 @RunWith(RobolectricTestRunner::class)
 class StartupTemporaryCleanupTest {
+
+    @Test
+    fun restoresModelBackupWhenInterruptedInstallLeftNoDestination() {
+        val context = RuntimeEnvironment.getApplication()
+        val speechBackup = File(context.filesDir, "speech/.voice.backup/model.onnx").apply {
+            parentFile?.mkdirs()
+            writeBytes(ByteArray(256))
+        }
+        val asrBackup = File(context.filesDir, "offline-asr/model.onnx.backup").apply {
+            parentFile?.mkdirs()
+            writeBytes(ByteArray(128))
+        }
+
+        StartupTemporaryCleanup.clear(context)
+
+        assertFalse(speechBackup.exists())
+        assertTrue(File(context.filesDir, "speech/voice/model.onnx").isFile)
+        assertTrue(File(context.filesDir, "offline-asr/model.onnx").isFile)
+    }
+
     @Test
     fun cleanupRemovesStagingAndPartialFilesButPreservesInstalledModels() {
         val context = RuntimeEnvironment.getApplication()
