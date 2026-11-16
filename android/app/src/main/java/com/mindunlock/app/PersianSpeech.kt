@@ -320,22 +320,44 @@ class PersianSpeech(context: Context) {
 
     fun deleteDownloadedVoice(id: String) {
         val target = voiceOptions.firstOrNull { it.first == id }?.first ?: return
+        if (closed) return
         if (loadingId == target) {
             val message = "تا پایان دریافت یا بارگذاری این گوینده، حذف فایل‌ها امکان‌پذیر نیست."
             error.value = message
             status.value = message
             return
         }
-        if (loadedId == target) {
-            stop()
-            try { tts?.release() } catch (_: Throwable) {}
+
+        val folder = File(appContext.filesDir, "speech/${spec(target).directory}")
+        val engineToRelease = if (loadedId == target) {
+            playbackQueue.cancel()
+            releaseActiveTrack()
+            val current = tts
             tts = null
             loadedId = null
             ready.value = false
+            current
+        } else {
+            null
         }
-        val folder = File(appContext.filesDir, "speech/${spec(target).directory}")
-        folder.deleteRecursively()
-        status.value = "مدل صوتی انتخاب‌شده از حافظهٔ برنامه حذف شد."
+
+        status.value = "حذف مدل در صف امن موتور صوتی قرار گرفت…"
+        // Keep deletion behind any active native synthesis call. Removing model
+        // files or releasing OfflineTts from the UI thread can race JNI inference.
+        runCatching {
+            executor.execute {
+                runCatching { engineToRelease?.release() }
+                val deleted = !folder.exists() || folder.deleteRecursively()
+                status.value = if (deleted) {
+                    "مدل صوتی انتخاب‌شده از حافظه برنامه حذف شد."
+                } else {
+                    "حذف مدل صوتی کامل نشد؛ فایل‌ها حفظ شدند."
+                }
+            }
+        }.onFailure { failure ->
+            error.value = failure.message ?: "قرار دادن حذف مدل در صف ممکن نشد."
+            status.value = error.value ?: "حذف مدل صوتی ناموفق بود."
+        }
     }
 
     fun speak(text: String, speed: Float = 1f, voiceName: String? = null) {
