@@ -38,7 +38,7 @@ fun GitHubContentSyncCard() {
     var busy by remember { mutableStateOf(false) }
     var loaded by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf("") }
-    var status by remember { mutableStateOf("عنوان دوره‌ها مستقیماً از Manifest مخزن خوانده می‌شود؛ برای دیدن آن‌ها نیازی به مرور پوشه‌ها نیست.") }
+    var status by remember { mutableStateOf("فهرست فقط دوره‌ها را پیدا می‌کند؛ برای افزودن به کتابخانه گوشی باید دوره را انتخاب و دکمه واردسازی را اجرا کنی.") }
     var progress by remember { mutableStateOf<Pair<Int, Int>?>(null) }
 
     fun inspect() {
@@ -71,6 +71,7 @@ fun GitHubContentSyncCard() {
             verticalArrangement = Arrangement.spacedBy(9.dp)
         ) {
             Text("دوره‌های آموزشی مخزن", style = MaterialTheme.typography.titleMedium)
+            Text("پیداشدن دوره یا خواندن Manifest به معنی ذخیره‌شدن آن نیست. واردسازی، محتوا را در پایگاه‌داده محلی برنامه ثبت می‌کند.", style = MaterialTheme.typography.bodySmall)
             Text(status, style = MaterialTheme.typography.bodySmall)
             if (error.isNotBlank()) {
                 Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
@@ -167,7 +168,7 @@ fun GitHubContentSyncCard() {
                             val result = repository.importSelected(selected) { done, total, _ ->
                                 progress = done to total
                             }
-                            status = "واردسازی انجام شد: ${result.imported} فصل جدید/به‌روزشده، ${result.skipped} مورد ردشده."
+                            status = "نتیجه واردسازی: ${result.imported} بسته/فصل و ${result.importedItems} آیتم آموزشی ذخیره شد؛ ${result.skipped} مورد رد شد."
                             error = result.blocked.joinToString("\n")
                             entries = repository.inspect()
                             selected = emptySet()
