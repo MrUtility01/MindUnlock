@@ -33,6 +33,29 @@ def extra_type(rel,suffix):
     if "پروژه" in n: return "project"
     return "lesson"
 
+def classify_content_kind(rel,title,content,source_type):
+    identity=(Path(rel).stem+" "+title).casefold()
+    patterns=[
+        ("question",r"سؤال|سوال|پرسش|question|quiz|q\\s*&\\s*a"),
+        ("exam",r"آزمون|امتحان|ارزیابی|exam|test"),
+        ("lab",r"آزمایشگاه|لابراتوار|lab|کارگاه عملی|سناریوی عملی"),
+        ("troubleshooting",r"عیب.?یابی|رفع.?اشکال|troubleshoot|runbook|incident"),
+        ("checklist",r"چک.?لیست|checklist|pre.?flight"),
+        ("tip",r"نکته|ترفند|best.?practice|tips?"),
+        ("command",r"دستور(?:ات)?|فرمان|command|cli|terminal"),
+        ("example",r"مثال|نمونه|example|نمونه.?پیکربندی"),
+        ("exercise",r"تمرین|exercise|practice|کار.?عملی"),
+        ("project",r"پروژه|project|تحویل.?واقعی"),
+        ("glossary",r"واژه.?نامه|اصطلاحات|glossary"),
+        ("reference",r"مرجع|reference|cheat.?sheet"),
+    ]
+    for kind,pattern in patterns:
+        if re.search(pattern,identity,re.I): return kind
+    source=str(source_type or "").casefold()
+    if source in ("todo","task","2"): return "checklist"
+    if source in ("code","script"): return "command"
+    return "lesson" if content.strip() else "note"
+
 def main():
     if not ROOT.is_dir() or not IMPORTER.is_dir(): raise SystemExit("Joplin source folders were not extracted.")
     src_manifest=json.loads((ROOT/"MANIFEST.json").read_text(encoding="utf-8"))
@@ -54,6 +77,8 @@ def main():
                 title=next((x.strip().lstrip("#").strip() for x in t.splitlines() if x.strip()),p.stem)[:180]
         meta={"source_path":rel,"source_uid":uid,"source_type":typ,"source_format":ext.lstrip(".") or "binary","language":"fa" if ext in (".md",".csv",".json",".py") else "und","import_origin":"Joplin Markdown Directory export"}
         if entry: meta.update({"source_manifest_type":entry["type"],"stable_id":entry["id"]})
+        content_kind=typ
+        source_status="verified"
         if ext in (".md",".csv",".json",".py"):
             content=data.decode("utf-8-sig",errors="replace")
             if ext==".md":
@@ -64,14 +89,19 @@ def main():
                 stripped=re.sub(r"(?m)^\s*\|.*\|\s*$","",stripped)
                 stripped=re.sub(r"<!--.*?-->","",stripped,flags=re.S)
                 meaningful=re.sub(r"[\s*_>#|\-]","",stripped)
-                meta["content_completeness"]="substantive" if len(meaningful)>500 else "scaffold_or_short"
-                if len(meaningful)>500: substantial+=1
+                content_kind=classify_content_kind(rel,title,content,typ)
+                is_substantive=len(meaningful)>500
+                meta["content_completeness"]="substantive" if is_substantive else "scaffold_or_short"
+                meta["content_kind"]=content_kind
+                if is_substantive: substantial+=1
+                source_status="verified" if is_substantive or (content_kind not in ("lesson","note") and len(meaningful)>80) else "draft"
+                meta["review_status"]="ready" if source_status=="verified" else "template_or_incomplete"
         else:
             ASSETS.mkdir(parents=True,exist_ok=True); shutil.copy2(p,ASSETS/p.name)
             asset="content/library/growth-path/assets/"+p.name
             meta.update({"asset_mime_type":mimetypes.guess_type(p.name)[0] or "application/octet-stream","asset_size_bytes":len(data),"asset_sha256":sha(data),"asset_path":asset})
             content=f"![{p.name}](https://raw.githubusercontent.com/MrUtility01/MindUnlock/main/{asset})\n\nفایل تصویری اصلی در مخزن دوره نگهداری می‌شود."
-        groups[(kind,key)].append((rel,{"source_uid":uid,"type":typ,"title":title,"content":content,"order":0,"metadata":meta}))
+        groups[(kind,key)].append((rel,{"source_uid":uid,"type":content_kind or "note","source_status":source_status,"title":title,"content":content,"order":0,"metadata":meta}))
     packages=[]
     def add(key,title,group,order,rows,desc):
         rows.sort(key=lambda x:natural(x[0])); items=[]
