@@ -179,6 +179,7 @@ fun KnowledgeArchiveScreen(db: AppDatabase, speech: PersianSpeech, onOpenItem: (
         "سؤال" -> "question"
         "فلش‌کارت" -> "flashcard"
         "آزمایشگاه" -> "lab"
+        "تمرین" -> "exercise"
         "دستور" -> "command"
         "مثال" -> "example"
         "یادداشت" -> "note"
