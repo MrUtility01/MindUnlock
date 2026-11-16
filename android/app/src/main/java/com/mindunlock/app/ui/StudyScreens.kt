@@ -631,8 +631,13 @@ fun SubjectListScreen(db: AppDatabase, onSubjectClick: (String) -> Unit) {
     val chapters by db.chapterDao().observeAll().collectAsState(initial = emptyList())
     val allItemsCount by db.contentItemDao().observeItemCount().collectAsState(initial = 0)
     var query by rememberSaveable { mutableStateOf("") }
-    val subjects = chapters.groupBy { it.groupName?.trim()?.takeIf(String::isNotEmpty) ?: "بدون موضوع" }
-        .entries.sortedBy { entry -> entry.value.minOfOrNull { it.orderIndex } ?: Int.MAX_VALUE }
+    val subjects = chapters.groupBy { chapter ->
+        if (chapter.id.startsWith("github_technology-path-")) {
+            "مسیر رشد"
+        } else {
+            chapter.groupName?.trim()?.takeIf(String::isNotEmpty) ?: "بدون موضوع"
+        }
+    }.entries.sortedBy { entry -> entry.value.minOfOrNull { it.orderIndex } ?: Int.MAX_VALUE }
         .filter { it.key.contains(query, true) }
     Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth(), label = { Text("جست‌وجوی موضوع") }, singleLine = true)
@@ -662,8 +667,14 @@ fun SubjectListScreen(db: AppDatabase, onSubjectClick: (String) -> Unit) {
 fun ChapterListScreen(db: AppDatabase, subject: String, onChapterClick: (String) -> Unit) {
     val chapters by db.chapterDao().observeAll().collectAsState(initial = emptyList())
     var query by rememberSaveable(subject) { mutableStateOf("") }
-    val filtered = chapters.filter { (it.groupName?.trim()?.ifBlank { "بدون موضوع" } ?: "بدون موضوع") == subject }
-        .filter { query.isBlank() || it.title.contains(query, true) }
+    val filtered = chapters.filter { chapter ->
+        val displayGroup = if (chapter.id.startsWith("github_technology-path-")) {
+            "مسیر رشد"
+        } else {
+            chapter.groupName?.trim()?.ifBlank { "بدون موضوع" } ?: "بدون موضوع"
+        }
+        displayGroup == subject
+    }.filter { query.isBlank() || it.title.contains(query, true) }
         .sortedWith(compareBy({ it.orderIndex }, { it.title }))
     Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(subject, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
@@ -671,12 +682,19 @@ fun ChapterListScreen(db: AppDatabase, subject: String, onChapterClick: (String)
         PersianVoiceInputButton(compact = true) { spoken -> query = listOf(query, spoken).filter { it.isNotBlank() }.joinToString(" ") }
         LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(9.dp)) {
             items(filtered, key = { it.id }) { chapter ->
+                val originalGrowthGroup = chapter.groupName
+                    ?.takeIf { chapter.id.startsWith("github_technology-path-") && it != "مسیر رشد" }
+                    ?.let { "حوزه یا بخش اصلی: $it" }
+                val chapterDescription = listOfNotNull(
+                    chapter.description?.takeIf { it.isNotBlank() },
+                    originalGrowthGroup
+                ).joinToString(" · ")
                 Card(onClick = { onChapterClick(chapter.id) }, modifier = Modifier.fillMaxWidth()) {
                     Row(Modifier.fillMaxWidth().padding(15.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text("فصل ${chapter.orderIndex + 1}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                             Text(chapter.title, fontWeight = FontWeight.SemiBold)
-                            if (!chapter.description.isNullOrBlank()) Text(chapter.description, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
+                            if (chapterDescription.isNotBlank()) Text(chapterDescription, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
                             Text("${chapter.itemCount} مطلب", style = MaterialTheme.typography.labelSmall)
                         }
                         Icon(Icons.Default.PlayArrow, contentDescription = "باز کردن فصل")
