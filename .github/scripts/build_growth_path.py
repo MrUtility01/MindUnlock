@@ -36,7 +36,7 @@ def extra_type(rel,suffix):
 def classify_content_kind(rel,title,content,source_type):
     identity=(Path(rel).stem+" "+title).casefold()
     patterns=[
-        ("question",r"سؤال|سوال|پرسش|question|quiz|q\\s*&\\s*a"),
+        ("question",r"سؤال|سوال|پرسش|question|quiz|q[ ]*&[ ]*a"),
         ("exam",r"آزمون|امتحان|ارزیابی|exam|test"),
         ("lab",r"آزمایشگاه|لابراتوار|lab|کارگاه عملی|سناریوی عملی"),
         ("troubleshooting",r"عیب.?یابی|رفع.?اشکال|troubleshoot|runbook|incident"),
