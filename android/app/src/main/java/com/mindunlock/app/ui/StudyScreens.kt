@@ -2785,7 +2785,7 @@ fun SettingsScreen(
                                     style = MaterialTheme.typography.labelSmall
                                 )
                                 Text(
-                                    if (speech.isVoiceDownloaded(voice.first)) "مدل نصب شده روی دستگاه" else "مدل دریافت نشده · با انتخاب، دانلود می‌شود",
+                                    if (speech.isVoiceDownloaded(voice.first)) "فایل‌های مدل موجود است · آماده‌بودن موتور با آزمون تولید صدا سنجیده می‌شود" else "فایل‌های مدل موجود نیست · با انتخاب، دانلود می‌شود",
                                     style = MaterialTheme.typography.labelSmall
                                 )
                                 Text(
