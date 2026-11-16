@@ -15,11 +15,11 @@ class StartupTemporaryCleanupTest {
     @Test
     fun restoresModelBackupWhenInterruptedInstallLeftNoDestination() {
         val context = RuntimeEnvironment.getApplication()
-        val speechBackup = File(context.filesDir, "speech/.voice.backup/model.onnx").apply {
+        val speechBackup = File(context.filesDir, "speech/.restore-me.backup/model.onnx").apply {
             parentFile?.mkdirs()
             writeBytes(ByteArray(256))
         }
-        val asrBackup = File(context.filesDir, "offline-asr/model.onnx.backup").apply {
+        val asrBackup = File(context.filesDir, "offline-asr/restored-model.onnx.backup").apply {
             parentFile?.mkdirs()
             writeBytes(ByteArray(128))
         }
@@ -27,8 +27,8 @@ class StartupTemporaryCleanupTest {
         StartupTemporaryCleanup.clear(context)
 
         assertFalse(speechBackup.exists())
-        assertTrue(File(context.filesDir, "speech/voice/model.onnx").isFile)
-        assertTrue(File(context.filesDir, "offline-asr/model.onnx").isFile)
+        assertTrue(File(context.filesDir, "speech/restore-me/model.onnx").isFile)
+        assertTrue(File(context.filesDir, "offline-asr/restored-model.onnx").isFile)
     }
 
     @Test
