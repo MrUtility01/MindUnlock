@@ -113,7 +113,7 @@ def main():
             asset="content/library/growth-path/assets/"+p.name
             meta.update({"asset_mime_type":mimetypes.guess_type(p.name)[0] or "application/octet-stream","asset_size_bytes":len(data),"asset_sha256":sha(data),"asset_path":asset})
             content=f"![{p.name}](https://raw.githubusercontent.com/MrUtility01/MindUnlock/main/{asset})\n\nفایل تصویری اصلی در مخزن دوره نگهداری می‌شود."
-                source_items=[]
+        source_items=[]
         if ext==".md":
             sections=split_markdown_sections(title,content)
             for section_index,(section_heading,section_content,section_level) in enumerate(sections):
