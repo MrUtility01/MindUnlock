@@ -64,7 +64,7 @@ def split_markdown_sections(title,content):
     for index,match in enumerate(headings):
         end=headings[index+1].start() if index+1<len(headings) else len(content)
         block=content[match.start():end]
-        if index==0 and prefix: block=prefix+"\\n\\n"+block
+        if index==0 and prefix: block=prefix+"\n\n"+block
         sections.append((match.group(2).strip(),block,len(match.group(1))))
     return sections
 
