@@ -16,6 +16,8 @@ import java.util.zip.GZIPInputStream
 import java.nio.ByteBuffer
 import java.nio.charset.CodingErrorAction
 import java.nio.charset.StandardCharsets
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 data class GitHubManifestItem(
     val id: String,
@@ -69,16 +71,24 @@ class GitHubContentSyncRepository(
 ) {
     private val preferences = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
-    suspend fun inspect(): List<GitHubContentSyncEntry> {
+    suspend fun inspect(): List<GitHubContentSyncEntry> =
+        withContext(Dispatchers.IO) { inspectOnIo() }
+
+    private suspend fun inspectOnIo(): List<GitHubContentSyncEntry> {
         val manifestFile = remote.readTextFile(manifestPath)
         require(manifestFile.size <= MAX_MANIFEST_BYTES) { "فایل فهرست محتوا بیش از حد بزرگ است." }
         val manifest = GitHubManifestPolicy.parse(manifestFile.text)
+        val directoryCache = mutableMapOf<String, Result<Set<String>>>()
         return manifest.map { item ->
             val parentPath = item.path.substringBeforeLast('/', "")
             val fileName = item.path.substringAfterLast('/')
-            val sourceAvailable = runCatching {
-                remote.list(parentPath).any { it.name == fileName && !it.isDirectory }
-            }.getOrDefault(false)
+            val directoryFiles = directoryCache[parentPath] ?: runCatching {
+                remote.list(parentPath).asSequence()
+                    .filterNot { it.isDirectory }
+                    .map { it.name }
+                    .toSet()
+            }.also { directoryCache[parentPath] = it }
+            val sourceAvailable = fileName in directoryFiles.getOrThrow()
             if (!sourceAvailable) {
                 GitHubContentSyncEntry(item, GitHubContentSyncStatus.UNAVAILABLE)
             } else if (item.format in COMPRESSED_COURSE_FORMATS) {
@@ -133,6 +143,13 @@ class GitHubContentSyncRepository(
     suspend fun importSelected(
         selectedIds: Set<String>,
         onProgress: (Int, Int, String) -> Unit = { _, _, _ -> }
+    ): GitHubContentSyncResult = withContext(Dispatchers.IO) {
+        importSelectedOnIo(selectedIds, onProgress)
+    }
+
+    private suspend fun importSelectedOnIo(
+        selectedIds: Set<String>,
+        onProgress: (Int, Int, String) -> Unit
     ): GitHubContentSyncResult {
         require(selectedIds.isNotEmpty()) { "حداقل یک فصل را برای واردسازی انتخاب کن." }
         val entries = inspect().filter { it.item.id in selectedIds }
@@ -148,7 +165,9 @@ class GitHubContentSyncRepository(
         var importedItems = 0
         var skipped = 0
         eligible.forEachIndexed { index, entry ->
-            onProgress(index + 1, eligible.size, entry.item.title)
+            withContext(Dispatchers.Main.immediate) {
+                onProgress(index + 1, eligible.size, entry.item.title)
+            }
             if (entry.item.format in COMPRESSED_COURSE_FORMATS) {
                 val bundleResult = importCompressedCourse(entry)
                 if (bundleResult.third != null) {
@@ -220,7 +239,11 @@ class GitHubContentSyncRepository(
      * Explicitly keeps the current local revision and records the currently reviewed remote
      * revision as the comparison base. No local content is modified or uploaded.
      */
-    suspend fun keepLocalVersion(id: String) {
+    suspend fun keepLocalVersion(id: String) = withContext(Dispatchers.IO) {
+        keepLocalVersionOnIo(id)
+    }
+
+    private suspend fun keepLocalVersionOnIo(id: String) {
         val entry = inspect().singleOrNull { it.item.id == id }
             ?: throw IllegalArgumentException("محتوا در Manifest فعلی پیدا نشد.")
         require(entry.status.canKeepLocal) { "حفظ نسخه محلی برای این وضعیت مجاز نیست." }
@@ -242,7 +265,11 @@ class GitHubContentSyncRepository(
      * Explicitly accepts the GitHub copy for a conflicting item. The local fingerprint is
      * rechecked inside the Room transaction so a concurrent edit is never overwritten.
      */
-    suspend fun takeRemoteVersion(id: String) {
+    suspend fun takeRemoteVersion(id: String) = withContext(Dispatchers.IO) {
+        takeRemoteVersionOnIo(id)
+    }
+
+    private suspend fun takeRemoteVersionOnIo(id: String) {
         val entry = inspect().singleOrNull { it.item.id == id }
             ?: throw IllegalArgumentException("محتوا در Manifest فعلی پیدا نشد.")
         require(entry.status.canTakeRemote) { "جایگزینی با نسخه GitHub برای این وضعیت مجاز نیست." }
