@@ -166,7 +166,7 @@ class GitHubContentSyncRepository(
         var skipped = 0
         eligible.forEachIndexed { index, entry ->
             withContext(Dispatchers.Main.immediate) {
-                onProgress(index + 1, eligible.size, entry.item.title)
+                onProgress(index, eligible.size, "در حال دریافت و پردازش «${entry.item.title}»")
             }
             if (entry.item.format in COMPRESSED_COURSE_FORMATS) {
                 val bundleResult = importCompressedCourse(entry)
@@ -231,6 +231,9 @@ class GitHubContentSyncRepository(
                 .apply()
             imported++
             importedItems += parsed.second.size
+        }
+        withContext(Dispatchers.Main.immediate) {
+            onProgress(eligible.size, eligible.size, "واردسازی پایان یافت")
         }
         return GitHubContentSyncResult(imported, skipped, blocked, importedItems)
     }
