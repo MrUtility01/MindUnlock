@@ -40,6 +40,7 @@ fun GitHubContentSyncCard() {
     var error by remember { mutableStateOf("") }
     var status by remember { mutableStateOf("فهرست فقط دوره‌ها را پیدا می‌کند؛ برای افزودن به کتابخانه گوشی باید دوره را انتخاب و دکمه واردسازی را اجرا کنی.") }
     var progress by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    var progressLabel by remember { mutableStateOf("") }
 
     fun inspect() {
         scope.launch {
@@ -152,11 +153,17 @@ fun GitHubContentSyncCard() {
             }
             if (progress != null) {
                 val (done, total) = progress!!
-                LinearProgressIndicator(
-                    progress = { if (total == 0) 0f else done.toFloat() / total },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Text("واردسازی $done از $total", style = MaterialTheme.typography.labelSmall)
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    CircularProgressIndicator()
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(progressLabel.ifBlank { "در حال دریافت و پردازش دوره از GitHub…" }, style = MaterialTheme.typography.labelSmall)
+                        LinearProgressIndicator(
+                            progress = { if (total == 0) 0f else done.toFloat() / total },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Text("مرحله $done از $total", style = MaterialTheme.typography.labelSmall)
+                    }
+                }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(enabled = !busy && selected.isNotEmpty(), onClick = {
@@ -164,9 +171,11 @@ fun GitHubContentSyncCard() {
                         busy = true
                         error = ""
                         progress = 0 to selected.size
+                        progressLabel = "شروع دریافت و بررسی فایل‌های انتخاب‌شده از GitHub…"
                         try {
-                            val result = repository.importSelected(selected) { done, total, _ ->
+                            val result = repository.importSelected(selected) { done, total, title ->
                                 progress = done to total
+                                progressLabel = "در حال دریافت و پردازش: $title"
                             }
                             status = "نتیجه واردسازی: ${result.imported} بسته/فصل و ${result.importedItems} آیتم آموزشی ذخیره شد؛ ${result.skipped} مورد رد شد."
                             error = result.blocked.joinToString("\n")
@@ -177,6 +186,7 @@ fun GitHubContentSyncCard() {
                         } finally {
                             busy = false
                             progress = null
+                            progressLabel = ""
                         }
                     }
                 }) { Text(if (busy) "در حال انجام…" else "واردسازی دوره‌های انتخاب‌شده") }
