@@ -42,6 +42,9 @@ interface ContentItemDao {
     @Query("SELECT uid, chapterId, type, title, orderIndex, optionsJson, answer, explanation, sourceStatus, metadataJson FROM content_items WHERE uid = :uid LIMIT 1")
     fun observeMetadata(uid: String): Flow<ContentItemEntity?>
 
+    @Query("SELECT uid, chapterId, type, title, orderIndex, optionsJson, answer, explanation, sourceStatus, metadataJson FROM content_items WHERE uid = :uid AND sourceStatus = 'verified' LIMIT 1")
+    fun observeVerifiedMetadata(uid: String): Flow<ContentItemEntity?>
+
     @Query("SELECT content FROM content_items WHERE uid = :uid LIMIT 1")
     fun observeContent(uid: String): Flow<String?>
     
