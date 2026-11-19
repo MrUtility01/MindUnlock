@@ -296,7 +296,6 @@ fun DashboardScreen(
 ) {
     val chapters by db.chapterDao().observeAll().collectAsState(initial = emptyList())
     val reviewCandidates by db.contentItemDao().observeReviewCandidates().collectAsState(initial = emptyList())
-    val lastReadItem by db.contentItemDao().observeLastOpenedVerifiedItem().collectAsState(initial = null)
     val itemCount by db.contentItemDao().observeItemCount().collectAsState(initial = 0)
     val flashcardCount by db.contentItemDao().observeFlashcardCount().collectAsState(initial = 0)
     val progress by userDb.progressDao().observeAll().collectAsState(initial = emptyList())
@@ -321,7 +320,11 @@ fun DashboardScreen(
     val feedbackScope = rememberCoroutineScope()
     var isSavingFeedback by remember(feedbackSession?.id) { mutableStateOf(false) }
     var feedbackMessage by remember(feedbackSession?.id) { mutableStateOf("") }
-    val lastReadProgress = lastReadItem?.let { item -> progress.firstOrNull { it.itemUid == item.uid } }
+    val lastReadProgress = progress.asSequence()
+        .filter { it.lastOpenedAt != null }
+        .maxByOrNull { it.lastOpenedAt ?: 0L }
+    val lastReadItem by (lastReadProgress?.itemUid?.let { db.contentItemDao().observeMetadata(it) }
+        ?: kotlinx.coroutines.flow.flowOf(null)).collectAsState(initial = null)
     val last = lastReadItem?.chapterId?.let { chapterId -> chapters.firstOrNull { it.id == chapterId } }
         ?: lastSession?.chapterId?.let { chapterId -> chapters.firstOrNull { it.id == chapterId } }
         ?: chapters.firstOrNull()
@@ -339,8 +342,7 @@ fun DashboardScreen(
     val lastChapterId = last?.id
     val lastChapterVerifiedCount by (lastChapterId?.let { db.contentItemDao().observeVerifiedCountForChapter(it) }
         ?: kotlinx.coroutines.flow.flowOf(0)).collectAsState(initial = 0)
-    val completedLastChapterItems by (lastChapterId?.let { db.contentItemDao().observeCompletedVerifiedCountForChapter(it) }
-        ?: kotlinx.coroutines.flow.flowOf(0)).collectAsState(initial = 0)
+    val completedLastChapterItems = progress.count { it.chapterId == lastChapterId && it.completed }
     val resumeAction = ResumeActionPolicy.select(
         dueReviewCount = dueReviews,
         overdueTaskCount = tasks.count { !it.completed && it.dueAt != null && it.dueAt < todayStart },
