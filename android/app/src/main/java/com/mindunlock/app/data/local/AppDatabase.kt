@@ -55,7 +55,7 @@ interface ContentItemDao {
     fun observeFlashcardCount(): Flow<Int>
 
     // Dashboard only needs review metadata; never hydrate full lesson bodies on Home.
-    @Query("SELECT uid, chapterId, type, optionsJson, answer, explanation, sourceStatus, metadataJson FROM content_items WHERE sourceStatus = 'verified' AND lower(type) IN ('flashcard', 'question', 'quiz', 'exercise', 'practice', 'exam')")
+    @Query("SELECT uid, chapterId, type, optionsJson, sourceStatus, metadataJson FROM content_items WHERE sourceStatus = 'verified' AND lower(type) IN ('flashcard', 'question', 'quiz', 'exercise', 'practice', 'exam')")
     fun observeReviewCandidates(): Flow<List<ContentItemEntity>>
 
     @Query("SELECT COUNT(*) FROM content_items WHERE chapterId = :chapterId AND sourceStatus = 'verified'")
