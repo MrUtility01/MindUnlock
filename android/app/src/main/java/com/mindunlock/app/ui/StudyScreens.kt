@@ -583,15 +583,15 @@ fun DashboardScreen(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.primary
                         )
-                        if (lastChapterItems.isNotEmpty()) {
-                            val percent = (completedLastChapterItems * 100) / lastChapterItems.size
+                        if (lastChapterVerifiedCount > 0) {
+                            val percent = (completedLastChapterItems * 100) / lastChapterVerifiedCount
                             Text(
-                                "پیشرفت فصل: ${PersianDate.toPersianDigits(completedLastChapterItems.toString())} از ${PersianDate.toPersianDigits(lastChapterItems.size.toString())} مطلب · ${PersianDate.toPersianDigits(percent.toString())}٪",
+                                "پیشرفت فصل: ${PersianDate.toPersianDigits(completedLastChapterItems.toString())} از ${PersianDate.toPersianDigits(lastChapterVerifiedCount.toString())} مطلب · ${PersianDate.toPersianDigits(percent.toString())}٪",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             LinearProgressIndicator(
-                                progress = { completedLastChapterItems.toFloat() / lastChapterItems.size.toFloat() },
+                                progress = { completedLastChapterItems.toFloat() / lastChapterVerifiedCount.toFloat() },
                                 modifier = Modifier.fillMaxWidth()
                             )
                         } else {
