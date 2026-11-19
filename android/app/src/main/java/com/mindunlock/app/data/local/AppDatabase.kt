@@ -54,6 +54,19 @@ interface ContentItemDao {
     @Query("SELECT COUNT(*) FROM content_items WHERE lower(type) = 'flashcard'")
     fun observeFlashcardCount(): Flow<Int>
 
+    // Dashboard only needs review metadata; never hydrate full lesson bodies on Home.
+    @Query("SELECT uid, chapterId, type, optionsJson, answer, explanation, sourceStatus, metadataJson FROM content_items WHERE sourceStatus = 'verified' AND lower(type) IN ('flashcard', 'question', 'quiz', 'exercise', 'practice', 'exam')")
+    fun observeReviewCandidates(): Flow<List<ContentItemEntity>>
+
+    @Query("SELECT ci.uid, ci.chapterId, ci.type, ci.optionsJson, ci.answer, ci.explanation, ci.sourceStatus, ci.metadataJson FROM content_items ci INNER JOIN progress p ON p.itemUid = ci.uid WHERE ci.sourceStatus = 'verified' AND p.lastOpenedAt IS NOT NULL ORDER BY p.lastOpenedAt DESC LIMIT 1")
+    fun observeLastOpenedVerifiedItem(): Flow<ContentItemEntity?>
+
+    @Query("SELECT COUNT(*) FROM content_items WHERE chapterId = :chapterId AND sourceStatus = 'verified'")
+    fun observeVerifiedCountForChapter(chapterId: String): Flow<Int>
+
+    @Query("SELECT COUNT(*) FROM content_items ci INNER JOIN progress p ON p.itemUid = ci.uid WHERE ci.chapterId = :chapterId AND ci.sourceStatus = 'verified' AND p.completed = 1")
+    fun observeCompletedVerifiedCountForChapter(chapterId: String): Flow<Int>
+
     @Query("SELECT * FROM content_items WHERE uid IN (:uids) ORDER BY chapterId, orderIndex, title")
     fun observeByUids(uids: List<String>): Flow<List<ContentItemEntity>>
 
