@@ -48,6 +48,10 @@ interface ContentItemDao {
     @Query("SELECT ci.* FROM content_items ci LEFT JOIN chapters c ON c.id = ci.chapterId ORDER BY COALESCE(c.orderIndex, 2147483647), ci.orderIndex, ci.title COLLATE NOCASE")
     fun observeAll(): Flow<List<ContentItemEntity>>
 
+    // Home analytics needs identifiers and review metadata only; never stream lesson bodies or raw JSON.
+    @Query("SELECT uid, chapterId, type, optionsJson, metadataJson, sourceStatus FROM content_items ORDER BY chapterId, orderIndex")
+    fun observeForDashboard(): Flow<List<ContentItemEntity>>
+
     @Query("SELECT COUNT(*) FROM content_items")
     fun observeItemCount(): Flow<Int>
 
