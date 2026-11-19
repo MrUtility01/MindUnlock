@@ -295,7 +295,7 @@ fun DashboardScreen(
     onContinue: (String) -> Unit
 ) {
     val chapters by db.chapterDao().observeAll().collectAsState(initial = emptyList())
-    val contentItems by db.contentItemDao().observeAll().collectAsState(initial = emptyList())
+    val contentItems by db.contentItemDao().observeForDashboard().collectAsState(initial = emptyList())
     val itemCount by db.contentItemDao().observeItemCount().collectAsState(initial = 0)
     val flashcardCount by db.contentItemDao().observeFlashcardCount().collectAsState(initial = 0)
     val progress by userDb.progressDao().observeAll().collectAsState(initial = emptyList())
