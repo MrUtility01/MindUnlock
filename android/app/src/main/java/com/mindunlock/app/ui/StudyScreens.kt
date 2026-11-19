@@ -323,7 +323,7 @@ fun DashboardScreen(
     val lastReadProgress = progress.asSequence()
         .filter { it.lastOpenedAt != null }
         .maxByOrNull { it.lastOpenedAt ?: 0L }
-    val lastReadItem by (lastReadProgress?.itemUid?.let { db.contentItemDao().observeMetadata(it) }
+    val lastReadItem by (lastReadProgress?.itemUid?.let { db.contentItemDao().observeVerifiedMetadata(it) }
         ?: kotlinx.coroutines.flow.flowOf(null)).collectAsState(initial = null)
     val last = lastReadItem?.chapterId?.let { chapterId -> chapters.firstOrNull { it.id == chapterId } }
         ?: lastSession?.chapterId?.let { chapterId -> chapters.firstOrNull { it.id == chapterId } }
