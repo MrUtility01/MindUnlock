@@ -248,8 +248,10 @@ class PersianSpeech(context: Context) {
         val sources = SpeechDownloadMirrors.candidates(appContext, SpeechMirrorSource.GITHUB_RELEASE, spec.archive)
             .flatMap { endpoint -> listOf(endpoint, endpoint) }
         val failures = mutableListOf<String>()
+        val skipRetryUrls = mutableSetOf<String>()
         check(sources.isNotEmpty()) { "منبع اصلی یا هیچ میروری برای دریافت مدل گفتار در دسترس نیست." }
         for ((index, source) in sources.withIndex()) {
+            if (index % 2 == 1 && source.url in skipRetryUrls) continue
             val offset = partial.length().takeIf { it in 1 until spec.archiveBytes } ?: 0L
             if (offset == 0L && partial.exists()) partial.delete()
             downloadedBytes.value = offset
@@ -321,6 +323,9 @@ class PersianSpeech(context: Context) {
                 val reason = failure.message ?: failure.javaClass.simpleName
                 DownloadAuditLog.record(appContext, "TTS", "failure host=${source.label} reason=$reason retained_partial=${partial.length()}")
                 failures += "${index + 1}. ${source.label}: $reason"
+                val transientIoFailure = generateSequence(failure) { it.cause }
+                    .any { it is java.io.IOException }
+                if (!transientIoFailure && index % 2 == 0) skipRetryUrls += source.url
             } finally {
                 connection.disconnect()
             }
