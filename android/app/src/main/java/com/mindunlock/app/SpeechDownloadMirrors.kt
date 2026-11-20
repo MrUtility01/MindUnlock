@@ -22,8 +22,8 @@ internal data class SpeechMirrorEndpoint(
  *  - a base URL, e.g. https://mirror.example.ir
  *  - a proxy template containing {url} or {encodedUrl}
  *
- * Configured mirrors are tried first, in the user's configured order. The
- * publisher's original URL is the final fallback.
+ * The publisher's official URL is tried first. Configured mirrors are fallback
+ * sources, in the user's configured order.
  */
 internal object SpeechDownloadMirrors {
     const val PREF_HF_MIRRORS = "speech_mirror_hugging_face"
@@ -69,7 +69,7 @@ internal object SpeechDownloadMirrors {
             require(original.host.isNotBlank() && original.userInfo == null)
             SpeechMirrorEndpoint(original.host, original.toExternalForm())
         }.getOrNull()
-        return (resolved + listOfNotNull(official)).distinctBy { it.url }
+        return (listOfNotNull(official) + resolved).distinctBy { it.url }
     }
 
     private fun resolve(configured: String, originalUrl: String): SpeechMirrorEndpoint? {
