@@ -324,7 +324,9 @@ class PersianSpeech(context: Context) {
                 DownloadAuditLog.record(appContext, "TTS", "failure host=${source.label} reason=$reason retained_partial=${partial.length()}")
                 failures += "${index + 1}. ${source.label}: $reason"
                 val transientIoFailure = generateSequence(failure) { it.cause }
-                    .any { it is java.io.IOException }
+                    .any { it is java.io.IOException } ||
+                    reason.startsWith("دانلود کامل نیست") ||
+                    Regex("پاسخ HTTP (408|425|429|5\\d{2})").containsMatchIn(reason)
                 if (!transientIoFailure && index % 2 == 0) skipRetryUrls += source.url
             } finally {
                 connection.disconnect()
