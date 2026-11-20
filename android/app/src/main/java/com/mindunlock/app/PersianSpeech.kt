@@ -263,6 +263,7 @@ class PersianSpeech(context: Context) {
                 requestMethod = "GET"
                 setRequestProperty("User-Agent", "MindUnlock-Android/0.6.32")
                 setRequestProperty("Accept", "application/octet-stream")
+                setRequestProperty("Accept-Encoding", "identity")
                 if (offset > 0L) setRequestProperty("Range", "bytes=$offset-")
             }
             try {
