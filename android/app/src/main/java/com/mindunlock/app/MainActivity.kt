@@ -312,6 +312,7 @@ private fun MindUnlockRoot(
         "about" -> "درباره ما"
         "profile" -> "پروفایل یادگیری"
         "learning" -> "موتور یادگیری"
+        "growth" -> "مسیر رشد تخصصی IT"
         "sync" -> "اتصال و دریافت محتوا"
         "github" -> "مخزن عمومی GitHub"
         "more" -> "ابزارهای یادگیری"
@@ -322,7 +323,7 @@ private fun MindUnlockRoot(
             "reader" -> previousScreen
             "chapter" -> "subject"
             "subject" -> "courses"
-            "sync", "github", "settings", "profile", "learning", "mindmap", "more", "quiz", "exam", "review", "labs", "planner", "progress", "bookmarks", "inbox", "journal", "later", "backup", "archive", "about" -> "home"
+            "sync", "github", "settings", "profile", "learning", "growth", "mindmap", "more", "quiz", "exam", "review", "labs", "planner", "progress", "bookmarks", "inbox", "journal", "later", "backup", "archive", "about" -> "home"
             else -> "home"
         }
     }
@@ -471,6 +472,7 @@ private fun MindUnlockRoot(
                 "about" -> AboutScreen()
                 "profile" -> LearningProfileScreen(preferences, userDatabase)
                 "learning" -> LearningEngineScreen(repository.database, userDatabase, preferences, onOpenChapter = { id -> selectedChapter = id; screen = "chapter" }, onNavigate = { screen = it })
+                "growth" -> GrowthPathScreen(preferences)
                 "sync" -> SyncScreen(repository, onDone = { screen = "courses" })
                 "github" -> GitHubBrowserScreen()
                 else -> MoreScreen(onNavigate = { screen = it })
@@ -488,6 +490,7 @@ private fun MoreScreen(onNavigate: (String) -> Unit) {
         Text("فضای کار MindUnlock", style = MaterialTheme.typography.headlineSmall, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
         Text("ابزارها در چند گروه مشخص چیده شده‌اند تا مسیرهای روزمره سریع‌تر پیدا شوند. داده‌های شخصی روی همین دستگاه نگهداری می‌شوند.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text("یادگیری و تمرین", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+        ActionTile("مسیر رشد تخصصی IT", "growth", onNavigate, Modifier.fillMaxWidth())
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ActionTile("تمرین", "quiz", onNavigate, Modifier.weight(1f))
             ActionTile("آزمون", "exam", onNavigate, Modifier.weight(1f))
