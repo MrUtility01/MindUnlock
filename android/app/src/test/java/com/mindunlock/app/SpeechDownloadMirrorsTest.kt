@@ -60,8 +60,8 @@ class SpeechDownloadMirrorsTest {
             original
         )
 
-        assertEquals("ghfast.top", candidates.first().label)
-        assertEquals(original, candidates.last().url)
+        assertEquals(original, candidates.first().url)
+        assertEquals("ghfast.top", candidates[1].label)
     }
 
     @Test
@@ -79,8 +79,8 @@ class SpeechDownloadMirrorsTest {
         )
 
         assertEquals(2, candidates.size)
-        assertTrue(candidates.first().url.startsWith("https://custom.example.ir/"))
-        assertEquals(original, candidates.last().url)
+        assertEquals(original, candidates.first().url)
+        assertTrue(candidates[1].url.startsWith("https://custom.example.ir/"))
     }
 
     @Test
@@ -102,10 +102,10 @@ class SpeechDownloadMirrorsTest {
 
         assertEquals(
             "https://iran-mirror.example.ir/org/model/resolve/main/model.onnx?download=true",
-            candidates.first().url
+            candidates[1].url
         )
-        assertTrue(candidates[1].url.startsWith("https://proxy.example.ir/fetch?url=https://huggingface.co/"))
-        assertEquals(original, candidates.last().url)
+        assertTrue(candidates[2].url.startsWith("https://proxy.example.ir/fetch?url=https://huggingface.co/"))
+        assertEquals(original, candidates.first().url)
         assertTrue(candidates.all { it.url.startsWith("https://") })
     }
 
@@ -118,9 +118,9 @@ class SpeechDownloadMirrorsTest {
             original
         )
 
-        assertEquals("ghfast.top", candidates.first().label)
-        assertEquals("ghproxy.net", candidates[1].label)
-        assertEquals(original, candidates.last().url)
+        assertEquals(original, candidates.first().url)
+        assertEquals("ghfast.top", candidates[1].label)
+        assertEquals("ghproxy.net", candidates[2].label)
         assertTrue(candidates.size >= 3)
         assertTrue(candidates.all { it.url.startsWith("https://") })
     }
@@ -139,8 +139,8 @@ class SpeechDownloadMirrorsTest {
             original
         ).first()
 
-        assertTrue(first.url.startsWith("https://proxy.example.ir/get?target=https%3A%2F%2Fgithub.com%2F"))
-        val proxy = SpeechDownloadMirrors.candidates(context, SpeechMirrorSource.GITHUB_RELEASE, original).last()
-        assertEquals(original, proxy.url)
+        assertEquals(original, first.url)
+        val proxy = SpeechDownloadMirrors.candidates(context, SpeechMirrorSource.GITHUB_RELEASE, original)[1]
+        assertTrue(proxy.url.startsWith("https://proxy.example.ir/get?target=https%3A%2F%2Fgithub.com%2F"))
     }
 }
