@@ -246,33 +246,39 @@ class PersianSpeech(context: Context) {
             return
         }
         val sources = SpeechDownloadMirrors.candidates(appContext, SpeechMirrorSource.GITHUB_RELEASE, spec.archive)
+            .flatMap { endpoint -> listOf(endpoint, endpoint) }
         val failures = mutableListOf<String>()
+        val skipRetryUrls = mutableSetOf<String>()
         check(sources.isNotEmpty()) { "منبع اصلی یا هیچ میروری برای دریافت مدل گفتار در دسترس نیست." }
         for ((index, source) in sources.withIndex()) {
+            if (index % 2 == 1 && source.url in skipRetryUrls) continue
             val offset = partial.length().takeIf { it in 1 until spec.archiveBytes } ?: 0L
             if (offset == 0L && partial.exists()) partial.delete()
             downloadedBytes.value = offset
             downloadProgress.value = (offset.toFloat() / spec.archiveBytes.toFloat()).coerceIn(0f, 1f)
-            val connection = (URL(source.url).openConnection() as HttpURLConnection).apply {
-                connectTimeout = 20_000
-                readTimeout = 600_000
-                instanceFollowRedirects = true
-                requestMethod = "GET"
-                setRequestProperty("User-Agent", "MindUnlock-Android/0.6.32")
-                setRequestProperty("Accept", "application/octet-stream")
-                if (offset > 0L) setRequestProperty("Range", "bytes=$offset-")
-            }
+            var connection: HttpURLConnection? = null
             try {
-                val role = if (index == 0) "primary_github" else "fallback_mirror"
+                val activeConnection = (URL(source.url).openConnection() as HttpURLConnection).apply {
+                    connectTimeout = 60_000
+                    readTimeout = 900_000
+                    instanceFollowRedirects = true
+                    requestMethod = "GET"
+                    setRequestProperty("User-Agent", "MindUnlock-Android/0.6.32")
+                    setRequestProperty("Accept", "application/octet-stream")
+                    setRequestProperty("Accept-Encoding", "identity")
+                    if (offset > 0L) setRequestProperty("Range", "bytes=$offset-")
+                }
+                connection = activeConnection
+                val role = if (index / 2 == 0) "official_github_primary" else "configured_mirror_fallback"
                 DownloadAuditLog.record(appContext, "TTS", "attempt=${index + 1}/${sources.size} role=$role host=${source.label} file=${spec.model} resume=$offset")
-                status.value = if (index == 0) "آزمایش منبع اصلی GitHub برای دریافت ${spec.model}…" else "منبع اصلی ناموفق بود؛ آزمایش Mirror ${index} از ${sources.lastIndex}: ${source.label}"
-                connection.connect()
-                val response = connection.responseCode
+                status.value = if (index / 2 == 0 && index % 2 == 0) "دریافت مستقیم مدل از GitHub؛ در صورت شکست، تلاش مجدد و سپس میرورها…" else if (index % 2 == 1) "ارتباط با ${source.label} قطع شد؛ تلاش مجدد از همان منبع…" else "منبع قبلی ناموفق بود؛ آزمایش Mirror ${index / 2} از ${sources.size / 2 - 1}: ${source.label}"
+                activeConnection.connect()
+                val response = activeConnection.responseCode
                 check(response == HttpURLConnection.HTTP_OK || response == HttpURLConnection.HTTP_PARTIAL) { "پاسخ HTTP $response" }
-                val contentType = connection.contentType.orEmpty().lowercase(java.util.Locale.US)
+                val contentType = activeConnection.contentType.orEmpty().lowercase(java.util.Locale.US)
                 check(!contentType.contains("text/html")) { "سرور به‌جای آرشیو مدل، صفحه HTML برگرداند." }
                 val appendOffset = if (offset > 0L && response == HttpURLConnection.HTTP_PARTIAL) {
-                    val contentRange = connection.getHeaderField("Content-Range").orEmpty()
+                    val contentRange = activeConnection.getHeaderField("Content-Range").orEmpty()
                     val range = Regex("^bytes (\\d+)-(\\d+)/(\\d+)$", RegexOption.IGNORE_CASE).matchEntire(contentRange)
                         ?: throw IllegalStateException("پاسخ ادامه دانلود فاقد Content-Range معتبر است.")
                     val first = range.groupValues[1].toLong()
@@ -287,7 +293,7 @@ class PersianSpeech(context: Context) {
                     }
                     0L
                 }
-                val announcedLength = connection.contentLengthLong
+                val announcedLength = activeConnection.contentLengthLong
                 val expectedResponseBytes = spec.archiveBytes - appendOffset
                 val announcedLengthMatches = if (appendOffset == 0L) {
                     announcedLength == spec.archiveBytes
@@ -297,7 +303,7 @@ class PersianSpeech(context: Context) {
                 if (announcedLength >= 0L) check(announcedLengthMatches) { "اندازه پاسخ با بازه درخواستی برابر نیست ($announcedLength از $expectedResponseBytes بایت)." }
                 status.value = "دریافت مدل از ${source.label}؛ ${if (appendOffset > 0L) "ادامه از ${appendOffset} بایت" else "شروع از ابتدا"}…"
                 var received = appendOffset
-                connection.inputStream.use { input ->
+                activeConnection.inputStream.use { input ->
                     java.io.FileOutputStream(partial, appendOffset > 0L).buffered().use { output ->
                         val buffer = ByteArray(64 * 1024)
                         while (true) {
@@ -315,16 +321,31 @@ class PersianSpeech(context: Context) {
                 DownloadAuditLog.record(appContext, "TTS", "success host=${source.label} bytes=$received file=${spec.model}")
                 status.value = "بسته از ${source.label} دریافت شد؛ اعتبارسنجی و استخراج آغاز می‌شود."
                 return
-            } catch (failure: Throwable) {
+            } catch (failure: Exception) {
                 if (partial.length() > spec.archiveBytes) partial.delete()
                 val reason = failure.message ?: failure.javaClass.simpleName
                 DownloadAuditLog.record(appContext, "TTS", "failure host=${source.label} reason=$reason retained_partial=${partial.length()}")
                 failures += "${index + 1}. ${source.label}: $reason"
+                val transientIoFailure = generateSequence<Throwable>(failure) { it.cause }
+                    .any { it is java.io.IOException } ||
+                    reason.startsWith("دانلود کامل نیست") ||
+                    Regex("پاسخ HTTP (408|425|429|5\\d{2})").containsMatchIn(reason)
+                if (!transientIoFailure && index % 2 == 0) {
+                    skipRetryUrls += source.url
+                } else if (transientIoFailure && index % 2 == 0) {
+                    status.value = "ارتباط با ${source.label} ناپایدار شد؛ ۱٫۵ ثانیه دیگر دوباره تلاش می‌کنیم…"
+                    try {
+                        Thread.sleep(1_500L)
+                    } catch (interrupted: InterruptedException) {
+                        Thread.currentThread().interrupt()
+                        throw IllegalStateException("دریافت مدل توسط سیستم متوقف شد.", interrupted)
+                    }
+                }
             } finally {
-                connection.disconnect()
+                connection?.disconnect()
             }
         }
-        throw IllegalStateException("تمام منابع دریافت مدل ناموفق بودند؛ فایل ناقص برای ادامه دانلود نگهداری شد: ${failures.joinToString(" | ")}")
+        throw IllegalStateException("ارتباط با منابع دریافت برقرار نشد یا دانلود کامل نشد؛ فایل ناقص برای ادامه دریافت نگهداری شد: ${failures.joinToString(" | ")}")
     }
 
     fun deleteDownloadedVoice(id: String) {

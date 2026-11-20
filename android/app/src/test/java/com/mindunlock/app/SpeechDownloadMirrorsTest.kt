@@ -65,7 +65,7 @@ class SpeechDownloadMirrorsTest {
     }
 
     @Test
-    fun customSavedListReplacesBuiltInDefaultsAndKeepsOfficialLast() {
+    fun customSavedListReplacesBuiltInDefaultsAndKeepsOfficialAsPrimary() {
         context.getSharedPreferences(SpeechDownloadMirrors.SETTINGS_FILE, Context.MODE_PRIVATE)
             .edit()
             .putString(SpeechDownloadMirrors.PREF_GITHUB_MIRRORS, "https://custom.example.ir/{url}")
@@ -84,7 +84,7 @@ class SpeechDownloadMirrorsTest {
     }
 
     @Test
-    fun customIranianEndpointIsTriedFirstAndOfficialHostLast() {
+    fun officialHostIsTriedFirstAndCustomIranianEndpointsAreFallbacks() {
         context.getSharedPreferences(SpeechDownloadMirrors.SETTINGS_FILE, Context.MODE_PRIVATE)
             .edit()
             .putString(
@@ -100,17 +100,17 @@ class SpeechDownloadMirrorsTest {
             original
         )
 
-        assertEquals(original, candidates.first().url)
         assertEquals(
             "https://iran-mirror.example.ir/org/model/resolve/main/model.onnx?download=true",
             candidates[1].url
         )
         assertTrue(candidates[2].url.startsWith("https://proxy.example.ir/fetch?url=https://huggingface.co/"))
+        assertEquals(original, candidates.first().url)
         assertTrue(candidates.all { it.url.startsWith("https://") })
     }
 
     @Test
-    fun githubReleaseHasSeveralFallbacksBeforeOfficialUrl() {
+    fun githubReleaseUsesOfficialUrlBeforeMirrorFallbacks() {
         val original = "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1/model.tar.bz2"
         val candidates = SpeechDownloadMirrors.candidates(
             context,
@@ -120,8 +120,9 @@ class SpeechDownloadMirrorsTest {
 
         assertEquals(original, candidates.first().url)
         assertEquals("ghfast.top", candidates[1].label)
+        assertEquals("ghproxy.net", candidates[2].label)
         assertTrue(candidates.size >= 3)
-        assertTrue(candidates.drop(1).all { it.url.startsWith("https://") })
+        assertTrue(candidates.all { it.url.startsWith("https://") })
     }
 
     @Test

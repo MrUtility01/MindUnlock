@@ -295,7 +295,7 @@ fun DashboardScreen(
     onContinue: (String) -> Unit
 ) {
     val chapters by db.chapterDao().observeAll().collectAsState(initial = emptyList())
-    val contentItems by db.contentItemDao().observeAll().collectAsState(initial = emptyList())
+    val reviewCandidates by db.contentItemDao().observeReviewCandidates().collectAsState(initial = emptyList())
     val itemCount by db.contentItemDao().observeItemCount().collectAsState(initial = 0)
     val flashcardCount by db.contentItemDao().observeFlashcardCount().collectAsState(initial = 0)
     val progress by userDb.progressDao().observeAll().collectAsState(initial = emptyList())
@@ -320,14 +320,11 @@ fun DashboardScreen(
     val feedbackScope = rememberCoroutineScope()
     var isSavingFeedback by remember(feedbackSession?.id) { mutableStateOf(false) }
     var feedbackMessage by remember(feedbackSession?.id) { mutableStateOf("") }
-    val verifiedItemsByUid = contentItems
-        .asSequence()
-        .filter { it.sourceStatus == "verified" }
-        .associateBy { it.uid }
     val lastReadProgress = progress.asSequence()
-        .filter { it.lastOpenedAt != null && verifiedItemsByUid.containsKey(it.itemUid) }
+        .filter { it.lastOpenedAt != null }
         .maxByOrNull { it.lastOpenedAt ?: 0L }
-    val lastReadItem = lastReadProgress?.let { saved -> verifiedItemsByUid[saved.itemUid] }
+    val lastReadItem by (lastReadProgress?.itemUid?.let { db.contentItemDao().observeVerifiedMetadata(it) }
+        ?: kotlinx.coroutines.flow.flowOf(null)).collectAsState(initial = null)
     val last = lastReadItem?.chapterId?.let { chapterId -> chapters.firstOrNull { it.id == chapterId } }
         ?: lastSession?.chapterId?.let { chapterId -> chapters.firstOrNull { it.id == chapterId } }
         ?: chapters.firstOrNull()
@@ -338,16 +335,14 @@ fun DashboardScreen(
     val tomorrowStart = today.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
     val todayTasks = tasks.filter { !it.completed && it.dueAt != null && it.dueAt >= todayStart && it.dueAt < tomorrowStart }
     val inboxCount = inboxItems.count { it.status == "inbox" }
-    val dueReviews = remember(chapters, contentItems, progress, tasks, sessions, now) {
-        LearningAnalytics.build(chapters, contentItems, progress, tasks, sessions, now).scheduledReviewsDue
+    val dueReviews = remember(reviewCandidates, progress, tasks, sessions, now) {
+        LearningAnalytics.build(emptyList(), reviewCandidates, progress, tasks, sessions, now).scheduledReviewsDue
     }
     val activeTopic = laterTopics.firstOrNull { it.status == "active" }
-    val lastChapterItems = last?.let { chapter ->
-        contentItems.filter { it.chapterId == chapter.id && it.sourceStatus == "verified" }
-    }.orEmpty()
-    val completedLastChapterItems = lastChapterItems.count { item ->
-        progress.any { it.itemUid == item.uid && it.completed }
-    }
+    val lastChapterId = last?.id
+    val lastChapterVerifiedCount by (lastChapterId?.let { db.contentItemDao().observeVerifiedCountForChapter(it) }
+        ?: kotlinx.coroutines.flow.flowOf(0)).collectAsState(initial = 0)
+    val completedLastChapterItems = progress.count { it.chapterId == lastChapterId && it.completed }
     val resumeAction = ResumeActionPolicy.select(
         dueReviewCount = dueReviews,
         overdueTaskCount = tasks.count { !it.completed && it.dueAt != null && it.dueAt < todayStart },
@@ -588,15 +583,15 @@ fun DashboardScreen(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.primary
                         )
-                        if (lastChapterItems.isNotEmpty()) {
-                            val percent = (completedLastChapterItems * 100) / lastChapterItems.size
+                        if (lastChapterVerifiedCount > 0) {
+                            val percent = (completedLastChapterItems * 100) / lastChapterVerifiedCount
                             Text(
-                                "پیشرفت فصل: ${PersianDate.toPersianDigits(completedLastChapterItems.toString())} از ${PersianDate.toPersianDigits(lastChapterItems.size.toString())} مطلب · ${PersianDate.toPersianDigits(percent.toString())}٪",
+                                "پیشرفت فصل: ${PersianDate.toPersianDigits(completedLastChapterItems.toString())} از ${PersianDate.toPersianDigits(lastChapterVerifiedCount.toString())} مطلب · ${PersianDate.toPersianDigits(percent.toString())}٪",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             LinearProgressIndicator(
-                                progress = { completedLastChapterItems.toFloat() / lastChapterItems.size.toFloat() },
+                                progress = { completedLastChapterItems.toFloat() / lastChapterVerifiedCount.toFloat() },
                                 modifier = Modifier.fillMaxWidth()
                             )
                         } else {

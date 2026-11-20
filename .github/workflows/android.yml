@@ -2,7 +2,7 @@ name: Build Android APK
 
 on:
   push:
-    branches: [ main, feature/mindunlock-core-modules, feature/github-public-browser ]
+    branches: [ main, feature/mindunlock-core-modules, feature/github-public-browser, 'fix/**' ]
   pull_request:
     branches: [ main, review/android-migration-tests ]
   workflow_dispatch:

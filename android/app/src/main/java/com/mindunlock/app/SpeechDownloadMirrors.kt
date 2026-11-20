@@ -22,8 +22,8 @@ internal data class SpeechMirrorEndpoint(
  *  - a base URL, e.g. https://mirror.example.ir
  *  - a proxy template containing {url} or {encodedUrl}
  *
- * The publisher's original URL is tried first to preserve the previously working
- * download path. Mirrors are fallback-only, in the configured order.
+ * The publisher's official URL is tried first. Configured mirrors are fallback
+ * sources, in the user's configured order.
  */
 internal object SpeechDownloadMirrors {
     const val PREF_HF_MIRRORS = "speech_mirror_hugging_face"
