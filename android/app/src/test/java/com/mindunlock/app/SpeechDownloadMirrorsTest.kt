@@ -65,7 +65,7 @@ class SpeechDownloadMirrorsTest {
     }
 
     @Test
-    fun customSavedListReplacesBuiltInDefaultsAndKeepsOfficialLast() {
+    fun customSavedListReplacesBuiltInDefaultsAndKeepsOfficialAsPrimary() {
         context.getSharedPreferences(SpeechDownloadMirrors.SETTINGS_FILE, Context.MODE_PRIVATE)
             .edit()
             .putString(SpeechDownloadMirrors.PREF_GITHUB_MIRRORS, "https://custom.example.ir/{url}")
@@ -84,7 +84,7 @@ class SpeechDownloadMirrorsTest {
     }
 
     @Test
-    fun customIranianEndpointIsTriedFirstAndOfficialHostLast() {
+    fun officialHostIsTriedFirstAndCustomIranianEndpointsAreFallbacks() {
         context.getSharedPreferences(SpeechDownloadMirrors.SETTINGS_FILE, Context.MODE_PRIVATE)
             .edit()
             .putString(
@@ -110,7 +110,7 @@ class SpeechDownloadMirrorsTest {
     }
 
     @Test
-    fun githubReleaseHasSeveralFallbacksBeforeOfficialUrl() {
+    fun githubReleaseUsesOfficialUrlBeforeMirrorFallbacks() {
         val original = "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1/model.tar.bz2"
         val candidates = SpeechDownloadMirrors.candidates(
             context,
