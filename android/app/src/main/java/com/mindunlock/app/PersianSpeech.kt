@@ -254,8 +254,8 @@ class PersianSpeech(context: Context) {
             downloadedBytes.value = offset
             downloadProgress.value = (offset.toFloat() / spec.archiveBytes.toFloat()).coerceIn(0f, 1f)
             val connection = (URL(source.url).openConnection() as HttpURLConnection).apply {
-                connectTimeout = 20_000
-                readTimeout = 600_000
+                connectTimeout = 60_000
+                readTimeout = 900_000
                 instanceFollowRedirects = true
                 requestMethod = "GET"
                 setRequestProperty("User-Agent", "MindUnlock-Android/0.6.32")
@@ -263,9 +263,9 @@ class PersianSpeech(context: Context) {
                 if (offset > 0L) setRequestProperty("Range", "bytes=$offset-")
             }
             try {
-                val role = if (index == 0) "primary_github" else "fallback_mirror"
+                val role = if (index == sources.lastIndex) "official_github_fallback" else "configured_mirror"
                 DownloadAuditLog.record(appContext, "TTS", "attempt=${index + 1}/${sources.size} role=$role host=${source.label} file=${spec.model} resume=$offset")
-                status.value = if (index == 0) "آزمایش منبع اصلی GitHub برای دریافت ${spec.model}…" else "منبع اصلی ناموفق بود؛ آزمایش Mirror ${index} از ${sources.lastIndex}: ${source.label}"
+                status.value = if (index == sources.lastIndex) "میرورها ناموفق بودند؛ آزمایش منبع اصلی GitHub برای دریافت ${spec.model}…" else "آزمایش Mirror ${index + 1} از ${sources.lastIndex}: ${source.label}"
                 connection.connect()
                 val response = connection.responseCode
                 check(response == HttpURLConnection.HTTP_OK || response == HttpURLConnection.HTTP_PARTIAL) { "پاسخ HTTP $response" }
