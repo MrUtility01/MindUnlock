@@ -263,9 +263,9 @@ class PersianSpeech(context: Context) {
                 if (offset > 0L) setRequestProperty("Range", "bytes=$offset-")
             }
             try {
-                val role = if (index == sources.lastIndex) "official_github_fallback" else "configured_mirror"
+                val role = if (index == 0) "official_github_primary" else "configured_mirror_fallback"
                 DownloadAuditLog.record(appContext, "TTS", "attempt=${index + 1}/${sources.size} role=$role host=${source.label} file=${spec.model} resume=$offset")
-                status.value = if (index == sources.lastIndex) "میرورها ناموفق بودند؛ آزمایش منبع اصلی GitHub برای دریافت ${spec.model}…" else "آزمایش Mirror ${index + 1} از ${sources.lastIndex}: ${source.label}"
+                status.value = if (index == 0) "دریافت مستقیم مدل از GitHub؛ در صورت شکست، میرورها امتحان می‌شوند…" else "منبع قبلی ناموفق بود؛ آزمایش Mirror ${index} از ${sources.lastIndex}: ${source.label}"
                 connection.connect()
                 val response = connection.responseCode
                 check(response == HttpURLConnection.HTTP_OK || response == HttpURLConnection.HTTP_PARTIAL) { "پاسخ HTTP $response" }
