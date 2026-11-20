@@ -319,7 +319,7 @@ class PersianSpeech(context: Context) {
                 DownloadAuditLog.record(appContext, "TTS", "success host=${source.label} bytes=$received file=${spec.model}")
                 status.value = "بسته از ${source.label} دریافت شد؛ اعتبارسنجی و استخراج آغاز می‌شود."
                 return
-            } catch (failure: Throwable) {
+            } catch (failure: Exception) {
                 if (partial.length() > spec.archiveBytes) partial.delete()
                 val reason = failure.message ?: failure.javaClass.simpleName
                 DownloadAuditLog.record(appContext, "TTS", "failure host=${source.label} reason=$reason retained_partial=${partial.length()}")
