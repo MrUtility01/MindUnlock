@@ -246,6 +246,7 @@ class PersianSpeech(context: Context) {
             return
         }
         val sources = SpeechDownloadMirrors.candidates(appContext, SpeechMirrorSource.GITHUB_RELEASE, spec.archive)
+            .flatMap { endpoint -> listOf(endpoint, endpoint) }
         val failures = mutableListOf<String>()
         check(sources.isNotEmpty()) { "منبع اصلی یا هیچ میروری برای دریافت مدل گفتار در دسترس نیست." }
         for ((index, source) in sources.withIndex()) {
@@ -263,9 +264,9 @@ class PersianSpeech(context: Context) {
                 if (offset > 0L) setRequestProperty("Range", "bytes=$offset-")
             }
             try {
-                val role = if (index == 0) "official_github_primary" else "configured_mirror_fallback"
+                val role = if (index / 2 == 0) "official_github_primary" else "configured_mirror_fallback"
                 DownloadAuditLog.record(appContext, "TTS", "attempt=${index + 1}/${sources.size} role=$role host=${source.label} file=${spec.model} resume=$offset")
-                status.value = if (index == 0) "دریافت مستقیم مدل از GitHub؛ در صورت شکست، میرورها امتحان می‌شوند…" else "منبع قبلی ناموفق بود؛ آزمایش Mirror ${index} از ${sources.lastIndex}: ${source.label}"
+                status.value = if (index / 2 == 0 && index % 2 == 0) "دریافت مستقیم مدل از GitHub؛ در صورت شکست، تلاش مجدد و سپس میرورها…" else if (index % 2 == 1) "ارتباط با ${source.label} قطع شد؛ تلاش مجدد از همان منبع…" else "منبع قبلی ناموفق بود؛ آزمایش Mirror ${index / 2} از ${sources.size / 2 - 1}: ${source.label}"
                 connection.connect()
                 val response = connection.responseCode
                 check(response == HttpURLConnection.HTTP_OK || response == HttpURLConnection.HTTP_PARTIAL) { "پاسخ HTTP $response" }
@@ -324,7 +325,7 @@ class PersianSpeech(context: Context) {
                 connection.disconnect()
             }
         }
-        throw IllegalStateException("تمام منابع دریافت مدل ناموفق بودند؛ فایل ناقص برای ادامه دانلود نگهداری شد: ${failures.joinToString(" | ")}")
+        throw IllegalStateException("ارتباط با منابع دریافت برقرار نشد یا دانلود کامل نشد؛ فایل ناقص برای ادامه دریافت نگهداری شد: ${failures.joinToString(" | ")}")
     }
 
     fun deleteDownloadedVoice(id: String) {
