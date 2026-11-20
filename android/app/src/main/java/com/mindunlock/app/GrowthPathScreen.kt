@@ -137,8 +137,13 @@ fun GrowthPathScreen(preferences: SharedPreferences) {
                                 color = if (correct) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
                                 fontWeight = FontWeight.Bold)
                             Text(unit.explanation)
-                            Button(onClick = { markDone(unit.id); selectedId = ""; answer = -1; submitted = false }, modifier = Modifier.fillMaxWidth()) { Text("ثبت تکمیل درس") }
+                            if (correct) {
+                                Button(onClick = { markDone(unit.id); selectedId = ""; answer = -1; submitted = false }, modifier = Modifier.fillMaxWidth()) { Text("ثبت تکمیل درس") }
+                            } else {
+                                Text("برای تکمیل درس، ابتدا پاسخ صحیح را انتخاب کن و آزمون را دوباره ثبت کن.", color = MaterialTheme.colorScheme.error)
+                            }
                             OutlinedButton(onClick = { answer = -1; submitted = false }, modifier = Modifier.fillMaxWidth()) { Text("تکرار آزمون") }
+                            OutlinedButton(onClick = { selectedId = ""; answer = -1; submitted = false }, modifier = Modifier.fillMaxWidth()) { Text("بازگشت به فهرست درس‌ها") }
                         }
                     }
                 }
