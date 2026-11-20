@@ -327,7 +327,17 @@ class PersianSpeech(context: Context) {
                     .any { it is java.io.IOException } ||
                     reason.startsWith("دانلود کامل نیست") ||
                     Regex("پاسخ HTTP (408|425|429|5\\d{2})").containsMatchIn(reason)
-                if (!transientIoFailure && index % 2 == 0) skipRetryUrls += source.url
+                if (!transientIoFailure && index % 2 == 0) {
+                    skipRetryUrls += source.url
+                } else if (transientIoFailure && index % 2 == 0) {
+                    status.value = "ارتباط با ${source.label} ناپایدار شد؛ ۱٫۵ ثانیه دیگر دوباره تلاش می‌کنیم…"
+                    try {
+                        Thread.sleep(1_500L)
+                    } catch (interrupted: InterruptedException) {
+                        Thread.currentThread().interrupt()
+                        throw IllegalStateException("دریافت مدل توسط سیستم متوقف شد.", interrupted)
+                    }
+                }
             } finally {
                 connection.disconnect()
             }
