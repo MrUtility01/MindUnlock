@@ -8,6 +8,7 @@ import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -198,7 +199,8 @@ private object OfflinePersianDictation {
             }
 
             val chunk = ShortArray(2_048) // 128 ms @ 16 kHz; fixed-size reusable buffer.
-            var previousText = ""
+            val transcript = StringBuilder()
+            var lastPartialUpdate = 0L
             audioRecord.startRecording()
             onRecording(true)
             onStatus("در حال شنیدن… صحبت کن؛ متن به‌صورت پیوسته به‌روز می‌شود.")
@@ -212,16 +214,24 @@ private object OfflinePersianDictation {
                 }
                 if (count == 0) continue
 
-                val current = RizehNative.nativePush(handle, chunk, count)
-                if (current != previousText) {
-                    previousText = current
-                    onPartial(current)
+                // Native ASR returns only the newly decoded suffix; never re-copy the whole
+                // accumulated transcript from JNI for every 128 ms audio buffer.
+                val delta = RizehNative.nativePush(handle, chunk, count)
+                if (delta.isNotEmpty()) {
+                    transcript.append(delta)
+                    val now = SystemClock.elapsedRealtime()
+                    // Limit Compose snapshots to at most ~3 updates/sec while keeping dictation live.
+                    if (lastPartialUpdate == 0L || now - lastPartialUpdate >= 350L) {
+                        onPartial(transcript.toString())
+                        lastPartialUpdate = now
+                    }
                 }
             }
 
             onRecording(false)
             onStatus("در حال نهایی‌سازی آخرین بخش گفتار…")
-            PersianTextNormalizer.normalize(RizehNative.nativeFinish(handle))
+            transcript.append(RizehNative.nativeFinish(handle))
+            PersianTextNormalizer.normalize(transcript.toString())
         } finally {
             onRecording(false)
             recorder?.let { audioRecord ->
