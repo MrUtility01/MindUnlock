@@ -220,6 +220,12 @@ struct RizehSession {
 
 impl RizehSession {
     fn new(model_path: &str, tokens_path: &str, mel_path: &str) -> Result<Self> {
+        // Bound parallel inference so a dictation session does not fan out over every
+        // logical CPU core. This global pool is initialized before tract is first used.
+        let _ = rayon::ThreadPoolBuilder::new()
+            .num_threads(2)
+            .thread_name(|index| format!("mindunlock-asr-{}", index))
+            .build_global();
         let features = FeatureExtractor::load(mel_path)?;
         let tokens = load_tokens(tokens_path)?;
         // The exported graph has dynamic batch/time dimensions. Pin every streaming
