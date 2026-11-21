@@ -421,3 +421,33 @@ fun PersianVoiceInputButton(compact: Boolean = false, onText: (String) -> Unit) 
         if (!compact) Text(status, style = MaterialTheme.typography.labelSmall)
     }
 }
+
+/**
+ * Backward-compatible settings API. The model is already embedded in APK assets;
+ * preparation only copies it to private storage and NEVER performs a network request.
+ */
+internal object OfflinePersianSpeech {
+    fun isInstalled(context: Context): Boolean = runCatching {
+        context.assets.openFd("rizeh/model.int4.onnx").use { it.length >= 25_000_000L }
+        context.assets.open("rizeh/tokens.txt").use { it.read() >= 0 }
+        context.assets.open("rizeh/mel_filters.json").use { it.read() >= 0 }
+        true
+    }.getOrDefault(false)
+
+    fun modelSizeBytes(context: Context): Long = runCatching {
+        context.assets.openFd("rizeh/model.int4.onnx").use { it.length }
+    }.getOrDefault(0L)
+
+    fun deleteModel(context: Context): Boolean {
+        val cached = File(context.filesDir, "offline-asr/rizeh-v1")
+        return !cached.exists() || cached.deleteRecursively()
+    }
+
+    suspend fun prepareModel(context: Context, onProgress: (Int) -> Unit = {}): Long =
+        withContext(Dispatchers.IO) {
+            onProgress(0)
+            val installed = RizehAssets.ensureInstalled(context.applicationContext)
+            onProgress(100)
+            installed.model.length() + installed.tokens.length() + installed.mel.length()
+        }
+}
