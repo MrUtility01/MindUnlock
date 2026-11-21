@@ -17,6 +17,14 @@ class PersianTextNormalizerTest {
     }
 
     @Test
+    fun insertsSpacingAfterPersianPunctuationWithoutChangingIpAddresses() {
+        assertEquals(
+            "سلام، دنیا؛ آماده‌ای؟ بله! 192.168.1.10",
+            PersianTextNormalizer.normalize("سلام،دنیا؛آماده‌ای؟بله! 192.168.1.10")
+        )
+    }
+
+    @Test
     fun insertsPersianHalfSpacesForCommonPrefixesAndSuffixes() {
         assertEquals(
             "می‌رود و نمی‌شود و کتاب‌ها و فایل‌های",
