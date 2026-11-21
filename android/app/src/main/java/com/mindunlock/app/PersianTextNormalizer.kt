@@ -59,8 +59,9 @@ internal object PersianTextNormalizer {
             .replace(Regex("[ \\t\\r\\n]+"), " ")
             .trim()
 
-        text = normalizeSpokenNumbers(text)
         text = normalizePersianHalfSpaces(text)
+        // Protect spoken letter names inside infrastructure abbreviations (for example,
+        // "سی" in "دی اچ سی پی") before number ITN turns them into numeric values.
         for ((spoken, technical) in spokenTerms) {
             val pattern = Regex(
                 "(?<![\\p{L}\\p{N}])" + Regex.escape(spoken) + "(?![\\p{L}\\p{N}])",
@@ -68,6 +69,7 @@ internal object PersianTextNormalizer {
             )
             text = pattern.replace(text, technical)
         }
+        text = normalizeSpokenNumbers(text)
 
         return text
             .replace(Regex(" +([،؛:,.!?؟])"), "$1")
