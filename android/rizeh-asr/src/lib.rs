@@ -361,24 +361,29 @@ impl RizehSession {
     fn run_step(&mut self, feature: &[f32], valid_frames: usize) -> Result<()> {
         let audio = Tensor::from_shape(&[1usize, MEL_BINS, INPUT_FRAMES], feature)?;
         let length = Tensor::from_shape(&[1usize], &[valid_frames as i64])?;
-        let inputs = tvec!(
-            audio.into(),
-            length.into(),
-            self.cache_channel.clone().into(),
-            self.cache_time.clone().into(),
-            self.cache_channel_len.clone().into()
-        );
-        // Tract's transient TValue may contain a non-Send Rc. Convert results to
-        // owned Send tensors inside the pool before returning to the recorder thread.
+        // Build Tract's transient TValue input vector inside the worker pool: TValue may
+        // wrap an Rc and is not guaranteed Send. Only owned Tensor inputs cross the boundary.
+        let model = self.model.clone();
+        let cache_channel = self.cache_channel.clone();
+        let cache_time = self.cache_time.clone();
+        let cache_channel_len = self.cache_channel_len.clone();
         let output: Vec<Tensor> = self
             .inference_pool
-            .install(|| {
-                self.model.run(inputs).map(|values| {
-                    values
-                        .into_iter()
-                        .map(|value| value.into_tensor())
-                        .collect::<Vec<Tensor>>()
-                })
+            .install(move || {
+                model
+                    .run(tvec!(
+                        audio.into(),
+                        length.into(),
+                        cache_channel.into(),
+                        cache_time.into(),
+                        cache_channel_len.into()
+                    ))
+                    .map(|values| {
+                        values
+                            .into_iter()
+                            .map(|value| value.into_tensor())
+                            .collect::<Vec<Tensor>>()
+                    })
             })
             .context("Rizeh streaming inference failed")?;
 
