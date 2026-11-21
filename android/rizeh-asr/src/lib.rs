@@ -217,6 +217,7 @@ struct RizehSession {
     frames_since_emit: usize,
     previous_chunk_had_emit: bool,
     transcript: String,
+    returned_bytes: usize,
 }
 
 impl RizehSession {
@@ -287,6 +288,7 @@ impl RizehSession {
             frames_since_emit: 999,
             previous_chunk_had_emit: true,
             transcript: String::new(),
+            returned_bytes: 0,
         })
     }
 
@@ -298,17 +300,26 @@ impl RizehSession {
         }
     }
 
-    fn accept(&mut self, pcm: &[f32]) -> Result<&str> {
-        self.pending.extend_from_slice(pcm);
-        self.drain(false)?;
-        Ok(&self.transcript)
+    /// Returns only the newly decoded UTF-8 suffix since the previous JNI call.
+    /// This keeps per-chunk text transfer O(new characters), not O(total transcript length).
+    fn take_new_text(&mut self) -> String {
+        let start = self.returned_bytes.min(self.transcript.len());
+        let delta = self.transcript.get(start..).unwrap_or("").to_owned();
+        self.returned_bytes = self.transcript.len();
+        delta
     }
 
-    fn finish(&mut self) -> Result<&str> {
+    fn accept(&mut self, pcm: &[f32]) -> Result<String> {
+        self.pending.extend_from_slice(pcm);
+        self.drain(false)?;
+        Ok(self.take_new_text())
+    }
+
+    fn finish(&mut self) -> Result<String> {
         self.pending
             .extend(std::iter::repeat(0.0).take(FINAL_PAD_SAMPLES));
         self.drain(true)?;
-        Ok(&self.transcript)
+        Ok(self.take_new_text())
     }
 
     fn drain(&mut self, flush: bool) -> Result<()> {
@@ -549,9 +560,9 @@ pub extern "system" fn Java_com_mindunlock_app_RizehNative_nativePush(
         throw_java(&mut env, "نشست تشخیص گفتار آزاد شده است.");
         return std::ptr::null_mut();
     };
-    let result = catch_unwind(AssertUnwindSafe(|| session.accept(&pcm).map(str::to_owned)));
+    let result = catch_unwind(AssertUnwindSafe(|| session.accept(&pcm)));
     match result {
-        Ok(Ok(text)) => to_java_string(&mut env, &text),
+        Ok(Ok(delta)) => to_java_string(&mut env, &delta),
         Ok(Err(error)) => {
             throw_java(&mut env, &format!("پردازش صوت ناموفق بود: {:#}", error));
             std::ptr::null_mut()
@@ -578,9 +589,9 @@ pub extern "system" fn Java_com_mindunlock_app_RizehNative_nativeFinish(
         throw_java(&mut env, "نشست تشخیص گفتار آزاد شده است.");
         return std::ptr::null_mut();
     };
-    let result = catch_unwind(AssertUnwindSafe(|| session.finish().map(str::to_owned)));
+    let result = catch_unwind(AssertUnwindSafe(|| session.finish()));
     match result {
-        Ok(Ok(text)) => to_java_string(&mut env, &text),
+        Ok(Ok(delta)) => to_java_string(&mut env, &delta),
         Ok(Err(error)) => {
             throw_java(&mut env, &format!("تکمیل تشخیص گفتار ناموفق بود: {:#}", error));
             std::ptr::null_mut()
