@@ -221,9 +221,31 @@ impl RizehSession {
     fn new(model_path: &str, tokens_path: &str, mel_path: &str) -> Result<Self> {
         let features = FeatureExtractor::load(mel_path)?;
         let tokens = load_tokens(tokens_path)?;
+        // The exported graph has dynamic batch/time dimensions. Pin every streaming
+        // input contract before tract type inference, matching the model author's native runtime.
         let typed = tract_onnx::onnx()
             .model_for_path(model_path)
             .with_context(|| format!("load Rizeh INT4 ONNX: {}", model_path))?
+            .with_input_fact(
+                0,
+                InferenceFact::dt_shape(f32::datum_type(), tvec!(1, MEL_BINS, INPUT_FRAMES)),
+            )?
+            .with_input_fact(1, InferenceFact::dt_shape(i64::datum_type(), tvec!(1)))?
+            .with_input_fact(
+                2,
+                InferenceFact::dt_shape(
+                    f32::datum_type(),
+                    tvec!(1, CACHE_LAYERS, CACHE_LEFT, CACHE_D_MODEL),
+                ),
+            )?
+            .with_input_fact(
+                3,
+                InferenceFact::dt_shape(
+                    f32::datum_type(),
+                    tvec!(1, CACHE_LAYERS, CACHE_D_MODEL, CACHE_TIME),
+                ),
+            )?
+            .with_input_fact(4, InferenceFact::dt_shape(i64::datum_type(), tvec!(1)))?
             .into_typed()
             .context("type-check Rizeh ONNX graph")?;
         let outputs = resolve_outputs(&output_names(&typed))?;
