@@ -50,6 +50,16 @@ jobs:
               path.write_text(data, encoding='utf-8')
           PY
 
+      - name: Install Rust toolchain for Android ARM64
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      - name: Install Android NDK for native ASR
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools ndk;27.2.12479018'
+
       - name: Build and package offline Shenava Rizeh INT4 engine
         shell: bash
         run: |
@@ -3545,6 +3555,11 @@ jobs:
           grep -Eq "^package: name='com\\.mindunlock\\.app(\\.debug)?'" /tmp/apk-badging.txt
           echo "APK_SIZE_BYTES=$(stat -c%s "$APK")" | tee -a "$GITHUB_STEP_SUMMARY"
           echo "APK archive integrity and application package verified." | tee -a "$GITHUB_STEP_SUMMARY"
+          unzip -l "$APK" | grep -F "lib/arm64-v8a/libmindunlock_asr.so" >/dev/null
+          unzip -l "$APK" | grep -F "assets/rizeh/model.int4.onnx" >/dev/null
+          unzip -l "$APK" | grep -F "assets/rizeh/tokens.txt" >/dev/null
+          unzip -l "$APK" | grep -F "assets/rizeh/LICENSE" >/dev/null
+          echo "Offline Rizeh INT4 model, tokenizer, Apache license and ARM64 native engine are present in the APK." | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Resolve Android artifact version
         shell: bash
