@@ -60,6 +60,7 @@ internal object PersianTextNormalizer {
             .trim()
 
         text = normalizeSpokenNumbers(text)
+        text = normalizePersianHalfSpaces(text)
         for ((spoken, technical) in spokenTerms) {
             val pattern = Regex(
                 "(?<![\\p{L}\\p{N}])" + Regex.escape(spoken) + "(?![\\p{L}\\p{N}])",
@@ -73,6 +74,13 @@ internal object PersianTextNormalizer {
             .replace(Regex(" {2,}"), " ")
             .trim()
     }
+
+    private fun normalizePersianHalfSpaces(text: String): String =
+        text
+            // Persian verbal prefixes: می‌رود، نمی‌شود
+            .replace(Regex("(?<![آ-ی])(نمی|می)\\s+([آ-ی]+)"), "$1‌$2")
+            // Common Persian suffixes: کتاب‌ها، فایل‌های، سریع‌تر، دقیق‌ترین
+            .replace(Regex("([آ-ی]+)\\s+(ها|های|تر|ترین)(?![آ-ی])"), "$1‌$2")
 
     private fun normalizeSpokenNumbers(text: String): String {
         val tokens = text.split(Regex("\\s+"))
