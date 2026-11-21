@@ -368,9 +368,18 @@ impl RizehSession {
             self.cache_time.clone().into(),
             self.cache_channel_len.clone().into()
         );
-        let output = self
+        // Tract's transient TValue may contain a non-Send Rc. Convert results to
+        // owned Send tensors inside the pool before returning to the recorder thread.
+        let output: Vec<Tensor> = self
             .inference_pool
-            .install(|| self.model.run(inputs))
+            .install(|| {
+                self.model.run(inputs).map(|values| {
+                    values
+                        .into_iter()
+                        .map(|value| value.into_tensor())
+                        .collect::<Vec<Tensor>>()
+                })
+            })
             .context("Rizeh streaming inference failed")?;
 
         let logits = output[self.outputs.ctc].cast_to::<f32>()?.into_owned();
@@ -420,8 +429,8 @@ impl RizehSession {
         }
         self.previous_chunk_had_emit = chunk_had_emit;
 
-        self.cache_channel = output[self.outputs.next_channel].clone().into_tensor();
-        self.cache_time = output[self.outputs.next_time].clone().into_tensor();
+        self.cache_channel = output[self.outputs.next_channel].clone();
+        self.cache_time = output[self.outputs.next_time].clone();
         self.cache_channel_len =
             output[self.outputs.next_channel_len].cast_to::<i64>()?.into_owned();
         Ok(())
