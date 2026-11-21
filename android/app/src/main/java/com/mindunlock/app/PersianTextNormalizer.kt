@@ -38,7 +38,8 @@ internal object PersianTextNormalizer {
         "وی لن" to "VLAN",
         "وی‌لن" to "VLAN",
         "اکتیو دایرکتوری" to "Active Directory",
-        "اکتیو دایرکتوری" to "Active Directory"
+        "میکرو‌تیک" to "MikroTik",
+        "فورتی‌گیت" to "FortiGate"
     )
 
     private data class WordToken(val prefix: String, val core: String, val suffix: String)
@@ -69,7 +70,6 @@ internal object PersianTextNormalizer {
 
         return text
             .replace(Regex(" +([،؛:,.!?؟])"), "$1")
-            .replace(Regex("([،؛:,.!?؟])(?=[^\\s])"), "$1 ")
             .replace(Regex(" {2,}"), " ")
             .trim()
     }
