@@ -1,0 +1,24 @@
+[package]
+name = "mindunlock-rizeh-asr"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+publish = false
+
+[lib]
+name = "mindunlock_asr"
+crate-type = ["cdylib"]
+
+[dependencies]
+anyhow = "1.0"
+jni = "0.21.1"
+rustfft = "6.2"
+rayon = "1.10"
+serde_json = "1.0"
+tract-onnx = "0.23.10"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "unwind"

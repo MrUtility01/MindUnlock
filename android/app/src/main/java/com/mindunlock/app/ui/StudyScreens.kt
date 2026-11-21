@@ -2887,11 +2887,11 @@ fun SettingsScreen(
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("تشخیص گفتار فارسی آفلاین", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(
-                    if (asrModelPresent) "مدل Shenava روی همین گوشی نصب است؛ تبدیل گفتار بدون اینترنت و بدون ارسال صدا انجام می‌شود."
-                    else "مدل فارسی هنوز نصب نشده است. می‌توانی همین‌جا آن را دانلود و اعتبارسنجی کنی؛ پس از نصب، تایپ صوتی آفلاین می‌شود.",
+                    if (asrModelPresent) "مدل Shenava Rizeh INT4 داخل APK قرار دارد؛ پس از نصب برنامه برای تشخیص گفتار به دانلود یا اینترنت نیاز نیست."
+                    else "فایل‌های مدل همراه برنامه هستند. در صورت نیاز، نسخهٔ محلی آن‌ها از حافظهٔ نصب برنامه آماده‌سازی می‌شود؛ هیچ دانلود اینترنتی انجام نمی‌شود.",
                     style = MaterialTheme.typography.bodySmall
                 )
-                Text("موتور: sherpa-onnx · مدل فارسی Shenava Rizeh · مجوز Apache 2.0", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("موتور: tract-onnx · Shenava Rizeh INT4 · مجوز Apache 2.0", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (asrModelPresent) {
                     Text(
                         "فضای اشغال‌شده توسط مدل: " + String.format(java.util.Locale.US, "%.1f", OfflinePersianSpeech.modelSizeBytes(context) / (1024.0 * 1024.0)) + " MB",
@@ -2899,7 +2899,7 @@ fun SettingsScreen(
                     )
                     OutlinedButton(onClick = { showDeleteAsrDialog = true }, modifier = Modifier.fillMaxWidth()) {
                         Icon(Icons.Default.Delete, contentDescription = null)
-                        Text("حذف مدل تشخیص گفتار و آزادسازی فضا")
+                        Text("پاک‌کردن نسخهٔ استخراج‌شده از حافظهٔ داخلی")
                     }
                 } else {
                     Button(
@@ -2908,26 +2908,26 @@ fun SettingsScreen(
                             settingsScope.launch {
                                 asrDownloading = true
                                 asrDownloadProgress = 0
-                                asrDownloadMessage = "آماده‌سازی دانلود مدل تشخیص گفتار…"
+                                asrDownloadMessage = "آماده‌سازی فایل‌های مدل از APK…"
                                 try {
-                                    OfflinePersianSpeech.downloadModel(context) { percent ->
+                                    OfflinePersianSpeech.prepareModel(context) { percent ->
                                         android.os.Handler(android.os.Looper.getMainLooper()).post {
                                             asrDownloadProgress = percent
-                                            asrDownloadMessage = "دریافت و بررسی مدل: $percent٪"
+                                            asrDownloadMessage = "آماده‌سازی مدل محلی: $percent٪"
                                         }
                                     }
                                     asrModelPresent = OfflinePersianSpeech.isInstalled(context)
                                     asrDownloadMessage = if (asrModelPresent) "مدل تشخیص گفتار با موفقیت نصب و بررسی شد." else "فایل‌های مدل ناقص هستند."
                                     storageBytes = privateDataSize()
                                 } catch (error: Exception) {
-                                    asrDownloadMessage = "دانلود یا نصب مدل ناموفق بود: ${error.message ?: error.javaClass.simpleName}"
+                                    asrDownloadMessage = "آماده‌سازی مدل ناموفق بود: ${error.message ?: error.javaClass.simpleName}"
                                 } finally {
                                     asrDownloading = false
                                 }
                             }
                         },
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text(if (asrDownloading) "در حال دریافت مدل…" else "دانلود و نصب مدل تایپ صوتی") }
+                    ) { Text(if (asrDownloading) "در حال آماده‌سازی فایل‌ها…" else "آماده‌سازی مدل آفلاین") }
                     if (asrDownloading) LinearProgressIndicator(progress = asrDownloadProgress / 100f, modifier = Modifier.fillMaxWidth())
                 }
                 if (asrDownloadMessage.isNotBlank()) Text(asrDownloadMessage, color = if (asrDownloadMessage.contains("ناموفق") || asrDownloadMessage.contains("ناقص")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
@@ -2936,15 +2936,15 @@ fun SettingsScreen(
         if (showDeleteAsrDialog) {
             AlertDialog(
                 onDismissRequest = { showDeleteAsrDialog = false },
-                title = { Text("حذف مدل گفتار فارسی؟") },
-                text = { Text("فایل مدل حدود ۱۱۷ مگابایت است. با حذف آن، تشخیص گفتار آفلاین تا دریافت دوباره مدل غیرفعال می‌شود؛ نوشته‌ها و داده‌های برنامه دست‌نخورده می‌مانند.") },
+                title = { Text("پاک‌کردن نسخهٔ محلی مدل؟") },
+                text = { Text("این کار فقط نسخهٔ استخراج‌شدهٔ مدل را از حافظهٔ داخلی پاک می‌کند. نسخهٔ اصلی داخل APK باقی می‌ماند و هنگام استفادهٔ بعدی دوباره به‌صورت محلی استخراج می‌شود؛ داده‌ها و نوشته‌های برنامه حذف نمی‌شوند.") },
                 confirmButton = {
                     TextButton(onClick = {
                         OfflinePersianSpeech.deleteModel(context)
                         asrModelPresent = OfflinePersianSpeech.isInstalled(context)
                         storageBytes = privateDataSize()
                         showDeleteAsrDialog = false
-                    }) { Text("حذف مدل") }
+                    }) { Text("پاک‌کردن نسخهٔ محلی") }
                 },
                 dismissButton = { TextButton(onClick = { showDeleteAsrDialog = false }) { Text("انصراف") } }
             )
