@@ -123,6 +123,7 @@ import com.mindunlock.app.data.local.LabStepProgressEntity
 import com.mindunlock.app.data.local.LabQuestionResponseEntity
 import com.mindunlock.app.data.local.LearningSessionFeedbackEntity
 import com.mindunlock.app.data.local.ContentItemListEntry
+import com.mindunlock.app.data.local.DashboardContentItem
 import com.mindunlock.app.data.local.NoteEntity
 import com.mindunlock.app.data.local.MindDumpWorkflow
 import com.mindunlock.app.data.local.ProgressEntity
@@ -295,7 +296,21 @@ fun DashboardScreen(
     onContinue: (String) -> Unit
 ) {
     val chapters by db.chapterDao().observeAll().collectAsState(initial = emptyList())
-    val contentItems by db.contentItemDao().observeAll().collectAsState(initial = emptyList())
+    val dashboardRows by db.contentItemDao().observeDashboardItems().collectAsState(initial = emptyList())
+    val contentItems = remember(dashboardRows) {
+        dashboardRows.map { row ->
+            ContentItemEntity(
+                uid = row.uid,
+                chapterId = row.chapterId,
+                type = row.type,
+                title = row.title,
+                orderIndex = row.orderIndex,
+                optionsJson = row.optionsJson,
+                sourceStatus = row.sourceStatus,
+                metadataJson = row.metadataJson
+            )
+        }
+    }
     val itemCount by db.contentItemDao().observeItemCount().collectAsState(initial = 0)
     val flashcardCount by db.contentItemDao().observeFlashcardCount().collectAsState(initial = 0)
     val progress by userDb.progressDao().observeAll().collectAsState(initial = emptyList())
