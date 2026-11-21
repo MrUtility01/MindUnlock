@@ -99,11 +99,27 @@ impl FeatureExtractor {
     }
 }
 
-fn take_text_delta(text: &str, returned_bytes: &mut usize) -> String {
-    let start = (*returned_bytes).min(text.len());
-    let delta = text.get(start..).unwrap_or("").to_owned();
-    *returned_bytes = text.len();
-    delta
+/// Append one SentencePiece/CTC token and carry word spacing across JNI calls.
+fn append_ctc_piece(
+    delta: &mut String,
+    has_output: &mut bool,
+    last_output_is_space: &mut bool,
+    token: &str,
+) {
+    if token.is_empty() || (token.starts_with('<') && token.ends_with('>')) {
+        return;
+    }
+    let starts_word = token.starts_with('▁');
+    let piece = token.strip_prefix('▁').unwrap_or(token);
+    if starts_word && *has_output && !*last_output_is_space {
+        delta.push(' ');
+        *last_output_is_space = true;
+    }
+    delta.push_str(piece);
+    if let Some(last) = piece.chars().last() {
+        *has_output = true;
+        *last_output_is_space = last.is_whitespace();
+    }
 }
 
 fn reflect_sample(signal: &[f32], index: i64) -> f32 {
@@ -223,8 +239,9 @@ struct RizehSession {
     last_emitted_token: i64,
     frames_since_emit: usize,
     previous_chunk_had_emit: bool,
-    transcript: String,
-    returned_bytes: usize,
+    delta_text: String,
+    has_output: bool,
+    last_output_is_space: bool,
 }
 
 impl RizehSession {
@@ -294,8 +311,9 @@ impl RizehSession {
             last_emitted_token: -1,
             frames_since_emit: 999,
             previous_chunk_had_emit: true,
-            transcript: String::new(),
-            returned_bytes: 0,
+            delta_text: String::new(),
+            has_output: false,
+            last_output_is_space: false,
         })
     }
 
@@ -307,19 +325,20 @@ impl RizehSession {
         }
     }
 
-    /// Returns only the newly decoded UTF-8 suffix since the previous JNI call.
-    /// This keeps per-chunk text transfer O(new characters), not O(total transcript length).
+    /// Returns and clears only newly decoded text. Kotlin owns the complete transcript.
     fn take_new_text(&mut self) -> String {
-        take_text_delta(&self.transcript, &mut self.returned_bytes)
+        std::mem::take(&mut self.delta_text)
     }
 
     fn accept(&mut self, pcm: &[f32]) -> Result<String> {
+        self.delta_text.clear();
         self.pending.extend_from_slice(pcm);
         self.drain(false)?;
         Ok(self.take_new_text())
     }
 
     fn finish(&mut self) -> Result<String> {
+        self.delta_text.clear();
         self.pending
             .extend(std::iter::repeat(0.0).take(FINAL_PAD_SAMPLES));
         self.drain(true)?;
@@ -458,14 +477,12 @@ impl RizehSession {
 
     fn append_token(&mut self, id: usize) -> Result<()> {
         let token = self.tokens.get(id).context("decoded token ID out of range")?;
-        if token.is_empty() || (token.starts_with('<') && token.ends_with('>')) {
-            return Ok(());
-        }
-        let piece = token.strip_prefix('▁').unwrap_or(token);
-        if token.starts_with('▁') && !self.transcript.is_empty() && !self.transcript.ends_with(' ') {
-            self.transcript.push(' ');
-        }
-        self.transcript.push_str(piece);
+        append_ctc_piece(
+            &mut self.delta_text,
+            &mut self.has_output,
+            &mut self.last_output_is_space,
+            token,
+        );
         Ok(())
     }
 
@@ -635,11 +652,21 @@ mod tests {
     }
 
     #[test]
-    fn transcript_delta_returns_only_new_utf8_text() {
-        let mut offset = 0usize;
-        assert_eq!(take_text_delta("سلام", &mut offset), "سلام");
-        assert_eq!(take_text_delta("سلام دنیا", &mut offset), " دنیا");
-        assert_eq!(take_text_delta("سلام دنیا", &mut offset), "");
+    fn incremental_ctc_deltas_preserve_word_boundaries_without_full_history() {
+        let mut delta = String::new();
+        let mut has_output = false;
+        let mut last_output_is_space = false;
+
+        append_ctc_piece(&mut delta, &mut has_output, &mut last_output_is_space, "▁سلام");
+        assert_eq!(std::mem::take(&mut delta), "سلام");
+        append_ctc_piece(&mut delta, &mut has_output, &mut last_output_is_space, "▁دنیا");
+        assert_eq!(std::mem::take(&mut delta), " دنیا");
+        append_ctc_piece(&mut delta, &mut has_output, &mut last_output_is_space, "!");
+        assert_eq!(std::mem::take(&mut delta), "!");
+        append_ctc_piece(&mut delta, &mut has_output, &mut last_output_is_space, "▁خوب");
+        assert_eq!(std::mem::take(&mut delta), " خوب");
+        append_ctc_piece(&mut delta, &mut has_output, &mut last_output_is_space, "<unk>");
+        assert!(delta.is_empty());
     }
 
     #[test]
