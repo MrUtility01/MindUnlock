@@ -35,6 +35,7 @@ android {
     kotlinOptions { jvmTarget = "17" }
     testOptions { unitTests.isIncludeAndroidResources = true }
     buildFeatures { compose = true; buildConfig = true }
+    androidResources { noCompress += "onnx" }
     packaging {
         resources.excludes += "sherpa-onnx/native/**"
          resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }
