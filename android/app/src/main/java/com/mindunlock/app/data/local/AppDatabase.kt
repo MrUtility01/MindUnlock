@@ -27,6 +27,17 @@ interface ChapterDao {
     suspend fun upsert(chapter: ChapterEntity)
 }
 
+data class DashboardContentItem(
+    val uid: String,
+    val chapterId: String,
+    val type: String?,
+    val title: String?,
+    val orderIndex: Int,
+    val optionsJson: String?,
+    val sourceStatus: String,
+    val metadataJson: String?
+)
+
 data class ContentItemListEntry(
     val uid: String,
     val chapterId: String,
@@ -47,6 +58,9 @@ interface ContentItemDao {
     
     @Query("SELECT ci.* FROM content_items ci LEFT JOIN chapters c ON c.id = ci.chapterId ORDER BY COALESCE(c.orderIndex, 2147483647), ci.orderIndex, ci.title COLLATE NOCASE")
     fun observeAll(): Flow<List<ContentItemEntity>>
+
+    @Query("SELECT uid, chapterId, type, title, orderIndex, optionsJson, sourceStatus, metadataJson FROM content_items WHERE sourceStatus = 'verified' ORDER BY chapterId, orderIndex, title COLLATE NOCASE")
+    fun observeDashboardItems(): Flow<List<DashboardContentItem>>
 
     @Query("SELECT COUNT(*) FROM content_items")
     fun observeItemCount(): Flow<Int>
