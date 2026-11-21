@@ -202,6 +202,7 @@ fn load_tokens(path: &str) -> Result<Vec<String>> {
 
 struct RizehSession {
     model: Arc<TypedRunnableModel>,
+    inference_pool: rayon::ThreadPool,
     outputs: OutputIndices,
     features: FeatureExtractor,
     tokens: Vec<String>,
@@ -220,50 +221,58 @@ struct RizehSession {
 
 impl RizehSession {
     fn new(model_path: &str, tokens_path: &str, mel_path: &str) -> Result<Self> {
-        // Bound parallel inference so a dictation session does not fan out over every
-        // logical CPU core. This global pool is initialized before tract is first used.
-        let _ = rayon::ThreadPoolBuilder::new()
+        // A session-owned 2-thread pool caps ASR CPU use and is dropped with the
+        // session at Stop, so no native worker threads remain idle in the background.
+        let inference_pool = rayon::ThreadPoolBuilder::new()
             .num_threads(2)
             .thread_name(|index| format!("mindunlock-asr-{}", index))
-            .build_global();
+            .build()
+            .context("create bounded Rizeh inference thread pool")?;
         let features = FeatureExtractor::load(mel_path)?;
         let tokens = load_tokens(tokens_path)?;
         // The exported graph has dynamic batch/time dimensions. Pin every streaming
         // input contract before tract type inference, matching the model author's native runtime.
-        let typed = tract_onnx::onnx()
-            .model_for_path(model_path)
-            .with_context(|| format!("load Rizeh INT4 ONNX: {}", model_path))?
-            .with_input_fact(
-                0,
-                InferenceFact::dt_shape(f32::datum_type(), tvec!(1, MEL_BINS, INPUT_FRAMES)),
-            )?
-            .with_input_fact(1, InferenceFact::dt_shape(i64::datum_type(), tvec!(1)))?
-            .with_input_fact(
-                2,
-                InferenceFact::dt_shape(
-                    f32::datum_type(),
-                    tvec!(1, CACHE_LAYERS, CACHE_LEFT, CACHE_D_MODEL),
-                ),
-            )?
-            .with_input_fact(
-                3,
-                InferenceFact::dt_shape(
-                    f32::datum_type(),
-                    tvec!(1, CACHE_LAYERS, CACHE_D_MODEL, CACHE_TIME),
-                ),
-            )?
-            .with_input_fact(4, InferenceFact::dt_shape(i64::datum_type(), tvec!(1)))?
-            .into_typed()
-            .context("type-check Rizeh ONNX graph")?;
+        let typed = inference_pool.install(|| {
+            tract_onnx::onnx()
+                .model_for_path(model_path)
+                .with_context(|| format!("load Rizeh INT4 ONNX: {}", model_path))?
+                .with_input_fact(
+                    0,
+                    InferenceFact::dt_shape(f32::datum_type(), tvec!(1, MEL_BINS, INPUT_FRAMES)),
+                )?
+                .with_input_fact(1, InferenceFact::dt_shape(i64::datum_type(), tvec!(1)))?
+                .with_input_fact(
+                    2,
+                    InferenceFact::dt_shape(
+                        f32::datum_type(),
+                        tvec!(1, CACHE_LAYERS, CACHE_LEFT, CACHE_D_MODEL),
+                    ),
+                )?
+                .with_input_fact(
+                    3,
+                    InferenceFact::dt_shape(
+                        f32::datum_type(),
+                        tvec!(1, CACHE_LAYERS, CACHE_D_MODEL, CACHE_TIME),
+                    ),
+                )?
+                .with_input_fact(4, InferenceFact::dt_shape(i64::datum_type(), tvec!(1)))?
+                .into_typed()
+                .context("type-check Rizeh ONNX graph")
+                .map_err(anyhow::Error::from)
+        })?;
         let outputs = resolve_outputs(&output_names(&typed))?;
-        let model = typed
-            .into_optimized()
-            .context("optimize Rizeh ONNX graph")?
-            .into_runnable()
-            .context("prepare Rizeh inference graph")?;
+        let model = inference_pool.install(|| {
+            typed
+                .into_optimized()
+                .context("optimize Rizeh ONNX graph")?
+                .into_runnable()
+                .context("prepare Rizeh inference graph")
+                .map_err(anyhow::Error::from)
+        })?;
 
         Ok(Self {
             model,
+            inference_pool,
             outputs,
             features,
             tokens,
@@ -359,7 +368,10 @@ impl RizehSession {
             self.cache_time.clone().into(),
             self.cache_channel_len.clone().into()
         );
-        let output = self.model.run(inputs).context("Rizeh streaming inference failed")?;
+        let output = self
+            .inference_pool
+            .install(|| self.model.run(inputs))
+            .context("Rizeh streaming inference failed")?;
 
         let logits = output[self.outputs.ctc].cast_to::<f32>()?.into_owned();
         let shape = logits.shape().to_vec();
