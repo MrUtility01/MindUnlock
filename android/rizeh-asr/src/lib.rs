@@ -7,6 +7,7 @@ use jni::sys::{jint, jlong, jstring};
 use jni::JNIEnv;
 use rustfft::{num_complex::Complex, Fft, FftPlanner};
 use std::sync::Arc;
+use std::panic::{catch_unwind, AssertUnwindSafe};
 use tract_onnx::prelude::*;
 
 const SAMPLE_RATE: usize = 16_000;
@@ -456,16 +457,20 @@ pub extern "system" fn Java_com_mindunlock_app_RizehNative_nativeCreate(
     tokens_path: JString,
     mel_path: JString,
 ) -> jlong {
-    let result = (|| -> Result<RizehSession> {
+    let result = catch_unwind(AssertUnwindSafe(|| -> Result<RizehSession> {
         let model = read_string(&mut env, model_path)?;
         let tokens = read_string(&mut env, tokens_path)?;
         let mel = read_string(&mut env, mel_path)?;
         RizehSession::new(&model, &tokens, &mel)
-    })();
+    }));
     match result {
-        Ok(session) => Box::into_raw(Box::new(session)) as jlong,
-        Err(error) => {
+        Ok(Ok(session)) => Box::into_raw(Box::new(session)) as jlong,
+        Ok(Err(error)) => {
             throw_java(&mut env, &format!("راه‌اندازی موتور Shenava Rizeh ناموفق بود: {:#}", error));
+            0
+        }
+        Err(_) => {
+            throw_java(&mut env, "موتور بومی تشخیص گفتار هنگام راه‌اندازی با خطای داخلی متوقف شد.");
             0
         }
     }
@@ -512,10 +517,15 @@ pub extern "system" fn Java_com_mindunlock_app_RizehNative_nativePush(
         throw_java(&mut env, "نشست تشخیص گفتار آزاد شده است.");
         return std::ptr::null_mut();
     };
-    match session.accept(&pcm) {
-        Ok(text) => to_java_string(&mut env, text),
-        Err(error) => {
+    let result = catch_unwind(AssertUnwindSafe(|| session.accept(&pcm).map(str::to_owned)));
+    match result {
+        Ok(Ok(text)) => to_java_string(&mut env, &text),
+        Ok(Err(error)) => {
             throw_java(&mut env, &format!("پردازش صوت ناموفق بود: {:#}", error));
+            std::ptr::null_mut()
+        }
+        Err(_) => {
+            throw_java(&mut env, "موتور بومی هنگام پردازش صوت با خطای داخلی متوقف شد.");
             std::ptr::null_mut()
         }
     }
@@ -536,10 +546,15 @@ pub extern "system" fn Java_com_mindunlock_app_RizehNative_nativeFinish(
         throw_java(&mut env, "نشست تشخیص گفتار آزاد شده است.");
         return std::ptr::null_mut();
     };
-    match session.finish() {
-        Ok(text) => to_java_string(&mut env, text),
-        Err(error) => {
+    let result = catch_unwind(AssertUnwindSafe(|| session.finish().map(str::to_owned)));
+    match result {
+        Ok(Ok(text)) => to_java_string(&mut env, &text),
+        Ok(Err(error)) => {
             throw_java(&mut env, &format!("تکمیل تشخیص گفتار ناموفق بود: {:#}", error));
+            std::ptr::null_mut()
+        }
+        Err(_) => {
+            throw_java(&mut env, "موتور بومی هنگام نهایی‌سازی گفتار با خطای داخلی متوقف شد.");
             std::ptr::null_mut()
         }
     }
@@ -552,9 +567,9 @@ pub extern "system" fn Java_com_mindunlock_app_RizehNative_nativeDestroy(
     handle: jlong,
 ) {
     if handle != 0 {
-        unsafe {
+        let _ = catch_unwind(AssertUnwindSafe(|| unsafe {
             drop(Box::from_raw(handle as *mut RizehSession));
-        }
+        }));
     }
 }
 
