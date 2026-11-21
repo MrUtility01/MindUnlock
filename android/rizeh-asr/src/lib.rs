@@ -99,6 +99,13 @@ impl FeatureExtractor {
     }
 }
 
+fn take_text_delta(text: &str, returned_bytes: &mut usize) -> String {
+    let start = (*returned_bytes).min(text.len());
+    let delta = text.get(start..).unwrap_or("").to_owned();
+    *returned_bytes = text.len();
+    delta
+}
+
 fn reflect_sample(signal: &[f32], index: i64) -> f32 {
     let n = signal.len() as i64;
     if n == 0 {
@@ -303,10 +310,7 @@ impl RizehSession {
     /// Returns only the newly decoded UTF-8 suffix since the previous JNI call.
     /// This keeps per-chunk text transfer O(new characters), not O(total transcript length).
     fn take_new_text(&mut self) -> String {
-        let start = self.returned_bytes.min(self.transcript.len());
-        let delta = self.transcript.get(start..).unwrap_or("").to_owned();
-        self.returned_bytes = self.transcript.len();
-        delta
+        take_text_delta(&self.transcript, &mut self.returned_bytes)
     }
 
     fn accept(&mut self, pcm: &[f32]) -> Result<String> {
@@ -628,6 +632,14 @@ mod tests {
         assert_eq!(INPUT_FRAMES - SHIFT_FRAMES, PRE_ENCODE_OVERLAP);
         assert_eq!(CACHE_LAYERS, 16);
         assert_eq!(CACHE_D_MODEL, 256);
+    }
+
+    #[test]
+    fn transcript_delta_returns_only_new_utf8_text() {
+        let mut offset = 0usize;
+        assert_eq!(take_text_delta("سلام", &mut offset), "سلام");
+        assert_eq!(take_text_delta("سلام دنیا", &mut offset), " دنیا");
+        assert_eq!(take_text_delta("سلام دنیا", &mut offset), "");
     }
 
     #[test]
