@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 
 import android.os.Bundle
 import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 import com.mindunlock.app.data.local.MindDumpEntity
