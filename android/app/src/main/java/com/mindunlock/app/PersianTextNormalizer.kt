@@ -71,6 +71,7 @@ internal object PersianTextNormalizer {
 
         return text
             .replace(Regex(" +([،؛:,.!?؟])"), "$1")
+            .replace(Regex("([،؛؟!])(?=\\S)"), "$1 ")
             .replace(Regex(" {2,}"), " ")
             .trim()
     }
