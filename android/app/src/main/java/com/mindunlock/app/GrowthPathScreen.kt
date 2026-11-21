@@ -7,11 +7,15 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -83,6 +87,15 @@ fun GrowthPathScreen(preferences: SharedPreferences) {
     val uriHandler = LocalUriHandler.current
     val saved = remember { mutableStateOf(preferences.getStringSet("growth_completed_v1", emptySet())?.toSet() ?: emptySet()) }
     var selectedId by rememberSaveable { mutableStateOf("") }
+    var selectedGroup by rememberSaveable { mutableStateOf("همه") }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    val groups = remember { listOf("همه") + growthUnits.map { it.group }.distinct() }
+    val filteredUnits = remember(growthUnits, selectedGroup, searchQuery, saved.value) {
+        growthUnits.filter { item ->
+            (selectedGroup == "همه" || item.group == selectedGroup) &&
+                (searchQuery.isBlank() || listOf(item.title, item.group, item.level, item.objective, item.commands, item.scenario).any { it.contains(searchQuery.trim(), ignoreCase = true) })
+        }
+    }
     var answer by rememberSaveable { mutableIntStateOf(-1) }
     var submitted by rememberSaveable { mutableStateOf(false) }
     val unit = growthUnits.firstOrNull { it.id == selectedId }
@@ -149,12 +162,38 @@ fun GrowthPathScreen(preferences: SharedPreferences) {
                 }
             }
         } else {
-            items(growthUnits, key = { it.id }) { item ->
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("فهرست مطالب", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Text("موضوع را انتخاب کن یا نام درس، فناوری و دستور را جست‌وجو کن. شماره هر درس برای مراجعه دوباره نمایش داده می‌شود.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        label = { Text("جست‌وجوی درس یا دستور") }
+                    )
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        groups.forEach { group ->
+                            val count = if (group == "همه") growthUnits.size else growthUnits.count { it.group == group }
+                            FilterChip(
+                                selected = selectedGroup == group,
+                                onClick = { selectedGroup = group },
+                                label = { Text("$group ($count)") }
+                            )
+                        }
+                    }
+                    Text("نمایش ${filteredUnits.size} درس از ${growthUnits.size} درس", style = MaterialTheme.typography.labelMedium)
+                    if (filteredUnits.isEmpty()) Text("مطلبی پیدا نشد؛ عبارت جست‌وجو یا موضوع را تغییر بده.")
+                }
+            }
+            items(filteredUnits, key = { it.id }) { item ->
+                val lessonNumber = filteredUnits.indexOfFirst { it.id == item.id } + 1
                 Card(Modifier.fillMaxWidth().clickable { selectedId = item.id; answer = -1; submitted = false }) {
                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text(item.group + " · " + item.level, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium)
+                        Text("درس ${PersianDate.toPersianDigits(lessonNumber.toString())} · ${item.group} · ${item.level}", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium)
                         Text(item.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Text(if (saved.value.contains(item.id)) "تکمیل شده" else "شروع درس و آزمون")
+                        Text(if (saved.value.contains(item.id)) "✓ تکمیل شده" else "باز کردن درس، دستورها و آزمون")
                     }
                 }
             }
