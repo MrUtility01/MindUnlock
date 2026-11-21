@@ -17,6 +17,14 @@ class PersianTextNormalizerTest {
     }
 
     @Test
+    fun insertsPersianHalfSpacesForCommonPrefixesAndSuffixes() {
+        assertEquals(
+            "می‌رود و نمی‌شود و کتاب‌ها و فایل‌های",
+            PersianTextNormalizer.normalize("می رود و نمی شود و کتاب ها و فایل های")
+        )
+    }
+
+    @Test
     fun preservesIpAddressesAndTechnicalTerms() {
         assertEquals(
             "MikroTik و FortiGate و DHCP و 192.168.1.10",
