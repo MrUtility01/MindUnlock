@@ -2,7 +2,7 @@ name: Build Android APK
 
 on:
   push:
-    branches: [ main, feature/mindunlock-core-modules, feature/github-public-browser ]
+    branches: [ main, feature/mindunlock-core-modules, feature/github-public-browser, feature/continuous-persian-dictation ]
   pull_request:
     branches: [ main, review/android-migration-tests ]
   workflow_dispatch:
@@ -49,6 +49,66 @@ jobs:
               for old, new in pairs: data = data.replace(old, new)
               path.write_text(data, encoding='utf-8')
           PY
+
+      - name: Build and package offline Shenava Rizeh INT4 engine
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd android-build
+          MODEL_REV="a13172bd81cbed1319b92034f4703731334a6340"
+          MODEL_SHA256="2cbebb39be531e04f0f31b15f7053365ac9941080c7f7ad5c98d6e0aa7638770"
+          MODEL_DIR="app/src/main/assets/rizeh"
+          mkdir -p "$MODEL_DIR"
+
+          rustup target add aarch64-linux-android
+          cargo install cargo-ndk --locked
+          export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/27.2.12479018"
+          export ANDROID_NDK_ROOT="$ANDROID_NDK_HOME"
+          test -d "$ANDROID_NDK_HOME"
+
+          cargo ndk -t arm64-v8a --platform 26 -o app/src/main/jniLibs build --release --manifest-path rizeh-asr/Cargo.toml
+          test -s app/src/main/jniLibs/arm64-v8a/libmindunlock_asr.so
+
+          HF_BASE="https://huggingface.co/Reza2kn/Shenava-Rizeh-v1.0-tract-streaming/resolve/$MODEL_REV"
+          curl --fail --location --retry 5 --retry-all-errors --connect-timeout 30 --max-time 900 \
+            "$HF_BASE/model.int4.onnx?download=true" -o "$MODEL_DIR/model.int4.onnx"
+          echo "$MODEL_SHA256  $MODEL_DIR/model.int4.onnx" | sha256sum --check --status
+          curl --fail --location --retry 5 --retry-all-errors --connect-timeout 30 --max-time 180 \
+            "$HF_BASE/tokens.txt?download=true" -o "$MODEL_DIR/tokens.txt"
+          curl --fail --location --retry 5 --retry-all-errors --connect-timeout 30 --max-time 180 \
+            "$HF_BASE/LICENSE" -o "$MODEL_DIR/LICENSE"
+          test -s "$MODEL_DIR/mel_filters.json"
+
+          python3 - "$MODEL_DIR/tokens.txt" <<'PY'
+          from pathlib import Path
+          import sys
+          tokens = Path(sys.argv[1]).read_text(encoding="utf-8").splitlines()
+          ids = {}
+          for line in tokens:
+              if " " not in line:
+                  continue
+              piece, raw_id = line.rsplit(" ", 1)
+              try:
+                  token_id = int(raw_id.strip())
+              except ValueError:
+                  continue
+              if token_id in ids:
+                  raise SystemExit(f"duplicate token ID: {token_id}")
+              ids[token_id] = piece
+          expected = set(range(1025))
+          if set(ids) != expected:
+              missing = sorted(expected - set(ids))[:10]
+              extra = sorted(set(ids) - expected)[:10]
+              raise SystemExit(f"Rizeh tokens must map IDs 0..1024; missing={missing}, extra={extra}")
+          if "blk" not in ids[1024]:
+              raise SystemExit(f"expected CTC blank at token ID 1024; got {ids[1024]!r}")
+          print(f"Verified {len(ids)} Rizeh tokens; blank ID 1024.")
+          PY
+
+          printf '%s\n' "$MODEL_REV" > "$MODEL_DIR/MODEL_REVISION"
+          printf '%s\n' "$MODEL_SHA256" > "$MODEL_DIR/MODEL_SHA256"
+          echo "Bundled Rizeh INT4 model, tokenizer, mel filters and Apache-2.0 license."
+          du -h "$MODEL_DIR/model.int4.onnx" app/src/main/jniLibs/arm64-v8a/libmindunlock_asr.so
 
       - name: Apply uploaded portrait as Android launcher icon
         shell: bash
